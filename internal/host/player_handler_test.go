@@ -45,8 +45,10 @@ func withPlayer(t *testing.T, function func(*player.Player)) {
 
 func TestPlayerHandlerMove(t *testing.T) {
 	runtime := &runtimeStub{subscriptions: native.PlayerMoveSubscription, moveCancelled: true}
-	handler := NewPlayerHandler(runtime, nil, 7)
 	withPlayer(t, func(p *player.Player) {
+		players := NewPlayers()
+		players.Register(p, 7)
+		handler := NewPlayerHandler(runtime, nil, players)
 		ctx := event.C(p)
 		handler.HandleMove(ctx, mgl64.Vec3{4, 5, 6}, [2]float64{90, 10})
 		if !ctx.Cancelled() {
@@ -64,8 +66,10 @@ func TestPlayerHandlerChat(t *testing.T) {
 		subscriptions: native.PlayerChatSubscription,
 		chatOutput:    native.PlayerChatOutput{Cancelled: true, Replacement: &replacement},
 	}
-	handler := NewPlayerHandler(runtime, nil, 9)
 	withPlayer(t, func(p *player.Player) {
+		players := NewPlayers()
+		players.Register(p, 9)
+		handler := NewPlayerHandler(runtime, nil, players)
 		ctx := event.C(p)
 		message := "original"
 		handler.HandleChat(ctx, &message)

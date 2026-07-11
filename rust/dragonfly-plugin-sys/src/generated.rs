@@ -47,6 +47,9 @@ pub struct DfCommandOverload { pub parameters: *const DfCommandParameter, pub pa
 pub struct DfCommandDescriptor { pub name: DfStringView, pub description: DfStringView, pub overloads: *const DfCommandOverload, pub overload_count: u64 }
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
+pub struct DfCommandEnumContext { pub source: DfStringView, pub online_players: *const DfStringView, pub online_player_count: u64 }
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
 pub struct DfCommandInput { pub source: DfStringView, pub arguments: DfStringView }
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
@@ -91,7 +94,7 @@ pub type DfPluginCreateFn = unsafe extern "C" fn() -> *mut c_void;
 pub type DfPluginLifecycleFn = unsafe extern "C" fn(instance: *mut c_void) -> DfStatus;
 pub type DfPluginCommandsFn = unsafe extern "C" fn(instance: *mut c_void, count: *mut u64) -> *const DfCommandDescriptor;
 pub type DfHandleCommandFn = unsafe extern "C" fn(instance: *mut c_void, command: u64, input: *const DfCommandInput, state: *mut DfCommandState) -> DfStatus;
-pub type DfCommandEnumOptionsFn = unsafe extern "C" fn(instance: *mut c_void, command: u64, overload: u64, parameter: u64, source: DfStringView, output: *mut DfStringBuffer) -> DfStatus;
+pub type DfCommandEnumOptionsFn = unsafe extern "C" fn(instance: *mut c_void, command: u64, overload: u64, parameter: u64, context: *const DfCommandEnumContext, output: *mut DfStringBuffer) -> DfStatus;
 pub type DfPluginDestroyFn = unsafe extern "C" fn(instance: *mut c_void);
 pub type DfHandleEventFn = unsafe extern "C" fn(instance: *mut c_void, event_id: DfEventId, input: *const c_void, state: *mut c_void) -> DfStatus;
 

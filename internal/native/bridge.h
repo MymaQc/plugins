@@ -35,7 +35,7 @@ DfStatus bg_runtime_command_enum_options(
     uint64_t index,
     uint64_t overload,
     uint64_t parameter,
-    DfStringView source,
+    const DfCommandEnumContext *context,
     DfStringBuffer *output
 );
 DfStatus bg_runtime_handle_player_move(

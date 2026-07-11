@@ -246,24 +246,50 @@ func (r *Runtime) HandleCommand(index uint64, input CommandInput) (CommandOutput
 	return output, nil
 }
 
-func (r *Runtime) CommandEnumOptions(index, overload, parameter uint64, sourceName string) ([]string, error) {
+func (r *Runtime) CommandEnumOptions(index, overload, parameter uint64, sourceName string, onlinePlayers []string) ([]string, error) {
 	if r == nil || r.ptr == nil {
 		return nil, errors.New("native runtime is closed")
 	}
 	source := C.CBytes([]byte(sourceName))
 	defer C.free(source)
+	var viewsPointer *C.DfStringView
+	var playerStrings []unsafe.Pointer
+	if len(onlinePlayers) != 0 {
+		viewsMemory := C.malloc(C.size_t(len(onlinePlayers)) * C.size_t(unsafe.Sizeof(C.DfStringView{})))
+		if viewsMemory == nil {
+			return nil, errors.New("allocate online player views")
+		}
+		defer C.free(viewsMemory)
+		viewsPointer = (*C.DfStringView)(viewsMemory)
+		views := unsafe.Slice(viewsPointer, len(onlinePlayers))
+		for index, name := range onlinePlayers {
+			value := C.CBytes([]byte(name))
+			playerStrings = append(playerStrings, value)
+			views[index] = C.DfStringView{data: (*C.uint8_t)(value), len: C.uint64_t(len(name))}
+		}
+		defer func() {
+			for _, value := range playerStrings {
+				C.free(value)
+			}
+		}()
+	}
 	buffer := C.malloc(MaxCommandEnumBytes)
 	if buffer == nil {
 		return nil, errors.New("allocate command enum buffer")
 	}
 	defer C.free(buffer)
 	output := C.DfStringBuffer{data: (*C.uint8_t)(buffer), capacity: MaxCommandEnumBytes}
+	context := C.DfCommandEnumContext{
+		source:              C.DfStringView{data: (*C.uint8_t)(source), len: C.uint64_t(len(sourceName))},
+		online_players:      viewsPointer,
+		online_player_count: C.uint64_t(len(onlinePlayers)),
+	}
 	status := C.bg_runtime_command_enum_options(
 		r.ptr,
 		C.uint64_t(index),
 		C.uint64_t(overload),
 		C.uint64_t(parameter),
-		C.DfStringView{data: (*C.uint8_t)(source), len: C.uint64_t(len(sourceName))},
+		&context,
 		&output,
 	)
 	if status != C.DF_STATUS_OK {

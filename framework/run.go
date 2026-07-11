@@ -63,7 +63,8 @@ func Run(ctx context.Context, config Config, log *slog.Logger) error {
 	if err := pluginRuntime.Enable(); err != nil {
 		return err
 	}
-	if err := host.RegisterCommands(pluginRuntime); err != nil {
+	players := host.NewPlayers()
+	if err := host.RegisterCommands(pluginRuntime, players); err != nil {
 		pluginRuntime.Disable()
 		return err
 	}
@@ -94,7 +95,8 @@ func Run(ctx context.Context, config Config, log *slog.Logger) error {
 
 	var generation atomic.Uint64
 	for p := range srv.Accept() {
-		p.Handle(host.NewPlayerHandler(pluginRuntime, log, generation.Add(1)))
+		players.Register(p, generation.Add(1))
+		p.Handle(host.NewPlayerHandler(pluginRuntime, log, players))
 	}
 	return nil
 }

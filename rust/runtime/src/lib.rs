@@ -211,7 +211,7 @@ impl DfRuntime {
         index: usize,
         overload: u64,
         parameter: u64,
-        source: DfStringView,
+        context: &dragonfly_plugin_sys::DfCommandEnumContext,
         output: &mut dragonfly_plugin_sys::DfStringBuffer,
     ) -> DfStatus {
         let Some(command) = self.commands.get(index) else {
@@ -230,7 +230,7 @@ impl DfRuntime {
                 command.local,
                 overload,
                 parameter,
-                source,
+                context,
                 output,
             )
         };
@@ -651,18 +651,31 @@ pub unsafe extern "C" fn df_runtime_command_enum_options(
     index: u64,
     overload: u64,
     parameter: u64,
-    source: DfStringView,
+    context: *const dragonfly_plugin_sys::DfCommandEnumContext,
     output: *mut dragonfly_plugin_sys::DfStringBuffer,
 ) -> DfStatus {
-    let (Some(runtime), Some(output)) = (unsafe { runtime.as_ref() }, unsafe { output.as_mut() })
+    let (Some(runtime), Some(context), Some(output)) = (
+        unsafe { runtime.as_ref() },
+        unsafe { context.as_ref() },
+        unsafe { output.as_mut() },
+    ) else {
+        return DF_STATUS_ERROR;
+    };
+    if unsafe { string_view(context.source) }.is_err() {
+        return DF_STATUS_ERROR;
+    }
+    let Ok(players) = (unsafe { abi_slice(context.online_players, context.online_player_count) })
     else {
         return DF_STATUS_ERROR;
     };
-    if unsafe { string_view(source) }.is_err() {
+    if players
+        .iter()
+        .any(|player| unsafe { string_view(*player) }.is_err())
+    {
         return DF_STATUS_ERROR;
     }
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        runtime.command_enum_options(index as usize, overload, parameter, source, output)
+        runtime.command_enum_options(index as usize, overload, parameter, context, output)
     }))
     .unwrap_or(DF_STATUS_ERROR)
 }

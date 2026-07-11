@@ -215,19 +215,32 @@ pub trait CommandDefinition: Sized {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug)]
 pub struct CommandSource<'a> {
     name: &'a str,
+    online_players: &'a [dragonfly_plugin_sys::DfStringView],
 }
 
 impl<'a> CommandSource<'a> {
     #[doc(hidden)]
-    pub const fn new(name: &'a str) -> Self {
-        Self { name }
+    pub const fn new(
+        name: &'a str,
+        online_players: &'a [dragonfly_plugin_sys::DfStringView],
+    ) -> Self {
+        Self {
+            name,
+            online_players,
+        }
     }
 
     pub const fn name(self) -> &'a str {
         self.name
+    }
+
+    pub fn online_players(self) -> impl Iterator<Item = &'a str> {
+        self.online_players
+            .iter()
+            .map(|name| unsafe { string_view(*name) })
     }
 }
 

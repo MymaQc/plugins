@@ -524,21 +524,38 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
                 command: u64,
                 overload: u64,
                 parameter: u64,
-                source: ::dragonfly_plugin::__private::sys::DfStringView,
+                context: *const ::dragonfly_plugin::__private::sys::DfCommandEnumContext,
                 output: *mut ::dragonfly_plugin::__private::sys::DfStringBuffer,
             ) -> ::dragonfly_plugin::__private::sys::DfStatus {
                 use ::dragonfly_plugin::__private::sys;
-                if instance.is_null() || output.is_null() || (source.len != 0 && source.data.is_null()) {
+                if instance.is_null() || context.is_null() || output.is_null() {
                     return sys::DF_STATUS_ERROR;
                 }
                 let result = ::std::panic::catch_unwind(::std::panic::AssertUnwindSafe(|| {
-                    let bytes = if source.len == 0 {
+                    let context = unsafe { &*context };
+                    if context.source.len != 0 && context.source.data.is_null() {
+                        return Err(());
+                    }
+                    let bytes = if context.source.len == 0 {
                         &[][..]
                     } else {
-                        unsafe { ::core::slice::from_raw_parts(source.data, source.len as usize) }
+                        unsafe { ::core::slice::from_raw_parts(context.source.data, context.source.len as usize) }
                     };
                     let name = ::core::str::from_utf8(bytes).map_err(|_| ())?;
-                    let source = ::dragonfly_plugin::CommandSource::new(name);
+                    let online_players = if context.online_player_count == 0 {
+                        &[][..]
+                    } else {
+                        if context.online_players.is_null() {
+                            return Err(());
+                        }
+                        unsafe {
+                            ::core::slice::from_raw_parts(
+                                context.online_players,
+                                context.online_player_count as usize,
+                            )
+                        }
+                    };
+                    let source = ::dragonfly_plugin::CommandSource::new(name, online_players);
                     let options = match command as usize {
                         #(#dynamic_dispatch_arms)*
                         _ => None,

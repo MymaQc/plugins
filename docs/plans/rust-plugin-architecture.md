@@ -506,7 +506,9 @@ Structured commands declare overloads containing literal subcommands, enums, str
 
 Online players are typed player targets, not dynamic enums: names are mutable and selectors must resolve through Dragonfly. Generic dynamic/soft enums are reserved for plugin-defined changing sets such as kits or arenas. Their options cross the ABI on Dragonfly's low-frequency command metadata path and may vary by command source.
 
-Dynamic enum fields use `Dynamic<T>`, where `T: DynamicCommandEnum`. Dragonfly polls the provider through the native runtime and promotes changed values to a Bedrock soft enum. The initial `CommandSource` exposes source identity; stable source/player handles and server queries are added with the host handle registry rather than exposing Go pointers.
+Dynamic enum fields use `Dynamic<T>`, where `T: DynamicCommandEnum`. Dragonfly polls the provider through the native runtime and promotes changed values to a Bedrock soft enum. `CommandSource` exposes source identity and the current online-player names. The host registry owns stable generation-tagged player IDs; later player command parameters carry those IDs rather than Go pointers.
+
+Go reflected runnable fields are transport only. `ParamDescriber` supplies client metadata, while generated Rust parsing owns validation and error text. A hidden trailing `Varargs` transport prevents Dragonfly syntax errors from leaking internal `P1`/`P2` field names.
 
 Rust has no Go-style runtime reflection. Its equivalent plugin API uses derive and attribute proc macros at compile time. A derived command enum turns variants into subcommands and `CommandEnum` fields into Dragonfly enums. A `#[command]` method inside the bare `#[plugin]` implementation is discovered and routed automatically. These macros generate the low-level static command schema and parser; direct `Command`, `CommandOverload`, and `CommandParameter` construction remains available as an escape hatch and ABI test surface.
 

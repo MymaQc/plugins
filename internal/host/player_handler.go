@@ -20,18 +20,18 @@ type playerRuntime interface {
 // Unsupported events keep Dragonfly's default behavior through NopHandler.
 type PlayerHandler struct {
 	player.NopHandler
-	runtime    playerRuntime
-	log        *slog.Logger
-	generation uint64
+	runtime playerRuntime
+	log     *slog.Logger
+	players *Players
 }
 
 var _ player.Handler = (*PlayerHandler)(nil)
 
-func NewPlayerHandler(runtime playerRuntime, log *slog.Logger, generation uint64) *PlayerHandler {
+func NewPlayerHandler(runtime playerRuntime, log *slog.Logger, players *Players) *PlayerHandler {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &PlayerHandler{runtime: runtime, log: log, generation: generation}
+	return &PlayerHandler{runtime: runtime, log: log, players: players}
 }
 
 func (h *PlayerHandler) HandleMove(ctx *player.Context, newPosition mgl64.Vec3, newRotation cube.Rotation) {
@@ -77,8 +77,10 @@ func (h *PlayerHandler) HandleChat(ctx *player.Context, message *string) {
 }
 
 func (h *PlayerHandler) playerID(p *player.Player) native.PlayerID {
-	id := native.PlayerID{Generation: h.generation}
-	uuid := p.UUID()
-	copy(id.UUID[:], uuid[:])
+	id, _ := h.players.ID(p)
 	return id
+}
+
+func (h *PlayerHandler) HandleQuit(p *player.Player) {
+	h.players.Unregister(p)
 }

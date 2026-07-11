@@ -30,6 +30,7 @@ typedef struct { uint8_t *data; uint64_t len; uint64_t capacity; } DfStringBuffe
 typedef struct { uint32_t kind; DfStringView name; const DfStringView *values; uint64_t value_count; } DfCommandParameter;
 typedef struct { const DfCommandParameter *parameters; uint64_t parameter_count; } DfCommandOverload;
 typedef struct { DfStringView name; DfStringView description; const DfCommandOverload *overloads; uint64_t overload_count; } DfCommandDescriptor;
+typedef struct { DfStringView source; const DfStringView *online_players; uint64_t online_player_count; } DfCommandEnumContext;
 typedef struct { DfStringView source; DfStringView arguments; } DfCommandInput;
 typedef struct { uint8_t failed; DfStringBuffer output; } DfCommandState;
 
@@ -70,7 +71,7 @@ typedef void *(*DfPluginCreateFn)(void);
 typedef DfStatus (*DfPluginLifecycleFn)(void *instance);
 typedef const DfCommandDescriptor *(*DfPluginCommandsFn)(void *instance, uint64_t *count);
 typedef DfStatus (*DfHandleCommandFn)(void *instance, uint64_t command, const DfCommandInput *input, DfCommandState *state);
-typedef DfStatus (*DfCommandEnumOptionsFn)(void *instance, uint64_t command, uint64_t overload, uint64_t parameter, DfStringView source, DfStringBuffer *output);
+typedef DfStatus (*DfCommandEnumOptionsFn)(void *instance, uint64_t command, uint64_t overload, uint64_t parameter, const DfCommandEnumContext *context, DfStringBuffer *output);
 typedef void (*DfPluginDestroyFn)(void *instance);
 
 typedef struct {
@@ -100,7 +101,7 @@ uint64_t df_runtime_subscriptions(const DfRuntime *runtime);
 uint64_t df_runtime_command_count(const DfRuntime *runtime);
 DfStatus df_runtime_command_at(const DfRuntime *runtime, uint64_t index, DfCommandDescriptor *out);
 DfStatus df_runtime_handle_command(DfRuntime *runtime, uint64_t index, const DfCommandInput *input, DfCommandState *state);
-DfStatus df_runtime_command_enum_options(DfRuntime *runtime, uint64_t index, uint64_t overload, uint64_t parameter, DfStringView source, DfStringBuffer *output);
+DfStatus df_runtime_command_enum_options(DfRuntime *runtime, uint64_t index, uint64_t overload, uint64_t parameter, const DfCommandEnumContext *context, DfStringBuffer *output);
 DfStatus df_runtime_handle_player_move(DfRuntime *runtime, const DfPlayerMoveInput *input, DfPlayerMoveState *state);
 DfStatus df_runtime_handle_player_chat(DfRuntime *runtime, const DfPlayerChatInput *input, DfPlayerChatState *state);
 

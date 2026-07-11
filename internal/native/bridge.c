@@ -12,7 +12,7 @@ typedef void (*RuntimeDisableFn)(DfRuntime *);
 typedef uint64_t (*RuntimeCountFn)(const DfRuntime *);
 typedef DfStatus (*RuntimeCommandAtFn)(const DfRuntime *, uint64_t, DfCommandDescriptor *);
 typedef DfStatus (*RuntimeCommandFn)(DfRuntime *, uint64_t, const DfCommandInput *, DfCommandState *);
-typedef DfStatus (*RuntimeCommandEnumFn)(DfRuntime *, uint64_t, uint64_t, uint64_t, DfStringView, DfStringBuffer *);
+typedef DfStatus (*RuntimeCommandEnumFn)(DfRuntime *, uint64_t, uint64_t, uint64_t, const DfCommandEnumContext *, DfStringBuffer *);
 typedef DfStatus (*RuntimeMoveFn)(DfRuntime *, const DfPlayerMoveInput *, DfPlayerMoveState *);
 typedef DfStatus (*RuntimeChatFn)(DfRuntime *, const DfPlayerChatInput *, DfPlayerChatState *);
 
@@ -179,13 +179,13 @@ DfStatus bg_runtime_command_enum_options(
     uint64_t index,
     uint64_t overload,
     uint64_t parameter,
-    DfStringView source,
+    const DfCommandEnumContext *context,
     DfStringBuffer *output
 ) {
-    if (library == NULL || output == NULL) {
+    if (library == NULL || context == NULL || output == NULL) {
         return DF_STATUS_ERROR;
     }
-    return library->command_enum_options(library->runtime, index, overload, parameter, source, output);
+    return library->command_enum_options(library->runtime, index, overload, parameter, context, output);
 }
 
 DfStatus bg_runtime_handle_player_move(

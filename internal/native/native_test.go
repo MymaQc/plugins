@@ -81,23 +81,23 @@ func TestCommand(t *testing.T) {
 	}
 	output, err := runtime.HandleCommand(commands[0].Index, CommandInput{
 		Source:    "Danick",
-		Arguments: "say excited",
+		Arguments: "say excited dragonfly",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if output.Failed || output.Message != "HELLO, DANICK!" {
+	if output.Failed || output.Message != "HELLO, DANICK! DRAGONFLY" {
 		t.Fatalf("output = %#v", output)
 	}
 }
 
 func TestDynamicCommandEnum(t *testing.T) {
 	runtime := openTestRuntime(t)
-	options, err := runtime.CommandEnumOptions(0, 5, 1, "Danick")
+	options, err := runtime.CommandEnumOptions(0, 5, 1, "Danick", []string{"Danick", "RestartFU"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(options) != 2 || options[0] != "Danick" || options[1] != "everyone" {
+	if len(options) != 3 || options[0] != "Danick" || options[1] != "RestartFU" || options[2] != "everyone" {
 		t.Fatalf("options = %#v", options)
 	}
 }

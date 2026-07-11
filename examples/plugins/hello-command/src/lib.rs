@@ -6,7 +6,9 @@ struct GreetingTargets;
 
 impl DynamicCommandEnum for GreetingTargets {
     fn options(source: CommandSource<'_>) -> Vec<String> {
-        vec![source.name().to_owned(), "everyone".to_owned()]
+        let mut players: Vec<_> = source.online_players().map(str::to_owned).collect();
+        players.push("everyone".to_owned());
+        players
     }
 }
 
@@ -19,7 +21,7 @@ enum Style {
 #[derive(Command)]
 #[command(name = "hello", description = "Greets the command source")]
 enum Hello {
-    Say { style: Style },
+    Say { style: Style, text: String },
     Add { left: i64, right: i64 },
     Toggle { enabled: bool },
     Echo { text: String },
@@ -37,10 +39,16 @@ impl Plugin for HelloCommand {
         let message = match command {
             Hello::Say {
                 style: Style::Plain,
-            } => format!("Hello, {}.", event.source()),
+                text,
+            } => format!("Hello, {}: {text}", event.source()),
             Hello::Say {
                 style: Style::Excited,
-            } => format!("HELLO, {}!", event.source().to_uppercase()),
+                text,
+            } => format!(
+                "HELLO, {}! {}",
+                event.source().to_uppercase(),
+                text.to_uppercase()
+            ),
             Hello::Add { left, right } => format!("{}", left + right),
             Hello::Toggle { enabled } => format!("enabled={enabled}"),
             Hello::Echo { text } => text,
