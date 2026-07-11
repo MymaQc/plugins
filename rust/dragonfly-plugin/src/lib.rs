@@ -147,6 +147,8 @@ impl<'a> PlayerChatEvent<'a> {
 }
 
 pub trait Plugin: Default + Send + Sync + 'static {
+    fn on_enable(&self) {}
+    fn on_disable(&self) {}
     fn on_move(&self, _event: &mut PlayerMoveEvent<'_>) {}
     fn on_chat(&self, _event: &mut PlayerChatEvent<'_>) {}
 }

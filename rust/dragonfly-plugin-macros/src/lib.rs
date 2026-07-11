@@ -36,7 +36,14 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
 
             unsafe extern "C" fn create() -> *mut ::dragonfly_plugin::__private::c_void {
                 match ::std::panic::catch_unwind(|| <PluginType as ::core::default::Default>::default()) {
-                    Ok(plugin) => ::std::boxed::Box::into_raw(::std::boxed::Box::new(plugin)).cast(),
+                    Ok(plugin) => {
+                        if ::std::panic::catch_unwind(::std::panic::AssertUnwindSafe(|| {
+                            <PluginType as ::dragonfly_plugin::Plugin>::on_enable(&plugin);
+                        })).is_err() {
+                            return ::core::ptr::null_mut();
+                        }
+                        ::std::boxed::Box::into_raw(::std::boxed::Box::new(plugin)).cast()
+                    }
                     Err(_) => ::core::ptr::null_mut(),
                 }
             }
@@ -44,7 +51,9 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
             unsafe extern "C" fn destroy(instance: *mut ::dragonfly_plugin::__private::c_void) {
                 if !instance.is_null() {
                     let _ = ::std::panic::catch_unwind(::std::panic::AssertUnwindSafe(|| {
-                        drop(unsafe { ::std::boxed::Box::from_raw(instance.cast::<PluginType>()) });
+                        let plugin = unsafe { ::std::boxed::Box::from_raw(instance.cast::<PluginType>()) };
+                        <PluginType as ::dragonfly_plugin::Plugin>::on_disable(&plugin);
+                        drop(plugin);
                     }));
                 }
             }
