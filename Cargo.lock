@@ -9,13 +9,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
 
 [[package]]
-name = "chat-filter-plugin"
-version = "0.1.0"
-dependencies = [
- "dragonfly-plugin",
-]
-
-[[package]]
 name = "dragonfly-plugin"
 version = "0.1.0"
 dependencies = [
@@ -52,13 +45,6 @@ checksum = "754ca22de805bb5744484a5b151a9e1a8e837d5dc232c2d7d8c2e3492edc8b60"
 dependencies = [
  "cfg-if",
  "windows-link",
-]
-
-[[package]]
-name = "movement-guard-plugin"
-version = "0.1.0"
-dependencies = [
- "dragonfly-plugin",
 ]
 
 [[package]]
