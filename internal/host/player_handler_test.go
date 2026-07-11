@@ -5,7 +5,9 @@ import (
 	"time"
 
 	"github.com/bedrock-gophers/plugins/internal/native"
+	"github.com/df-mc/dragonfly/server/block/cube"
 	"github.com/df-mc/dragonfly/server/event"
+	"github.com/df-mc/dragonfly/server/item"
 	"github.com/df-mc/dragonfly/server/player"
 	"github.com/df-mc/dragonfly/server/world"
 	"github.com/go-gl/mathgl/mgl64"
@@ -13,18 +15,22 @@ import (
 )
 
 type runtimeStub struct {
-	subscriptions uint64
-	moveCancelled bool
-	chatOutput    native.PlayerChatOutput
-	moveInput     native.PlayerMoveInput
-	chatInput     native.PlayerChatInput
-	joinInput     native.PlayerJoinInput
-	quitInput     native.PlayerQuitInput
-	joinCancelled bool
-	hurtInput     native.PlayerHurtInput
-	hurtOutput    native.PlayerHurtOutput
-	healInput     native.PlayerHealInput
-	healOutput    native.PlayerHealOutput
+	subscriptions       uint64
+	moveCancelled       bool
+	chatOutput          native.PlayerChatOutput
+	moveInput           native.PlayerMoveInput
+	chatInput           native.PlayerChatInput
+	joinInput           native.PlayerJoinInput
+	quitInput           native.PlayerQuitInput
+	joinCancelled       bool
+	hurtInput           native.PlayerHurtInput
+	hurtOutput          native.PlayerHurtOutput
+	healInput           native.PlayerHealInput
+	healOutput          native.PlayerHealOutput
+	blockBreakInput     native.PlayerBlockBreakInput
+	blockBreakOutput    native.PlayerBlockBreakOutput
+	blockPlaceInput     native.PlayerBlockPlaceInput
+	blockPlaceCancelled bool
 }
 
 func (r *runtimeStub) HandlePlayerJoin(input native.PlayerJoinInput, _ bool) (bool, error) {
@@ -42,6 +48,14 @@ func (r *runtimeStub) HandlePlayerHurt(input native.PlayerHurtInput, _ bool) (na
 func (r *runtimeStub) HandlePlayerHeal(input native.PlayerHealInput, _ bool) (native.PlayerHealOutput, error) {
 	r.healInput = input
 	return r.healOutput, nil
+}
+func (r *runtimeStub) HandlePlayerBlockBreak(input native.PlayerBlockBreakInput, _ bool) (native.PlayerBlockBreakOutput, error) {
+	r.blockBreakInput = input
+	return r.blockBreakOutput, nil
+}
+func (r *runtimeStub) HandlePlayerBlockPlace(input native.PlayerBlockPlaceInput, _ bool) (bool, error) {
+	r.blockPlaceInput = input
+	return r.blockPlaceCancelled, nil
 }
 
 func (r *runtimeStub) Subscriptions() uint64 { return r.subscriptions }
@@ -157,6 +171,34 @@ func TestPlayerHandlerHurtAndHeal(t *testing.T) {
 		}
 		if runtime.hurtInput.Player.Generation != 13 || runtime.healInput.Player.Generation != 13 {
 			t.Fatalf("hurt=%+v heal=%+v", runtime.hurtInput, runtime.healInput)
+		}
+	})
+}
+
+func TestPlayerHandlerBlockBreakAndPlace(t *testing.T) {
+	runtime := &runtimeStub{
+		subscriptions:       native.PlayerBlockBreakSubscription | native.PlayerBlockPlaceSubscription,
+		blockBreakOutput:    native.PlayerBlockBreakOutput{Experience: 7},
+		blockPlaceCancelled: true,
+	}
+	withPlayer(t, func(p *player.Player) {
+		players := NewPlayers()
+		players.Register(p, 14)
+		handler := NewPlayerHandler(runtime, nil, players)
+		breakContext := event.C(p)
+		drops := []item.Stack{}
+		experience := 2
+		handler.HandleBlockBreak(breakContext, cube.Pos{1, 2, 3}, &drops, &experience)
+		if breakContext.Cancelled() || experience != 7 {
+			t.Fatalf("cancelled=%v experience=%d", breakContext.Cancelled(), experience)
+		}
+		placeContext := event.C(p)
+		handler.HandleBlockPlace(placeContext, cube.Pos{4, 5, 6}, nil)
+		if !placeContext.Cancelled() {
+			t.Fatal("block place was not cancelled")
+		}
+		if runtime.blockBreakInput.Position != (native.BlockPos{X: 1, Y: 2, Z: 3}) || runtime.blockPlaceInput.Position != (native.BlockPos{X: 4, Y: 5, Z: 6}) {
+			t.Fatalf("break=%+v place=%+v", runtime.blockBreakInput, runtime.blockPlaceInput)
 		}
 	})
 }

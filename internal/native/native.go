@@ -19,15 +19,17 @@ import (
 )
 
 const (
-	PlayerMoveSubscription  uint64 = 1
-	PlayerChatSubscription  uint64 = 2
-	PlayerJoinSubscription  uint64 = 4
-	PlayerQuitSubscription  uint64 = 8
-	PlayerHurtSubscription  uint64 = 16
-	PlayerHealSubscription  uint64 = 32
-	MaxChatReplacementBytes        = 4096
-	MaxCommandOutputBytes          = 4096
-	MaxCommandEnumBytes            = 4096
+	PlayerMoveSubscription       uint64 = 1
+	PlayerChatSubscription       uint64 = 2
+	PlayerJoinSubscription       uint64 = 4
+	PlayerQuitSubscription       uint64 = 8
+	PlayerHurtSubscription       uint64 = 16
+	PlayerHealSubscription       uint64 = 32
+	PlayerBlockBreakSubscription uint64 = 64
+	PlayerBlockPlaceSubscription uint64 = 128
+	MaxChatReplacementBytes             = 4096
+	MaxCommandOutputBytes               = 4096
+	MaxCommandEnumBytes                 = 4096
 )
 
 type PlayerID struct {
@@ -41,6 +43,10 @@ type Vec3 struct {
 
 type Rotation struct {
 	Yaw, Pitch float32
+}
+
+type BlockPos struct {
+	X, Y, Z int32
 }
 
 type PlayerMoveInput struct {
@@ -93,6 +99,24 @@ type PlayerHealInput struct {
 type PlayerHealOutput struct {
 	Cancelled bool
 	Health    float64
+}
+
+type PlayerBlockBreakInput struct {
+	Player     PlayerID
+	Position   BlockPos
+	Block      string
+	Experience int32
+}
+
+type PlayerBlockBreakOutput struct {
+	Cancelled  bool
+	Experience int32
+}
+
+type PlayerBlockPlaceInput struct {
+	Player   PlayerID
+	Position BlockPos
+	Block    string
 }
 
 type Command struct {
@@ -534,6 +558,53 @@ func (r *Runtime) HandlePlayerHeal(input PlayerHealInput, cancelled bool) (Playe
 	output.Cancelled = state.cancelled != 0
 	output.Health = float64(state.health)
 	return output, nil
+}
+
+func (r *Runtime) HandlePlayerBlockBreak(input PlayerBlockBreakInput, cancelled bool) (PlayerBlockBreakOutput, error) {
+	output := PlayerBlockBreakOutput{Cancelled: cancelled, Experience: input.Experience}
+	if r == nil || r.ptr == nil {
+		return output, errors.New("native runtime is closed")
+	}
+	block := C.CBytes([]byte(input.Block))
+	defer C.free(block)
+	var nativeInput C.DfPlayerBlockBreakInput
+	fillPlayerID(&nativeInput.player, input.Player)
+	nativeInput.position = nativeBlockPos(input.Position)
+	nativeInput.block = C.DfStringView{data: (*C.uint8_t)(block), len: C.uint64_t(len(input.Block))}
+	state := C.DfPlayerBlockBreakState{experience: C.int32_t(input.Experience)}
+	if cancelled {
+		state.cancelled = 1
+	}
+	if status := C.bg_runtime_handle_player_block_break(r.ptr, &nativeInput, &state); status != C.DF_STATUS_OK {
+		return output, fmt.Errorf("native block-break handler failed with status %d", int32(status))
+	}
+	output.Cancelled = state.cancelled != 0
+	output.Experience = int32(state.experience)
+	return output, nil
+}
+
+func (r *Runtime) HandlePlayerBlockPlace(input PlayerBlockPlaceInput, cancelled bool) (bool, error) {
+	if r == nil || r.ptr == nil {
+		return cancelled, errors.New("native runtime is closed")
+	}
+	block := C.CBytes([]byte(input.Block))
+	defer C.free(block)
+	var nativeInput C.DfPlayerBlockPlaceInput
+	fillPlayerID(&nativeInput.player, input.Player)
+	nativeInput.position = nativeBlockPos(input.Position)
+	nativeInput.block = C.DfStringView{data: (*C.uint8_t)(block), len: C.uint64_t(len(input.Block))}
+	var state C.DfPlayerBlockPlaceState
+	if cancelled {
+		state.cancelled = 1
+	}
+	if status := C.bg_runtime_handle_player_block_place(r.ptr, &nativeInput, &state); status != C.DF_STATUS_OK {
+		return state.cancelled != 0, fmt.Errorf("native block-place handler failed with status %d", int32(status))
+	}
+	return state.cancelled != 0, nil
+}
+
+func nativeBlockPos(position BlockPos) C.DfBlockPos {
+	return C.DfBlockPos{x: C.int32_t(position.X), y: C.int32_t(position.Y), z: C.int32_t(position.Z)}
 }
 
 func boolByte(value bool) uint8 {

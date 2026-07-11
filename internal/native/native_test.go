@@ -203,6 +203,34 @@ func TestPlayerHurtAndHeal(t *testing.T) {
 	}
 }
 
+func TestPlayerBlockBreakAndPlace(t *testing.T) {
+	runtime := openTestRuntime(t)
+	if runtime.Subscriptions()&PlayerBlockBreakSubscription == 0 || runtime.Subscriptions()&PlayerBlockPlaceSubscription == 0 {
+		t.Fatal("block-break or block-place subscription missing")
+	}
+	broken, err := runtime.HandlePlayerBlockBreak(PlayerBlockBreakInput{
+		Position:   BlockPos{X: 1, Y: 2, Z: 3},
+		Block:      "minecraft:stone",
+		Experience: 4,
+	}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if broken.Cancelled || broken.Experience != 4 {
+		t.Fatalf("block break = %+v", broken)
+	}
+	cancelled, err := runtime.HandlePlayerBlockPlace(PlayerBlockPlaceInput{
+		Position: BlockPos{X: 4, Y: 5, Z: 6},
+		Block:    "minecraft:dirt",
+	}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cancelled {
+		t.Fatal("block place cancelled")
+	}
+}
+
 func TestCancellationIsMonotonic(t *testing.T) {
 	runtime := openTestRuntime(t)
 	cancelled, err := runtime.HandlePlayerMove(PlayerMoveInput{NewPosition: Vec3{Y: 64}}, true)

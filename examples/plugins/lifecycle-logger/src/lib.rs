@@ -1,5 +1,6 @@
 use dragonfly::{
-    PlayerHealEvent, PlayerHurtEvent, PlayerJoinEvent, PlayerQuitEvent, Plugin, plugin,
+    PlayerBlockBreakEvent, PlayerBlockPlaceEvent, PlayerHealEvent, PlayerHurtEvent,
+    PlayerJoinEvent, PlayerQuitEvent, Plugin, plugin,
 };
 
 #[derive(Default)]
@@ -29,5 +30,13 @@ impl Plugin for LifecycleLogger {
 
     fn on_heal(&self, event: &mut PlayerHealEvent<'_>) {
         eprintln!("player healed for {} by {}", event.health(), event.source());
+    }
+
+    fn on_block_break(&self, event: &mut PlayerBlockBreakEvent<'_>) {
+        eprintln!("broke {} at {:?}", event.block(), event.position());
+    }
+
+    fn on_block_place(&self, event: &mut PlayerBlockPlaceEvent<'_>) {
+        eprintln!("placed {} at {:?}", event.block(), event.position());
     }
 }

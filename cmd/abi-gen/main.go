@@ -102,7 +102,8 @@ func readEvents(dir string) ([]event, error) {
 func validateFields(eventName string, fields []field) error {
 	valid := map[string]bool{
 		"bool": true, "player_id": true, "rotation": true, "string_buffer": true,
-		"string_view": true, "vec3": true, "f64": true, "u64": true,
+		"string_view": true, "vec3": true, "f64": true, "u64": true, "i32": true,
+		"block_pos": true,
 	}
 	seen := map[string]bool{}
 	for _, f := range fields {
@@ -139,6 +140,7 @@ typedef uint32_t DfEventId;
 typedef struct { uint8_t bytes[16]; uint64_t generation; } DfPlayerId;
 typedef struct { double x; double y; double z; } DfVec3;
 typedef struct { float yaw; float pitch; } DfRotation;
+typedef struct { int32_t x; int32_t y; int32_t z; } DfBlockPos;
 typedef struct { const uint8_t *data; uint64_t len; } DfStringView;
 typedef struct { uint8_t *data; uint64_t len; uint64_t capacity; } DfStringBuffer;
 #define DF_COMMAND_PARAMETER_SUBCOMMAND 1u
@@ -261,6 +263,9 @@ pub struct DfVec3 { pub x: f64, pub y: f64, pub z: f64 }
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DfRotation { pub yaw: f32, pub pitch: f32 }
 #[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfBlockPos { pub x: i32, pub y: i32, pub z: i32 }
+#[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct DfStringView { pub data: *const u8, pub len: u64 }
 impl Default for DfStringView {
@@ -368,6 +373,7 @@ func cType(t string) string {
 		"bool": "uint8_t", "player_id": "DfPlayerId", "rotation": "DfRotation",
 		"string_buffer": "DfStringBuffer", "string_view": "DfStringView", "vec3": "DfVec3",
 		"f64": "double", "u64": "uint64_t",
+		"i32": "int32_t", "block_pos": "DfBlockPos",
 	}[t]
 }
 
@@ -376,6 +382,7 @@ func rustType(t string) string {
 		"bool": "u8", "player_id": "DfPlayerId", "rotation": "DfRotation",
 		"string_buffer": "DfStringBuffer", "string_view": "DfStringView", "vec3": "DfVec3",
 		"f64": "f64", "u64": "u64",
+		"i32": "i32", "block_pos": "DfBlockPos",
 	}[t]
 }
 

@@ -8,6 +8,7 @@ import (
 
 	"github.com/bedrock-gophers/plugins/internal/native"
 	"github.com/df-mc/dragonfly/server/block/cube"
+	"github.com/df-mc/dragonfly/server/item"
 	"github.com/df-mc/dragonfly/server/player"
 	"github.com/df-mc/dragonfly/server/world"
 	"github.com/go-gl/mathgl/mgl64"
@@ -21,6 +22,8 @@ type playerRuntime interface {
 	HandlePlayerQuit(native.PlayerQuitInput) error
 	HandlePlayerHurt(native.PlayerHurtInput, bool) (native.PlayerHurtOutput, error)
 	HandlePlayerHeal(native.PlayerHealInput, bool) (native.PlayerHealOutput, error)
+	HandlePlayerBlockBreak(native.PlayerBlockBreakInput, bool) (native.PlayerBlockBreakOutput, error)
+	HandlePlayerBlockPlace(native.PlayerBlockPlaceInput, bool) (bool, error)
 }
 
 // PlayerHandler forwards supported Dragonfly player events into the native runtime.
@@ -124,6 +127,58 @@ func (h *PlayerHandler) HandleHeal(ctx *player.Context, health *float64, source 
 	if output.Cancelled {
 		ctx.Cancel()
 	}
+}
+
+func (h *PlayerHandler) HandleBlockBreak(ctx *player.Context, position cube.Pos, _ *[]item.Stack, experience *int) {
+	if h.runtime.Subscriptions()&native.PlayerBlockBreakSubscription == 0 {
+		return
+	}
+	p := ctx.Val()
+	output, err := h.runtime.HandlePlayerBlockBreak(native.PlayerBlockBreakInput{
+		Player:     h.playerID(p),
+		Position:   nativeBlockPos(position),
+		Block:      blockName(p.Tx().Block(position)),
+		Experience: int32(*experience),
+	}, ctx.Cancelled())
+	if err != nil {
+		h.log.Error("native plugin block-break handler failed", "player", p.Name(), "error", err)
+		return
+	}
+	*experience = int(output.Experience)
+	if output.Cancelled {
+		ctx.Cancel()
+	}
+}
+
+func (h *PlayerHandler) HandleBlockPlace(ctx *player.Context, position cube.Pos, block world.Block) {
+	if h.runtime.Subscriptions()&native.PlayerBlockPlaceSubscription == 0 {
+		return
+	}
+	p := ctx.Val()
+	cancelled, err := h.runtime.HandlePlayerBlockPlace(native.PlayerBlockPlaceInput{
+		Player:   h.playerID(p),
+		Position: nativeBlockPos(position),
+		Block:    blockName(block),
+	}, ctx.Cancelled())
+	if err != nil {
+		h.log.Error("native plugin block-place handler failed", "player", p.Name(), "error", err)
+		return
+	}
+	if cancelled {
+		ctx.Cancel()
+	}
+}
+
+func nativeBlockPos(position cube.Pos) native.BlockPos {
+	return native.BlockPos{X: int32(position.X()), Y: int32(position.Y()), Z: int32(position.Z())}
+}
+
+func blockName(block world.Block) string {
+	if block == nil {
+		return "minecraft:air"
+	}
+	name, _ := block.EncodeBlock()
+	return name
 }
 
 func (h *PlayerHandler) playerID(p *player.Player) native.PlayerID {

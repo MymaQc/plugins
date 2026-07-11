@@ -18,6 +18,7 @@ typedef uint32_t DfEventId;
 typedef struct { uint8_t bytes[16]; uint64_t generation; } DfPlayerId;
 typedef struct { double x; double y; double z; } DfVec3;
 typedef struct { float yaw; float pitch; } DfRotation;
+typedef struct { int32_t x; int32_t y; int32_t z; } DfBlockPos;
 typedef struct { const uint8_t *data; uint64_t len; } DfStringView;
 typedef struct { uint8_t *data; uint64_t len; uint64_t capacity; } DfStringBuffer;
 #define DF_COMMAND_PARAMETER_SUBCOMMAND 1u
@@ -120,6 +121,31 @@ typedef struct {
     double health;
 } DfPlayerHealState;
 
+#define DF_EVENT_PLAYER_BLOCK_BREAK 7u
+
+typedef struct {
+    DfPlayerId player;
+    DfBlockPos position;
+    DfStringView block;
+} DfPlayerBlockBreakInput;
+
+typedef struct {
+    uint8_t cancelled;
+    int32_t experience;
+} DfPlayerBlockBreakState;
+
+#define DF_EVENT_PLAYER_BLOCK_PLACE 8u
+
+typedef struct {
+    DfPlayerId player;
+    DfBlockPos position;
+    DfStringView block;
+} DfPlayerBlockPlaceInput;
+
+typedef struct {
+    uint8_t cancelled;
+} DfPlayerBlockPlaceState;
+
 typedef DfStatus (*DfHandleEventFn)(void *instance, DfEventId event_id, const void *input, void *state);
 typedef void *(*DfPluginCreateFn)(void);
 typedef DfStatus (*DfPluginLifecycleFn)(void *instance);
@@ -162,6 +188,8 @@ DfStatus df_runtime_handle_player_join(DfRuntime *runtime, const DfPlayerJoinInp
 DfStatus df_runtime_handle_player_quit(DfRuntime *runtime, const DfPlayerQuitInput *input, DfPlayerQuitState *state);
 DfStatus df_runtime_handle_player_hurt(DfRuntime *runtime, const DfPlayerHurtInput *input, DfPlayerHurtState *state);
 DfStatus df_runtime_handle_player_heal(DfRuntime *runtime, const DfPlayerHealInput *input, DfPlayerHealState *state);
+DfStatus df_runtime_handle_player_block_break(DfRuntime *runtime, const DfPlayerBlockBreakInput *input, DfPlayerBlockBreakState *state);
+DfStatus df_runtime_handle_player_block_place(DfRuntime *runtime, const DfPlayerBlockPlaceInput *input, DfPlayerBlockPlaceState *state);
 
 #ifdef __cplusplus
 }

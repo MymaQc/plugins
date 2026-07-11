@@ -18,6 +18,9 @@ pub struct DfVec3 { pub x: f64, pub y: f64, pub z: f64 }
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DfRotation { pub yaw: f32, pub pitch: f32 }
 #[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfBlockPos { pub x: i32, pub y: i32, pub z: i32 }
+#[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct DfStringView { pub data: *const u8, pub len: u64 }
 impl Default for DfStringView {
@@ -156,6 +159,37 @@ pub struct DfPlayerHealInput {
 pub struct DfPlayerHealState {
     pub cancelled: u8,
     pub health: f64,
+}
+
+pub const DF_EVENT_PLAYER_BLOCK_BREAK: DfEventId = 7;
+pub const DF_SUBSCRIPTION_PLAYER_BLOCK_BREAK: u64 = 1u64 << 6;
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfPlayerBlockBreakInput {
+    pub player: DfPlayerId,
+    pub position: DfBlockPos,
+    pub block: DfStringView,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfPlayerBlockBreakState {
+    pub cancelled: u8,
+    pub experience: i32,
+}
+
+pub const DF_EVENT_PLAYER_BLOCK_PLACE: DfEventId = 8;
+pub const DF_SUBSCRIPTION_PLAYER_BLOCK_PLACE: u64 = 1u64 << 7;
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfPlayerBlockPlaceInput {
+    pub player: DfPlayerId,
+    pub position: DfBlockPos,
+    pub block: DfStringView,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfPlayerBlockPlaceState {
+    pub cancelled: u8,
 }
 
 pub type DfPluginCreateFn = unsafe extern "C" fn() -> *mut c_void;

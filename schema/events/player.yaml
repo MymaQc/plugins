@@ -49,3 +49,20 @@ events:
     state:
       - { name: cancelled, type: bool }
       - { name: health, type: f64 }
+  - name: block_break
+    id: 7
+    input:
+      - { name: player, type: player_id }
+      - { name: position, type: block_pos }
+      - { name: block, type: string_view }
+    state:
+      - { name: cancelled, type: bool }
+      - { name: experience, type: i32 }
+  - name: block_place
+    id: 8
+    input:
+      - { name: player, type: player_id }
+      - { name: position, type: block_pos }
+      - { name: block, type: string_view }
+    state:
+      - { name: cancelled, type: bool }

@@ -17,6 +17,23 @@ pub struct Vec3 {
     pub z: f64,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub struct BlockPos {
+    pub x: i32,
+    pub y: i32,
+    pub z: i32,
+}
+
+impl From<dragonfly_plugin_sys::DfBlockPos> for BlockPos {
+    fn from(value: dragonfly_plugin_sys::DfBlockPos) -> Self {
+        Self {
+            x: value.x,
+            y: value.y,
+            z: value.z,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct PlayerId {
     uuid: [u8; 16],
@@ -801,6 +818,88 @@ pub struct PlayerHealEvent<'a> {
     state: &'a mut dragonfly_plugin_sys::DfPlayerHealState,
 }
 
+pub struct PlayerBlockBreakEvent<'a> {
+    input: &'a dragonfly_plugin_sys::DfPlayerBlockBreakInput,
+    state: &'a mut dragonfly_plugin_sys::DfPlayerBlockBreakState,
+}
+
+impl<'a> PlayerBlockBreakEvent<'a> {
+    /// # Safety
+    /// Both references must belong to the same active block-break callback.
+    #[doc(hidden)]
+    pub unsafe fn from_raw(
+        input: &'a dragonfly_plugin_sys::DfPlayerBlockBreakInput,
+        state: &'a mut dragonfly_plugin_sys::DfPlayerBlockBreakState,
+    ) -> Self {
+        Self { input, state }
+    }
+
+    pub fn player(&self) -> Player {
+        Player::from_id(self.input.player)
+    }
+
+    pub fn position(&self) -> BlockPos {
+        self.input.position.into()
+    }
+
+    pub fn block(&self) -> &str {
+        unsafe { string_view(self.input.block) }
+    }
+
+    pub fn experience(&self) -> i32 {
+        self.state.experience
+    }
+
+    pub fn set_experience(&mut self, experience: i32) {
+        self.state.experience = experience.max(0);
+    }
+
+    pub fn cancelled(&self) -> bool {
+        self.state.cancelled != 0
+    }
+
+    pub fn cancel(&mut self) {
+        self.state.cancelled = 1;
+    }
+}
+
+pub struct PlayerBlockPlaceEvent<'a> {
+    input: &'a dragonfly_plugin_sys::DfPlayerBlockPlaceInput,
+    state: &'a mut dragonfly_plugin_sys::DfPlayerBlockPlaceState,
+}
+
+impl<'a> PlayerBlockPlaceEvent<'a> {
+    /// # Safety
+    /// Both references must belong to the same active block-place callback.
+    #[doc(hidden)]
+    pub unsafe fn from_raw(
+        input: &'a dragonfly_plugin_sys::DfPlayerBlockPlaceInput,
+        state: &'a mut dragonfly_plugin_sys::DfPlayerBlockPlaceState,
+    ) -> Self {
+        Self { input, state }
+    }
+
+    pub fn player(&self) -> Player {
+        Player::from_id(self.input.player)
+    }
+
+    pub fn position(&self) -> BlockPos {
+        self.input.position.into()
+    }
+
+    pub fn block(&self) -> &str {
+        unsafe { string_view(self.input.block) }
+    }
+
+    pub fn cancelled(&self) -> bool {
+        self.state.cancelled != 0
+    }
+
+    pub fn cancel(&mut self) {
+        self.state.cancelled = 1;
+    }
+}
+
 impl<'a> PlayerHealEvent<'a> {
     /// # Safety
     /// Both references must belong to the same active heal callback.
@@ -846,6 +945,8 @@ pub trait Plugin: Default + Send + Sync + 'static {
     fn on_quit(&self, _event: &PlayerQuitEvent<'_>) {}
     fn on_hurt(&self, _event: &mut PlayerHurtEvent<'_>) {}
     fn on_heal(&self, _event: &mut PlayerHealEvent<'_>) {}
+    fn on_block_break(&self, _event: &mut PlayerBlockBreakEvent<'_>) {}
+    fn on_block_place(&self, _event: &mut PlayerBlockPlaceEvent<'_>) {}
     fn commands(&self) -> &'static [Command] {
         &[]
     }

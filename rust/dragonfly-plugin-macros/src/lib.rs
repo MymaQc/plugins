@@ -799,12 +799,20 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
         .items
         .iter()
         .any(|item| matches!(item, syn::ImplItem::Fn(function) if function.sig.ident == "on_heal"));
+    let handles_block_break = implementation.items.iter().any(
+        |item| matches!(item, syn::ImplItem::Fn(function) if function.sig.ident == "on_block_break"),
+    );
+    let handles_block_place = implementation.items.iter().any(
+        |item| matches!(item, syn::ImplItem::Fn(function) if function.sig.ident == "on_block_place"),
+    );
     let subscriptions = u64::from(handles_move)
         | (u64::from(handles_chat) << 1)
         | (u64::from(handles_join) << 2)
         | (u64::from(handles_quit) << 3)
         | (u64::from(handles_hurt) << 4)
-        | (u64::from(handles_heal) << 5);
+        | (u64::from(handles_heal) << 5)
+        | (u64::from(handles_block_break) << 6)
+        | (u64::from(handles_block_place) << 7);
 
     quote! {
         #[doc(hidden)]
@@ -1005,6 +1013,22 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
                         let state = unsafe { &mut *state.cast::<sys::DfPlayerHealState>() };
                         let mut event = unsafe { ::dragonfly_plugin::PlayerHealEvent::from_raw(input, state) };
                         <PluginType as ::dragonfly_plugin::Plugin>::on_heal(plugin, &mut event);
+                        sys::DF_STATUS_OK
+                    }
+                    sys::DF_EVENT_PLAYER_BLOCK_BREAK => {
+                        let plugin = unsafe { &*instance.cast::<PluginType>() };
+                        let input = unsafe { &*input.cast::<sys::DfPlayerBlockBreakInput>() };
+                        let state = unsafe { &mut *state.cast::<sys::DfPlayerBlockBreakState>() };
+                        let mut event = unsafe { ::dragonfly_plugin::PlayerBlockBreakEvent::from_raw(input, state) };
+                        <PluginType as ::dragonfly_plugin::Plugin>::on_block_break(plugin, &mut event);
+                        sys::DF_STATUS_OK
+                    }
+                    sys::DF_EVENT_PLAYER_BLOCK_PLACE => {
+                        let plugin = unsafe { &*instance.cast::<PluginType>() };
+                        let input = unsafe { &*input.cast::<sys::DfPlayerBlockPlaceInput>() };
+                        let state = unsafe { &mut *state.cast::<sys::DfPlayerBlockPlaceState>() };
+                        let mut event = unsafe { ::dragonfly_plugin::PlayerBlockPlaceEvent::from_raw(input, state) };
+                        <PluginType as ::dragonfly_plugin::Plugin>::on_block_place(plugin, &mut event);
                         sys::DF_STATUS_OK
                     }
                     _ => sys::DF_STATUS_ERROR,

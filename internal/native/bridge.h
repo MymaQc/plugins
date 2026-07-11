@@ -68,6 +68,16 @@ DfStatus bg_runtime_handle_player_heal(
     const DfPlayerHealInput *input,
     DfPlayerHealState *state
 );
+DfStatus bg_runtime_handle_player_block_break(
+    BgRuntimeLibrary *library,
+    const DfPlayerBlockBreakInput *input,
+    DfPlayerBlockBreakState *state
+);
+DfStatus bg_runtime_handle_player_block_place(
+    BgRuntimeLibrary *library,
+    const DfPlayerBlockPlaceInput *input,
+    DfPlayerBlockPlaceState *state
+);
 uint64_t bg_runtime_handle_player_move_value(
     BgRuntimeLibrary *library,
     DfPlayerMoveInput input,
