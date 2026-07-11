@@ -41,8 +41,8 @@ func TestStructuredCommandParsesSubcommandAndEnum(t *testing.T) {
 		t.Fatal(err)
 	}
 	source := &commandSourceStub{}
-	cmd.New("hello", "", nil, runnables...).Execute("say excited dragonfly", source, nil)
-	if runtime.input.Source != "tester" || runtime.input.Arguments != "say excited dragonfly" {
+	cmd.New("hello", "", nil, runnables...).Execute("say excited", source, nil)
+	if runtime.input.Source != "tester" || runtime.input.Arguments != "say excited" {
 		t.Fatalf("input = %#v", runtime.input)
 	}
 	if source.output == nil || source.output.ErrorCount() != 0 || source.output.MessageCount() != 1 {

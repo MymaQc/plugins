@@ -34,6 +34,10 @@ impl Default for DfStringBuffer {
 pub struct DfCommandParameter { pub kind: u32, pub name: DfStringView, pub values: *const DfStringView, pub value_count: u64 }
 pub const DF_COMMAND_PARAMETER_SUBCOMMAND: u32 = 1;
 pub const DF_COMMAND_PARAMETER_ENUM: u32 = 2;
+pub const DF_COMMAND_PARAMETER_STRING: u32 = 3;
+pub const DF_COMMAND_PARAMETER_INTEGER: u32 = 4;
+pub const DF_COMMAND_PARAMETER_FLOAT: u32 = 5;
+pub const DF_COMMAND_PARAMETER_BOOL: u32 = 6;
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct DfCommandOverload { pub parameters: *const DfCommandParameter, pub parameter_count: u64 }

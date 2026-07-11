@@ -75,6 +75,10 @@ type CommandParameterKind uint32
 const (
 	CommandParameterSubcommand CommandParameterKind = 1
 	CommandParameterEnum       CommandParameterKind = 2
+	CommandParameterString     CommandParameterKind = 3
+	CommandParameterInteger    CommandParameterKind = 4
+	CommandParameterFloat      CommandParameterKind = 5
+	CommandParameterBool       CommandParameterKind = 6
 )
 
 type CommandInput struct {

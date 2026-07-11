@@ -502,7 +502,9 @@ Raw commands use one generic Go runnable with `cmd.Varargs`:
 /plugin-command <raw arguments...>
 ```
 
-Structured commands declare overloads containing literal subcommands and enum parameters. The Go adapter maps them to Dragonfly `Runnable`, `ParamDescriber`, `Parameter`, and `Enum` implementations so Bedrock clients receive native command metadata.
+Structured commands declare overloads containing literal subcommands, enums, strings, integers, floats, and booleans. The Go adapter maps them to Dragonfly `Runnable`, `ParamDescriber`, `Parameter`, and `Enum` implementations so Bedrock clients receive native command metadata.
+
+Online players are typed player targets, not dynamic enums: names are mutable and selectors must resolve through Dragonfly. Generic dynamic/soft enums are reserved for plugin-defined changing sets such as kits or arenas. Their options cross the ABI on Dragonfly's low-frequency command metadata path and may vary by command source.
 
 Rust has no Go-style runtime reflection. Its equivalent plugin API uses derive and attribute proc macros at compile time. A derived command enum turns variants into subcommands and `CommandEnum` fields into Dragonfly enums. A `#[command]` method inside the bare `#[plugin]` implementation is discovered and routed automatically. These macros generate the low-level static command schema and parser; direct `Command`, `CommandOverload`, and `CommandParameter` construction remains available as an escape hatch and ABI test surface.
 

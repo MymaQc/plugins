@@ -10,6 +10,9 @@ enum Style {
 #[command(name = "hello", description = "Greets the command source")]
 enum Hello {
     Say { style: Style },
+    Add { left: i64, right: i64 },
+    Toggle { enabled: bool },
+    Echo { text: String },
     About,
 }
 
@@ -27,6 +30,9 @@ impl Plugin for HelloCommand {
             Hello::Say {
                 style: Style::Excited,
             } => format!("HELLO, {}!", event.source().to_uppercase()),
+            Hello::Add { left, right } => format!("{}", left + right),
+            Hello::Toggle { enabled } => format!("enabled={enabled}"),
+            Hello::Echo { text } => text,
             Hello::About => "Hello from a Rust plugin running in Dragonfly.".to_owned(),
         };
         event

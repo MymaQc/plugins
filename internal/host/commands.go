@@ -3,6 +3,7 @@ package host
 import (
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/bedrock-gophers/plugins/internal/native"
@@ -76,17 +77,14 @@ type pluginCommandBase struct {
 	index   uint64
 }
 
-func (c pluginCommandBase) dispatch(source cmd.Source, output *cmd.Output, arguments []string, trailing cmd.Varargs) {
-	if value := strings.TrimSpace(string(trailing)); value != "" {
-		arguments = append(arguments, value)
-	}
+func (c pluginCommandBase) dispatch(source cmd.Source, output *cmd.Output, arguments string) {
 	sourceName := fmt.Sprintf("%T", source)
 	if named, ok := source.(cmd.NamedTarget); ok {
 		sourceName = named.Name()
 	}
 	result, err := c.runtime.HandleCommand(c.index, native.CommandInput{
 		Source:    sourceName,
-		Arguments: strings.Join(arguments, " "),
+		Arguments: arguments,
 	})
 	if err != nil {
 		output.Error(err)
@@ -108,7 +106,7 @@ type pluginCommand struct {
 }
 
 func (c pluginCommand) Run(source cmd.Source, output *cmd.Output, _ *world.Tx) {
-	c.dispatch(source, output, nil, c.Arguments)
+	c.dispatch(source, output, string(c.Arguments))
 }
 
 type pluginParameter struct {
@@ -137,6 +135,25 @@ func (p pluginParameter) Parse(line *cmd.Line, value reflect.Value) error {
 			}
 		}
 		return fmt.Errorf("%q is not a valid %s", argument, p.descriptor.Name)
+	case native.CommandParameterString:
+		p.selected = argument
+	case native.CommandParameterInteger:
+		if _, signedErr := strconv.ParseInt(argument, 10, 64); signedErr != nil {
+			if _, unsignedErr := strconv.ParseUint(argument, 10, 64); unsignedErr != nil {
+				return fmt.Errorf("%q is not a valid integer", argument)
+			}
+		}
+		p.selected = argument
+	case native.CommandParameterFloat:
+		if _, err := strconv.ParseFloat(argument, 64); err != nil {
+			return fmt.Errorf("%q is not a valid float", argument)
+		}
+		p.selected = argument
+	case native.CommandParameterBool:
+		if !strings.EqualFold(argument, "true") && !strings.EqualFold(argument, "false") {
+			return fmt.Errorf("%q is not a valid boolean", argument)
+		}
+		p.selected = strings.ToLower(argument)
 	default:
 		return fmt.Errorf("unknown plugin parameter kind %d", p.descriptor.Kind)
 	}
@@ -155,11 +172,12 @@ func (e describedEnum) Type() string                { return e.typeName }
 func (e describedEnum) Options(cmd.Source) []string { return e.options }
 
 func describe(parameters ...pluginParameter) []cmd.ParamInfo {
-	result := make([]cmd.ParamInfo, 0, len(parameters)+1)
+	result := make([]cmd.ParamInfo, 0, len(parameters))
 	for _, parameter := range parameters {
-		if parameter.descriptor.Kind == native.CommandParameterSubcommand {
+		switch parameter.descriptor.Kind {
+		case native.CommandParameterSubcommand:
 			result = append(result, cmd.ParamInfo{Name: parameter.descriptor.Name, Value: cmd.SubCommand{}})
-		} else {
+		case native.CommandParameterEnum:
 			result = append(result, cmd.ParamInfo{
 				Name: parameter.descriptor.Name,
 				Value: describedEnum{
@@ -167,42 +185,46 @@ func describe(parameters ...pluginParameter) []cmd.ParamInfo {
 					options:  parameter.descriptor.Values,
 				},
 			})
+		case native.CommandParameterString:
+			result = append(result, cmd.ParamInfo{Name: parameter.descriptor.Name, Value: ""})
+		case native.CommandParameterInteger:
+			result = append(result, cmd.ParamInfo{Name: parameter.descriptor.Name, Value: int64(0)})
+		case native.CommandParameterFloat:
+			result = append(result, cmd.ParamInfo{Name: parameter.descriptor.Name, Value: float64(0)})
+		case native.CommandParameterBool:
+			result = append(result, cmd.ParamInfo{Name: parameter.descriptor.Name, Value: false})
 		}
 	}
-	result = append(result, cmd.ParamInfo{Name: "arguments", Value: cmd.Varargs(""), Optional: true})
 	return result
 }
 
 type pluginCommand1 struct {
 	pluginCommandBase `cmd:"-"`
 	P1                pluginParameter
-	Arguments         cmd.Varargs `cmd:"arguments"`
 }
 
 func (c pluginCommand1) Run(source cmd.Source, output *cmd.Output, _ *world.Tx) {
-	c.dispatch(source, output, []string{c.P1.selected}, c.Arguments)
+	c.dispatch(source, output, c.P1.selected)
 }
 func (c pluginCommand1) DescribeParams(cmd.Source) []cmd.ParamInfo { return describe(c.P1) }
 
 type pluginCommand2 struct {
 	pluginCommandBase `cmd:"-"`
 	P1, P2            pluginParameter
-	Arguments         cmd.Varargs `cmd:"arguments"`
 }
 
 func (c pluginCommand2) Run(source cmd.Source, output *cmd.Output, _ *world.Tx) {
-	c.dispatch(source, output, []string{c.P1.selected, c.P2.selected}, c.Arguments)
+	c.dispatch(source, output, strings.Join([]string{c.P1.selected, c.P2.selected}, " "))
 }
 func (c pluginCommand2) DescribeParams(cmd.Source) []cmd.ParamInfo { return describe(c.P1, c.P2) }
 
 type pluginCommand3 struct {
 	pluginCommandBase `cmd:"-"`
 	P1, P2, P3        pluginParameter
-	Arguments         cmd.Varargs `cmd:"arguments"`
 }
 
 func (c pluginCommand3) Run(source cmd.Source, output *cmd.Output, _ *world.Tx) {
-	c.dispatch(source, output, []string{c.P1.selected, c.P2.selected, c.P3.selected}, c.Arguments)
+	c.dispatch(source, output, strings.Join([]string{c.P1.selected, c.P2.selected, c.P3.selected}, " "))
 }
 func (c pluginCommand3) DescribeParams(cmd.Source) []cmd.ParamInfo {
 	return describe(c.P1, c.P2, c.P3)
@@ -211,11 +233,10 @@ func (c pluginCommand3) DescribeParams(cmd.Source) []cmd.ParamInfo {
 type pluginCommand4 struct {
 	pluginCommandBase `cmd:"-"`
 	P1, P2, P3, P4    pluginParameter
-	Arguments         cmd.Varargs `cmd:"arguments"`
 }
 
 func (c pluginCommand4) Run(source cmd.Source, output *cmd.Output, _ *world.Tx) {
-	c.dispatch(source, output, []string{c.P1.selected, c.P2.selected, c.P3.selected, c.P4.selected}, c.Arguments)
+	c.dispatch(source, output, strings.Join([]string{c.P1.selected, c.P2.selected, c.P3.selected, c.P4.selected}, " "))
 }
 func (c pluginCommand4) DescribeParams(cmd.Source) []cmd.ParamInfo {
 	return describe(c.P1, c.P2, c.P3, c.P4)

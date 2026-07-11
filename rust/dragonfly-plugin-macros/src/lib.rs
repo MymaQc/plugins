@@ -46,6 +46,27 @@ fn kebab_case(value: &str) -> String {
     output
 }
 
+fn type_name(value: &Type) -> Option<String> {
+    let Type::Path(path) = value else {
+        return None;
+    };
+    path.path
+        .segments
+        .last()
+        .map(|segment| segment.ident.to_string())
+}
+
+fn parse_scalar(field: &syn::Ident, ty: &Type) -> proc_macro2::TokenStream {
+    quote! {
+        let raw = parts.next().ok_or_else(|| ::dragonfly_plugin::CommandParseError::new(
+            concat!("missing command argument ", stringify!(#field))
+        ))?;
+        let #field = raw.parse::<#ty>().map_err(|_| {
+            ::dragonfly_plugin::CommandParseError::new(format!("invalid {}: {raw}", stringify!(#field)))
+        })?;
+    }
+}
+
 #[proc_macro_derive(CommandEnum, attributes(command))]
 pub fn command_enum(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
@@ -119,28 +140,66 @@ fn expand_command(input: DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
         let variant_name = command_attribute(&variant.attrs, "name")?
             .unwrap_or_else(|| kebab_case(&variant.ident.to_string()));
         let variant_ident = variant.ident;
-        let (parameters, field_names, field_types): (Vec<_>, Vec<_>, Vec<_>) = match variant.fields
-        {
+        let (parameters, field_names, reads): (Vec<_>, Vec<_>, Vec<_>) = match variant.fields {
             Fields::Unit => (Vec::new(), Vec::new(), Vec::new()),
             Fields::Named(fields) => {
                 let mut parameters = Vec::new();
                 let mut names = Vec::new();
-                let mut types = Vec::new();
+                let mut reads = Vec::new();
                 for field in fields.named {
                     let field_name = field.ident.expect("named field");
                     let parameter_name = command_attribute(&field.attrs, "name")?
                         .unwrap_or_else(|| kebab_case(&field_name.to_string()));
                     let field_type = field.ty;
-                    parameters.push(quote! {
-                        ::dragonfly_plugin::CommandParameter::enumeration(
-                            #parameter_name,
-                            <#field_type as ::dragonfly_plugin::CommandEnum>::VALUES,
-                        )
-                    });
+                    let field_type_name = type_name(&field_type);
+                    let (parameter, read) = match field_type_name.as_deref() {
+                        Some("String") => (
+                            quote!(::dragonfly_plugin::CommandParameter::string(#parameter_name)),
+                            quote! {
+                                let #field_name = parts.next().ok_or_else(|| {
+                                    ::dragonfly_plugin::CommandParseError::new(
+                                        concat!("missing command argument ", stringify!(#field_name))
+                                    )
+                                })?.to_owned();
+                            },
+                        ),
+                        Some("bool") => (
+                            quote!(::dragonfly_plugin::CommandParameter::boolean(#parameter_name)),
+                            parse_scalar(&field_name, &field_type),
+                        ),
+                        Some("f32" | "f64") => (
+                            quote!(::dragonfly_plugin::CommandParameter::float(#parameter_name)),
+                            parse_scalar(&field_name, &field_type),
+                        ),
+                        Some(
+                            "i8" | "i16" | "i32" | "i64" | "isize" | "u8" | "u16" | "u32" | "u64"
+                            | "usize",
+                        ) => (
+                            quote!(::dragonfly_plugin::CommandParameter::integer(#parameter_name)),
+                            parse_scalar(&field_name, &field_type),
+                        ),
+                        _ => (
+                            quote! {
+                                ::dragonfly_plugin::CommandParameter::enumeration(
+                                    #parameter_name,
+                                    <#field_type as ::dragonfly_plugin::CommandEnum>::VALUES,
+                                )
+                            },
+                            quote! {
+                                let raw = parts.next().ok_or_else(|| ::dragonfly_plugin::CommandParseError::new(
+                                    concat!("missing command argument ", stringify!(#field_name))
+                                ))?;
+                                let #field_name = <#field_type as ::dragonfly_plugin::CommandEnum>::parse(raw).ok_or_else(|| {
+                                    ::dragonfly_plugin::CommandParseError::new(format!("invalid {}: {raw}", stringify!(#field_name)))
+                                })?;
+                            },
+                        ),
+                    };
+                    parameters.push(parameter);
                     names.push(field_name);
-                    types.push(field_type);
+                    reads.push(read);
                 }
-                (parameters, names, types)
+                (parameters, names, reads)
             }
             Fields::Unnamed(fields) => {
                 return Err(syn::Error::new_spanned(
@@ -160,14 +219,6 @@ fn expand_command(input: DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
                 ::dragonfly_plugin::CommandParameter::subcommand(#variant_name),
                 #(#parameters),*
             ])
-        });
-        let reads = field_names.iter().zip(field_types.iter()).map(|(field, ty)| quote! {
-            let raw = parts.next().ok_or_else(|| ::dragonfly_plugin::CommandParseError::new(
-                concat!("missing command argument ", stringify!(#field))
-            ))?;
-            let #field = <#ty as ::dragonfly_plugin::CommandEnum>::parse(raw).ok_or_else(|| {
-                ::dragonfly_plugin::CommandParseError::new(format!("invalid {}: {raw}", stringify!(#field)))
-            })?;
         });
         let construct = if field_names.is_empty() {
             quote!(Self::#variant_ident)

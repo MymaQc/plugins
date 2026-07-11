@@ -1,9 +1,10 @@
 use dragonfly_plugin_sys::{
-    DF_ABI_VERSION, DF_COMMAND_PARAMETER_ENUM, DF_COMMAND_PARAMETER_SUBCOMMAND,
-    DF_EVENT_PLAYER_CHAT, DF_EVENT_PLAYER_MOVE, DF_STATUS_ERROR, DF_STATUS_OK,
-    DF_SUBSCRIPTION_PLAYER_CHAT, DF_SUBSCRIPTION_PLAYER_MOVE, DfCommandDescriptor, DfCommandInput,
-    DfCommandState, DfPlayerChatInput, DfPlayerChatState, DfPlayerMoveInput, DfPlayerMoveState,
-    DfPluginApiV1, DfPluginEntryV1Fn, DfStatus, DfStringView,
+    DF_ABI_VERSION, DF_COMMAND_PARAMETER_BOOL, DF_COMMAND_PARAMETER_ENUM,
+    DF_COMMAND_PARAMETER_FLOAT, DF_COMMAND_PARAMETER_INTEGER, DF_COMMAND_PARAMETER_STRING,
+    DF_COMMAND_PARAMETER_SUBCOMMAND, DF_EVENT_PLAYER_CHAT, DF_EVENT_PLAYER_MOVE, DF_STATUS_ERROR,
+    DF_STATUS_OK, DF_SUBSCRIPTION_PLAYER_CHAT, DF_SUBSCRIPTION_PLAYER_MOVE, DfCommandDescriptor,
+    DfCommandInput, DfCommandState, DfPlayerChatInput, DfPlayerChatState, DfPlayerMoveInput,
+    DfPlayerMoveState, DfPluginApiV1, DfPluginEntryV1Fn, DfStatus, DfStringView,
 };
 use libloading::{Library, Symbol};
 use std::ffi::{OsStr, c_void};
@@ -416,6 +417,11 @@ fn valid_command_descriptor(descriptor: &DfCommandDescriptor) -> bool {
                         }
                     }
                 }
+                DF_COMMAND_PARAMETER_STRING
+                | DF_COMMAND_PARAMETER_INTEGER
+                | DF_COMMAND_PARAMETER_FLOAT
+                | DF_COMMAND_PARAMETER_BOOL
+                    if values.is_empty() => {}
                 _ => return false,
             }
         }

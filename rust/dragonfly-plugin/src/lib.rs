@@ -105,9 +105,9 @@ pub struct CommandParameter(dragonfly_plugin_sys::DfCommandParameter);
 unsafe impl Sync for CommandParameter {}
 
 impl CommandParameter {
-    pub const fn subcommand(name: &'static str) -> Self {
+    const fn typed(name: &'static str, kind: u32) -> Self {
         Self(dragonfly_plugin_sys::DfCommandParameter {
-            kind: dragonfly_plugin_sys::DF_COMMAND_PARAMETER_SUBCOMMAND,
+            kind,
             name: dragonfly_plugin_sys::DfStringView {
                 data: name.as_ptr(),
                 len: name.len() as u64,
@@ -115,6 +115,10 @@ impl CommandParameter {
             values: core::ptr::null(),
             value_count: 0,
         })
+    }
+
+    pub const fn subcommand(name: &'static str) -> Self {
+        Self::typed(name, dragonfly_plugin_sys::DF_COMMAND_PARAMETER_SUBCOMMAND)
     }
 
     pub const fn enumeration(name: &'static str, values: &'static [CommandValue]) -> Self {
@@ -127,6 +131,22 @@ impl CommandParameter {
             values: values.as_ptr().cast(),
             value_count: values.len() as u64,
         })
+    }
+
+    pub const fn string(name: &'static str) -> Self {
+        Self::typed(name, dragonfly_plugin_sys::DF_COMMAND_PARAMETER_STRING)
+    }
+
+    pub const fn integer(name: &'static str) -> Self {
+        Self::typed(name, dragonfly_plugin_sys::DF_COMMAND_PARAMETER_INTEGER)
+    }
+
+    pub const fn float(name: &'static str) -> Self {
+        Self::typed(name, dragonfly_plugin_sys::DF_COMMAND_PARAMETER_FLOAT)
+    }
+
+    pub const fn boolean(name: &'static str) -> Self {
+        Self::typed(name, dragonfly_plugin_sys::DF_COMMAND_PARAMETER_BOOL)
     }
 }
 
@@ -352,10 +372,17 @@ mod tests {
         Creative,
     }
 
-    #[derive(Command, Debug, Eq, PartialEq)]
+    #[derive(Command, Debug, PartialEq)]
     #[command(name = "mode", description = "Changes a mode")]
     enum ModeCommand {
-        Set { mode: Mode },
+        Set {
+            mode: Mode,
+        },
+        Configure {
+            level: i64,
+            scale: f64,
+            enabled: bool,
+        },
         Query,
     }
 
@@ -395,6 +422,14 @@ mod tests {
             }
         );
         assert_eq!(ModeCommand::parse("query").unwrap(), ModeCommand::Query);
+        assert_eq!(
+            ModeCommand::parse("configure 4 1.5 true").unwrap(),
+            ModeCommand::Configure {
+                level: 4,
+                scale: 1.5,
+                enabled: true,
+            }
+        );
         assert!(ModeCommand::parse("set spectator").is_err());
     }
 }

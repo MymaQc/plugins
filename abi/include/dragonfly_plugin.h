@@ -22,6 +22,10 @@ typedef struct { const uint8_t *data; uint64_t len; } DfStringView;
 typedef struct { uint8_t *data; uint64_t len; uint64_t capacity; } DfStringBuffer;
 #define DF_COMMAND_PARAMETER_SUBCOMMAND 1u
 #define DF_COMMAND_PARAMETER_ENUM 2u
+#define DF_COMMAND_PARAMETER_STRING 3u
+#define DF_COMMAND_PARAMETER_INTEGER 4u
+#define DF_COMMAND_PARAMETER_FLOAT 5u
+#define DF_COMMAND_PARAMETER_BOOL 6u
 typedef struct { uint32_t kind; DfStringView name; const DfStringView *values; uint64_t value_count; } DfCommandParameter;
 typedef struct { const DfCommandParameter *parameters; uint64_t parameter_count; } DfCommandOverload;
 typedef struct { DfStringView name; DfStringView description; const DfCommandOverload *overloads; uint64_t overload_count; } DfCommandDescriptor;
