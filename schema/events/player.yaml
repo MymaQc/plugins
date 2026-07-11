@@ -1,0 +1,12 @@
+domain: player
+events:
+  - name: move
+    id: 1
+    input:
+      - { name: player, type: player_id }
+      - { name: old_position, type: vec3 }
+      - { name: new_position, type: vec3 }
+      - { name: rotation, type: rotation }
+    state:
+      - { name: cancelled, type: bool }
+
