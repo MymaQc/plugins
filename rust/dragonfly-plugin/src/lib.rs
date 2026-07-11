@@ -320,6 +320,24 @@ pub struct Dynamic<T> {
     marker: core::marker::PhantomData<T>,
 }
 
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct Varargs(String);
+
+impl Varargs {
+    #[doc(hidden)]
+    pub fn new(value: String) -> Self {
+        Self(value)
+    }
+
+    pub fn value(&self) -> &str {
+        &self.0
+    }
+
+    pub fn into_string(self) -> String {
+        self.0
+    }
+}
+
 impl<T> Dynamic<T> {
     #[doc(hidden)]
     pub fn new(value: impl Into<String>) -> Self {
@@ -553,8 +571,7 @@ mod tests {
             player: Player,
         },
         Message {
-            #[command(varargs)]
-            text: String,
+            text: Varargs,
         },
         Maybe {
             value: Option<i64>,
@@ -617,7 +634,7 @@ mod tests {
         else {
             panic!("wrong command variant");
         };
-        assert_eq!(text, "hello from rust");
+        assert_eq!(text.value(), "hello from rust");
         assert_eq!(
             ModeCommand::parse("maybe").unwrap(),
             ModeCommand::Maybe { value: None }

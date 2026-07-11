@@ -35,38 +35,12 @@ fn command_attribute(attributes: &[Attribute], key: &str) -> syn::Result<Option<
                     value = Some(parsed);
                 }
                 Ok(())
-            } else if meta.path.is_ident("varargs") {
-                Ok(())
             } else {
                 Err(meta.error("unknown command option"))
             }
         })?;
     }
     Ok(value)
-}
-
-fn command_flag(attributes: &[Attribute], key: &str) -> syn::Result<bool> {
-    let mut found = false;
-    for attribute in attributes
-        .iter()
-        .filter(|attribute| attribute.path().is_ident("command"))
-    {
-        attribute.parse_nested_meta(|meta| {
-            if meta.path.is_ident("varargs") {
-                found |= key == "varargs";
-                return Ok(());
-            }
-            if meta.path.is_ident("name")
-                || meta.path.is_ident("description")
-                || meta.path.is_ident("value")
-            {
-                let _ = meta.value()?.parse::<LitStr>()?;
-                return Ok(());
-            }
-            Err(meta.error("unknown command option"))
-        })?;
-    }
-    Ok(found)
 }
 
 fn kebab_case(value: &str) -> String {
@@ -211,7 +185,6 @@ fn expand_command(input: DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
                         let field_name = field.ident.expect("named field");
                         let parameter_name = command_attribute(&field.attrs, "name")?
                             .unwrap_or_else(|| kebab_case(&field_name.to_string()));
-                        let varargs = command_flag(&field.attrs, "varargs")?;
                         let declared_type = field.ty;
                         let optional_type = generic_argument(&declared_type, "Option");
                         let optional = optional_type.is_some();
@@ -225,23 +198,20 @@ fn expand_command(input: DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
                         let field_type = optional_type.unwrap_or_else(|| declared_type.clone());
                         let provider = generic_argument(&field_type, "Dynamic");
                         let field_type_name = type_name(&field_type);
+                        let varargs = field_type_name.as_deref() == Some("Varargs");
                         let (mut parameter, mut read) = if varargs {
-                            if field_type_name.as_deref() != Some("String") {
-                                return Err(syn::Error::new_spanned(
-                                    &field_type,
-                                    "#[command(varargs)] currently requires String",
-                                ));
-                            }
                             if field_index + 1 != field_count {
                                 return Err(syn::Error::new_spanned(
                                     &field_name,
-                                    "#[command(varargs)] must be the final command field",
+                                    "Varargs must be the final command field",
                                 ));
                             }
                             (
                                 quote!(::dragonfly_plugin::CommandParameter::raw_text(#parameter_name)),
                                 quote! {
-                                    let #field_name = parts.by_ref().collect::<Vec<_>>().join(" ");
+                                let #field_name = ::dragonfly_plugin::Varargs::new(
+                                    parts.by_ref().collect::<Vec<_>>().join(" ")
+                                );
                                 },
                             )
                         } else if let Some(provider) = provider {
@@ -510,7 +480,7 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
         let description = format!("Runs {root} commands");
         let mut variants = Vec::new();
         let mut variant_dispatch = Vec::new();
-        for (variant_index, (subcommand, mut function)) in methods.into_iter().enumerate() {
+        for (variant_index, (subcommand, function)) in methods.into_iter().enumerate() {
             if function.sig.inputs.len() < 2 {
                 return syn::Error::new_spanned(
                     &function.sig,
@@ -526,7 +496,7 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
             let method = function.sig.ident.clone();
             let mut fields = Vec::new();
             let mut field_names = Vec::new();
-            for argument in function.sig.inputs.iter_mut().skip(2) {
+            for argument in function.sig.inputs.iter().skip(2) {
                 let FnArg::Typed(argument) = argument else {
                     return syn::Error::new_spanned(
                         argument,
@@ -545,15 +515,7 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
                 };
                 let field = pattern.ident.clone();
                 let ty = argument.ty.clone();
-                let varargs = argument
-                    .attrs
-                    .iter()
-                    .any(|attribute| attribute.path().is_ident("varargs"));
-                argument
-                    .attrs
-                    .retain(|attribute| !attribute.path().is_ident("varargs"));
-                let field_attribute = varargs.then(|| quote!(#[command(varargs)]));
-                fields.push(quote!(#field_attribute #field: #ty));
+                fields.push(quote!(#field: #ty));
                 field_names.push(field);
             }
             variants.push(quote! {

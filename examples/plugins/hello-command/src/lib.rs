@@ -1,5 +1,6 @@
 use dragonfly_plugin::{
-    CommandEnum, CommandEvent, CommandSource, Dynamic, DynamicCommandEnum, Player, Plugin, plugin,
+    CommandEnum, CommandEvent, CommandSource, Dynamic, DynamicCommandEnum, Player, Plugin, Varargs,
+    plugin,
 };
 
 struct GreetingTargets;
@@ -24,13 +25,13 @@ struct HelloCommand;
 #[plugin]
 impl Plugin for HelloCommand {
     #[command("hello say")]
-    fn say(&self, event: &mut CommandEvent<'_>, style: Style, #[varargs] text: String) {
+    fn say(&self, event: &mut CommandEvent<'_>, style: Style, text: Varargs) {
         let message = match style {
-            Style::Plain => format!("Hello, {}: {text}", event.source()),
+            Style::Plain => format!("Hello, {}: {}", event.source(), text.value()),
             Style::Excited => format!(
                 "HELLO, {}! {}",
                 event.source().to_uppercase(),
-                text.to_uppercase()
+                text.value().to_uppercase()
             ),
         };
         event.reply(&message).expect("command reply fits");
