@@ -20,11 +20,12 @@ make benchmark
 Build and run owned server:
 
 ```shell
-make build
-./build/bedrock-gophers -config build/server.toml
+make run
 ```
 
-First run creates configuration. Framework loads native runtime and plugins, creates Dragonfly, installs world/player handlers, owns accept loop, and closes cleanly on `SIGINT`/`SIGTERM`.
+`make run` compiles example Rust plugins, stages them under `examples/plugins`, then runs root Go command using `examples/server.toml`. Framework derives native runtime library path for current platform; config contains no `.so` path.
+
+Framework creates Dragonfly, installs world/player handlers, owns accept loop, and closes cleanly on `SIGINT`/`SIGTERM`.
 
 Regenerate ABI files after changing `schema/`:
 
@@ -60,4 +61,4 @@ See [native plugin architecture](docs/plans/rust-plugin-architecture.md).
 - [Movement guard](examples/rust/movement-guard): cancels movement below Y=0.
 - [Chat filter](examples/rust/chat-filter): replaces text and cancels a blocked message.
 
-Both examples compile as native plugin libraries through `make build-native`.
+Both examples compile as native plugin libraries through `make stage-examples`. Precompiled `.so`, `.dylib`, or `.dll` plugins may also be placed directly in `examples/plugins`.

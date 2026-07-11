@@ -18,9 +18,7 @@ func RunFile(ctx context.Context, configPath string, log *slog.Logger) error {
 		return err
 	}
 	base := filepath.Dir(configPath)
-	if !filepath.IsAbs(config.Plugins.RuntimeLibrary) {
-		config.Plugins.RuntimeLibrary = filepath.Join(base, config.Plugins.RuntimeLibrary)
-	}
+	config.Plugins.RuntimeLibrary = filepath.Join(base, "lib", runtimeLibraryFilename())
 	if !filepath.IsAbs(config.Plugins.Directory) {
 		config.Plugins.Directory = filepath.Join(base, config.Plugins.Directory)
 	}

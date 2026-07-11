@@ -1,4 +1,4 @@
-.PHONY: generate check-generated build-native build-server build test benchmark clean
+.PHONY: generate check-generated build-native build-server build stage-examples run test benchmark clean
 
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
@@ -32,6 +32,16 @@ build-server:
 
 build: build-native build-server
 
+stage-examples: build-native
+	mkdir -p examples/lib examples/plugins
+	rm -f examples/lib/*.so examples/lib/*.dylib examples/lib/*.dll
+	cp build/lib/$(RUNTIME_LIBRARY) examples/lib/
+	cp build/plugins/$(PLUGIN_LIBRARY) examples/plugins/
+	cp build/plugins/$(CHAT_PLUGIN_LIBRARY) examples/plugins/
+
+run: stage-examples
+	go run ./cmd/bedrock-gophers -config examples/server.toml
+
 test: build-native check-generated
 	cargo test --workspace
 	go test ./...
@@ -42,3 +52,5 @@ benchmark: build-native
 clean:
 	cargo clean
 	rm -rf build
+	rm -rf examples/lib
+	rm -f examples/plugins/$(PLUGIN_LIBRARY) examples/plugins/$(CHAT_PLUGIN_LIBRARY)

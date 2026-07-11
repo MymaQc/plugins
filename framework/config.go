@@ -12,7 +12,8 @@ import (
 )
 
 type PluginConfig struct {
-	RuntimeLibrary string `toml:"runtime-library"`
+	// RuntimeLibrary is derived from the config directory by RunFile and is not serialized.
+	RuntimeLibrary string `toml:"-"`
 	Directory      string `toml:"directory"`
 }
 
@@ -22,16 +23,9 @@ type Config struct {
 }
 
 func DefaultConfig() Config {
-	extension := ".so"
-	if runtime.GOOS == "darwin" {
-		extension = ".dylib"
-	} else if runtime.GOOS == "windows" {
-		extension = ".dll"
-	}
 	return Config{
 		Plugins: PluginConfig{
-			RuntimeLibrary: filepath.Join("lib", "libdragonfly_plugin_runtime"+extension),
-			Directory:      "plugins",
+			Directory: "plugins",
 		},
 		Dragonfly: server.DefaultConfig(),
 	}
@@ -60,8 +54,18 @@ func LoadConfig(path string) (Config, error) {
 	if err := toml.Unmarshal(data, &config); err != nil {
 		return Config{}, fmt.Errorf("decode config: %w", err)
 	}
-	if config.Plugins.RuntimeLibrary == "" || config.Plugins.Directory == "" {
-		return Config{}, fmt.Errorf("plugins.runtime-library and plugins.directory are required")
+	if config.Plugins.Directory == "" {
+		return Config{}, fmt.Errorf("plugins.directory is required")
 	}
 	return config, nil
+}
+
+func runtimeLibraryFilename() string {
+	if runtime.GOOS == "windows" {
+		return "dragonfly_plugin_runtime.dll"
+	}
+	if runtime.GOOS == "darwin" {
+		return "libdragonfly_plugin_runtime.dylib"
+	}
+	return "libdragonfly_plugin_runtime.so"
 }

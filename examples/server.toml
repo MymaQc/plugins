@@ -1,0 +1,29 @@
+[plugins]
+  directory = "plugins"
+
+[dragonfly]
+
+  [dragonfly.Network]
+    Address = "127.0.0.1:19132"
+
+  [dragonfly.Server]
+    Name = "Bedrock Gophers Example"
+    AuthEnabled = false
+    DisableJoinQuitMessages = false
+    MuteEmoteChat = false
+
+  [dragonfly.World]
+    SaveData = true
+    Folder = ".data/world"
+
+  [dragonfly.Players]
+    MaxCount = 20
+    MaximumChunkRadius = 12
+    SaveData = true
+    Folder = ".data/players"
+
+  [dragonfly.Resources]
+    AutoBuildPack = true
+    Folder = ".data/resources"
+    Required = false
+
