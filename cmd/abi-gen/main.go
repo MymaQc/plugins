@@ -150,7 +150,7 @@ typedef struct { uint8_t *data; uint64_t len; uint64_t capacity; } DfStringBuffe
 #define DF_COMMAND_PARAMETER_DYNAMIC_ENUM 7u
 #define DF_COMMAND_PARAMETER_PLAYER 8u
 #define DF_COMMAND_PARAMETER_RAW_TEXT 9u
-typedef struct { uint32_t kind; DfStringView name; const DfStringView *values; uint64_t value_count; } DfCommandParameter;
+typedef struct { uint32_t kind; uint8_t optional; DfStringView name; const DfStringView *values; uint64_t value_count; } DfCommandParameter;
 typedef struct { const DfCommandParameter *parameters; uint64_t parameter_count; } DfCommandOverload;
 typedef struct { DfStringView name; DfStringView description; const DfCommandOverload *overloads; uint64_t overload_count; } DfCommandDescriptor;
 typedef struct { DfStringView source; const DfStringView *online_players; uint64_t online_player_count; } DfCommandEnumContext;
@@ -264,7 +264,7 @@ impl Default for DfStringBuffer {
 }
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
-pub struct DfCommandParameter { pub kind: u32, pub name: DfStringView, pub values: *const DfStringView, pub value_count: u64 }
+pub struct DfCommandParameter { pub kind: u32, pub optional: u8, pub name: DfStringView, pub values: *const DfStringView, pub value_count: u64 }
 pub const DF_COMMAND_PARAMETER_SUBCOMMAND: u32 = 1;
 pub const DF_COMMAND_PARAMETER_ENUM: u32 = 2;
 pub const DF_COMMAND_PARAMETER_STRING: u32 = 3;

@@ -443,6 +443,9 @@ fn valid_command_descriptor(descriptor: &DfCommandDescriptor) -> bool {
             return false;
         };
         for parameter in parameters {
+            if parameter.optional > 1 {
+                return false;
+            }
             let Ok(name) = (unsafe { string_view(parameter.name) }) else {
                 return false;
             };

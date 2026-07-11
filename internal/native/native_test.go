@@ -79,6 +79,10 @@ func TestCommand(t *testing.T) {
 	if len(commands) != 1 || commands[0].Name != "hello" {
 		t.Fatalf("commands = %#v, want hello", commands)
 	}
+	last := commands[0].Overloads[len(commands[0].Overloads)-1]
+	if len(last.Parameters) != 2 || !last.Parameters[1].Optional {
+		t.Fatalf("optional overload = %#v", last)
+	}
 	output, err := runtime.HandleCommand(commands[0].Index, CommandInput{
 		Source:    "Danick",
 		Arguments: "say excited dragonfly plugins rock",

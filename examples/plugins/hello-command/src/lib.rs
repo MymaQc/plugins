@@ -75,4 +75,11 @@ impl Plugin for HelloCommand {
             .reply(&format!("player generation={}", player.id().generation()))
             .expect("reply fits");
     }
+
+    #[command("hello maybe")]
+    fn maybe(&self, event: &mut CommandEvent<'_>, value: Option<i64>) {
+        event
+            .reply(&format!("value={value:?}"))
+            .expect("reply fits");
+    }
 }

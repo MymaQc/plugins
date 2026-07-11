@@ -205,16 +205,27 @@ fn expand_command(input: DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
                     let mut parameters = Vec::new();
                     let mut names = Vec::new();
                     let mut reads = Vec::new();
+                    let mut seen_optional = false;
                     let field_count = fields.named.len();
                     for (field_index, field) in fields.named.into_iter().enumerate() {
                         let field_name = field.ident.expect("named field");
                         let parameter_name = command_attribute(&field.attrs, "name")?
                             .unwrap_or_else(|| kebab_case(&field_name.to_string()));
                         let varargs = command_flag(&field.attrs, "varargs")?;
-                        let field_type = field.ty;
+                        let declared_type = field.ty;
+                        let optional_type = generic_argument(&declared_type, "Option");
+                        let optional = optional_type.is_some();
+                        if seen_optional && !optional {
+                            return Err(syn::Error::new_spanned(
+                                &field_name,
+                                "required command fields cannot follow Option fields",
+                            ));
+                        }
+                        seen_optional |= optional;
+                        let field_type = optional_type.unwrap_or_else(|| declared_type.clone());
                         let provider = generic_argument(&field_type, "Dynamic");
                         let field_type_name = type_name(&field_type);
-                        let (parameter, read) = if varargs {
+                        let (mut parameter, mut read) = if varargs {
                             if field_type_name.as_deref() != Some("String") {
                                 return Err(syn::Error::new_spanned(
                                     &field_type,
@@ -308,6 +319,19 @@ fn expand_command(input: DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
                                 ),
                             }
                         };
+                        if optional {
+                            parameter = quote!((#parameter).optional());
+                            read = quote! {
+                                let #field_name = if parts.clone().next().is_none() {
+                                    None
+                                } else {
+                                    Some({
+                                        #read
+                                        #field_name
+                                    })
+                                };
+                            };
+                        }
                         parameters.push(parameter);
                         names.push(field_name);
                         reads.push(read);

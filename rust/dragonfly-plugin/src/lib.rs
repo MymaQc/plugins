@@ -159,6 +159,7 @@ impl CommandParameter {
     const fn typed(name: &'static str, kind: u32) -> Self {
         Self(dragonfly_plugin_sys::DfCommandParameter {
             kind,
+            optional: 0,
             name: dragonfly_plugin_sys::DfStringView {
                 data: name.as_ptr(),
                 len: name.len() as u64,
@@ -175,6 +176,7 @@ impl CommandParameter {
     pub const fn enumeration(name: &'static str, values: &'static [CommandValue]) -> Self {
         Self(dragonfly_plugin_sys::DfCommandParameter {
             kind: dragonfly_plugin_sys::DF_COMMAND_PARAMETER_ENUM,
+            optional: 0,
             name: dragonfly_plugin_sys::DfStringView {
                 data: name.as_ptr(),
                 len: name.len() as u64,
@@ -213,6 +215,11 @@ impl CommandParameter {
 
     pub const fn raw_text(name: &'static str) -> Self {
         Self::typed(name, dragonfly_plugin_sys::DF_COMMAND_PARAMETER_RAW_TEXT)
+    }
+
+    pub const fn optional(mut self) -> Self {
+        self.0.optional = 1;
+        self
     }
 }
 
@@ -549,6 +556,9 @@ mod tests {
             #[command(varargs)]
             text: String,
         },
+        Maybe {
+            value: Option<i64>,
+        },
         Query,
     }
 
@@ -608,5 +618,13 @@ mod tests {
             panic!("wrong command variant");
         };
         assert_eq!(text, "hello from rust");
+        assert_eq!(
+            ModeCommand::parse("maybe").unwrap(),
+            ModeCommand::Maybe { value: None }
+        );
+        assert_eq!(
+            ModeCommand::parse("maybe 12").unwrap(),
+            ModeCommand::Maybe { value: Some(12) }
+        );
     }
 }

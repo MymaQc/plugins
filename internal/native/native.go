@@ -67,9 +67,10 @@ type CommandOverload struct {
 }
 
 type CommandParameter struct {
-	Kind   CommandParameterKind
-	Name   string
-	Values []string
+	Kind     CommandParameterKind
+	Name     string
+	Values   []string
+	Optional bool
 }
 
 type CommandParameterKind uint32
@@ -199,8 +200,9 @@ func (r *Runtime) Commands() ([]Command, error) {
 			parameters := unsafe.Slice(nativeOverload.parameters, int(nativeOverload.parameter_count))
 			for _, nativeParameter := range parameters {
 				parameter := CommandParameter{
-					Kind: CommandParameterKind(nativeParameter.kind),
-					Name: stringView(nativeParameter.name),
+					Kind:     CommandParameterKind(nativeParameter.kind),
+					Name:     stringView(nativeParameter.name),
+					Optional: nativeParameter.optional != 0,
 				}
 				if nativeParameter.value_count > 0 && nativeParameter.values == nil {
 					return nil, fmt.Errorf("read native command %d: null enum values", index)

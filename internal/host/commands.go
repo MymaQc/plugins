@@ -197,6 +197,7 @@ func (e describedEnum) Options(source cmd.Source) []string {
 func describe(parameters ...pluginParameter) []cmd.ParamInfo {
 	result := make([]cmd.ParamInfo, 0, len(parameters))
 	for _, parameter := range parameters {
+		before := len(result)
 		switch parameter.descriptor.Kind {
 		case native.CommandParameterSubcommand:
 			result = append(result, cmd.ParamInfo{Name: parameter.descriptor.Name, Value: cmd.SubCommand{}})
@@ -232,6 +233,9 @@ func describe(parameters ...pluginParameter) []cmd.ParamInfo {
 			})
 		case native.CommandParameterRawText:
 			result = append(result, cmd.ParamInfo{Name: parameter.descriptor.Name, Value: cmd.Varargs("")})
+		}
+		if len(result) != before {
+			result[len(result)-1].Optional = parameter.descriptor.Optional
 		}
 	}
 	return result
