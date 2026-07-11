@@ -62,5 +62,6 @@ See [native plugin architecture](docs/plans/rust-plugin-architecture.md).
 
 - [Movement guard](examples/plugins/movement-guard): cancels movement below Y=0.
 - [Chat filter](examples/plugins/chat-filter): replaces text and cancels a blocked message.
+- [Lifecycle logger](examples/plugins/lifecycle-logger): demonstrates enable and disable hooks.
 
 Both examples compile as native plugin libraries through `make stage-examples`. Precompiled `.so`, `.dylib`, or `.dll` plugins may also be placed directly in `examples/plugins`.

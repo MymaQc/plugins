@@ -25,6 +25,7 @@ struct LoadedPlugin {
     api: &'static DfPluginApiV1,
     instance: *mut c_void,
     id: String,
+    enabled: bool,
     _library: Library,
 }
 
@@ -68,7 +69,8 @@ impl DfRuntime {
 
     fn handle_move(&self, input: &DfPlayerMoveInput, state: &mut DfPlayerMoveState) -> DfStatus {
         for plugin in &self.plugins {
-            if plugin.api.header.subscriptions & DF_SUBSCRIPTION_PLAYER_MOVE == 0 {
+            if !plugin.enabled || plugin.api.header.subscriptions & DF_SUBSCRIPTION_PLAYER_MOVE == 0
+            {
                 continue;
             }
             let was_cancelled = state.cancelled != 0;
@@ -95,9 +97,37 @@ impl DfRuntime {
         DF_STATUS_OK
     }
 
+    fn enable(&mut self) -> DfStatus {
+        for index in 0..self.plugins.len() {
+            let plugin = &mut self.plugins[index];
+            if plugin.enabled {
+                continue;
+            }
+            let status = plugin.api.enable.map_or(DF_STATUS_OK, |enable| {
+                // SAFETY: instance belongs to this plugin and callback is ABI-validated.
+                unsafe { enable(plugin.instance) }
+            });
+            if status != DF_STATUS_OK {
+                for previous in self.plugins[..index].iter_mut().rev() {
+                    previous.disable();
+                }
+                return status;
+            }
+            plugin.enabled = true;
+        }
+        DF_STATUS_OK
+    }
+
+    fn disable(&mut self) {
+        for plugin in self.plugins.iter_mut().rev() {
+            plugin.disable();
+        }
+    }
+
     fn handle_chat(&self, input: &DfPlayerChatInput, state: &mut DfPlayerChatState) -> DfStatus {
         for plugin in &self.plugins {
-            if plugin.api.header.subscriptions & DF_SUBSCRIPTION_PLAYER_CHAT == 0 {
+            if !plugin.enabled || plugin.api.header.subscriptions & DF_SUBSCRIPTION_PLAYER_CHAT == 0
+            {
                 continue;
             }
             let was_cancelled = state.cancelled != 0;
@@ -121,6 +151,12 @@ impl DfRuntime {
             }
         }
         DF_STATUS_OK
+    }
+}
+
+impl Drop for DfRuntime {
+    fn drop(&mut self) {
+        self.disable();
     }
 }
 
@@ -148,6 +184,17 @@ fn valid_chat_state(state: &DfPlayerChatState) -> bool {
 }
 
 impl LoadedPlugin {
+    fn disable(&mut self) {
+        if !self.enabled {
+            return;
+        }
+        if let Some(disable) = self.api.disable {
+            // SAFETY: instance belongs to this plugin and callback is ABI-validated.
+            let _ = unsafe { disable(self.instance) };
+        }
+        self.enabled = false;
+    }
+
     unsafe fn open(path: &Path) -> Result<Self, String> {
         // SAFETY: loading native plugins is the purpose of this trusted plugin runtime.
         let library = unsafe { Library::new(path) }
@@ -192,6 +239,7 @@ impl LoadedPlugin {
             api,
             instance,
             id,
+            enabled: false,
             _library: library,
         })
     }
@@ -278,6 +326,30 @@ pub unsafe extern "C" fn df_runtime_create(
             write_error(error, error_capacity, "panic while creating runtime");
             DF_STATUS_ERROR
         }
+    }
+}
+
+#[unsafe(no_mangle)]
+/// Enables loaded plugins in deterministic order.
+///
+/// # Safety
+/// `runtime` must point to a live runtime and must not be used concurrently during this call.
+pub unsafe extern "C" fn df_runtime_enable(runtime: *mut DfRuntime) -> DfStatus {
+    let Some(runtime) = (unsafe { runtime.as_mut() }) else {
+        return DF_STATUS_ERROR;
+    };
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| runtime.enable()))
+        .unwrap_or(DF_STATUS_ERROR)
+}
+
+#[unsafe(no_mangle)]
+/// Disables enabled plugins in reverse order.
+///
+/// # Safety
+/// `runtime` must be null or point to a live runtime and must not be used concurrently during this call.
+pub unsafe extern "C" fn df_runtime_disable(runtime: *mut DfRuntime) {
+    if let Some(runtime) = unsafe { runtime.as_mut() } {
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| runtime.disable()));
     }
 }
 

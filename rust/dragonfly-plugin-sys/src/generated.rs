@@ -66,6 +66,7 @@ pub struct DfPlayerChatState {
 }
 
 pub type DfPluginCreateFn = unsafe extern "C" fn() -> *mut c_void;
+pub type DfPluginLifecycleFn = unsafe extern "C" fn(instance: *mut c_void) -> DfStatus;
 pub type DfPluginDestroyFn = unsafe extern "C" fn(instance: *mut c_void);
 pub type DfHandleEventFn = unsafe extern "C" fn(instance: *mut c_void, event_id: DfEventId, input: *const c_void, state: *mut c_void) -> DfStatus;
 
@@ -74,6 +75,8 @@ pub struct DfPluginApiV1 {
     pub header: DfAbiHeader,
     pub plugin_id: DfStringView,
     pub create: Option<DfPluginCreateFn>,
+    pub enable: Option<DfPluginLifecycleFn>,
+    pub disable: Option<DfPluginLifecycleFn>,
     pub destroy: Option<DfPluginDestroyFn>,
     pub handle_event: Option<DfHandleEventFn>,
 }

@@ -60,6 +60,9 @@ func Run(ctx context.Context, config Config, log *slog.Logger) error {
 	if err := worlds.RegisterCore(EndID, srv.End()); err != nil {
 		return err
 	}
+	if err := pluginRuntime.Enable(); err != nil {
+		return err
+	}
 	srv.Listen()
 	defer func() {
 		if err := srv.Close(); err != nil {
@@ -71,6 +74,7 @@ func Run(ctx context.Context, config Config, log *slog.Logger) error {
 			log.Error("close custom worlds", "error", err)
 		}
 	}()
+	defer pluginRuntime.Disable()
 
 	stopped := make(chan struct{})
 	defer close(stopped)

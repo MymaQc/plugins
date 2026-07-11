@@ -542,8 +542,9 @@ Native safety limitations are permanent: no hot unload, no sandboxing, and a nat
 ├── schema/
 │   ├── types.yaml
 │   └── events/
-├── tools/
+├── cmd/
 │   ├── abi-gen/
+│   ├── bedrock-gophers/
 │   └── dragonfly-api-scan/
 ├── abi/
 │   ├── include/dragonfly_plugin.h

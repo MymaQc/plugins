@@ -34,14 +34,18 @@ func openTestRuntime(t testing.TB) *Runtime {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := runtime.Enable(); err != nil {
+		t.Fatal(err)
+	}
 	t.Cleanup(runtime.Close)
+	t.Cleanup(runtime.Disable)
 	return runtime
 }
 
 func TestMovementGuard(t *testing.T) {
 	runtime := openTestRuntime(t)
-	if runtime.PluginCount() != 2 {
-		t.Fatalf("plugin count = %d, want 2", runtime.PluginCount())
+	if runtime.PluginCount() != 3 {
+		t.Fatalf("plugin count = %d, want 3", runtime.PluginCount())
 	}
 	if runtime.Subscriptions()&PlayerMoveSubscription == 0 {
 		t.Fatal("movement subscription missing")
@@ -100,6 +104,28 @@ func TestCancellationIsMonotonic(t *testing.T) {
 	}
 	if !cancelled {
 		t.Fatal("plugin cleared existing cancellation")
+	}
+}
+
+func TestLifecycleControlsDispatch(t *testing.T) {
+	runtime := openTestRuntime(t)
+	runtime.Disable()
+	cancelled, err := runtime.HandlePlayerMove(PlayerMoveInput{NewPosition: Vec3{Y: -1}}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cancelled {
+		t.Fatal("disabled plugin handled movement")
+	}
+	if err := runtime.Enable(); err != nil {
+		t.Fatal(err)
+	}
+	cancelled, err = runtime.HandlePlayerMove(PlayerMoveInput{NewPosition: Vec3{Y: -1}}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cancelled {
+		t.Fatal("enabled plugin did not handle movement")
 	}
 }
 

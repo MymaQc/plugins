@@ -97,6 +97,22 @@ func (r *Runtime) Close() {
 	runtime.SetFinalizer(r, nil)
 }
 
+func (r *Runtime) Enable() error {
+	if r == nil || r.ptr == nil {
+		return errors.New("native runtime is closed")
+	}
+	if status := C.bg_runtime_enable(r.ptr); status != C.DF_STATUS_OK {
+		return fmt.Errorf("enable native plugins: status %d", int32(status))
+	}
+	return nil
+}
+
+func (r *Runtime) Disable() {
+	if r != nil && r.ptr != nil {
+		C.bg_runtime_disable(r.ptr)
+	}
+}
+
 func (r *Runtime) PluginCount() uint64 {
 	if r == nil || r.ptr == nil {
 		return 0

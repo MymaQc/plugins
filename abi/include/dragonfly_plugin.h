@@ -55,12 +55,15 @@ typedef struct {
 
 typedef DfStatus (*DfHandleEventFn)(void *instance, DfEventId event_id, const void *input, void *state);
 typedef void *(*DfPluginCreateFn)(void);
+typedef DfStatus (*DfPluginLifecycleFn)(void *instance);
 typedef void (*DfPluginDestroyFn)(void *instance);
 
 typedef struct {
     DfAbiHeader header;
     DfStringView plugin_id;
     DfPluginCreateFn create;
+    DfPluginLifecycleFn enable;
+    DfPluginLifecycleFn disable;
     DfPluginDestroyFn destroy;
     DfHandleEventFn handle_event;
 } DfPluginApiV1;
@@ -71,6 +74,8 @@ typedef struct DfRuntime DfRuntime;
 typedef struct { DfStringView plugin_directory; } DfRuntimeConfig;
 
 DfStatus df_runtime_create(const DfRuntimeConfig *config, DfRuntime **out, uint8_t *error, uint64_t error_capacity);
+DfStatus df_runtime_enable(DfRuntime *runtime);
+void df_runtime_disable(DfRuntime *runtime);
 void df_runtime_destroy(DfRuntime *runtime);
 uint64_t df_runtime_plugin_count(const DfRuntime *runtime);
 uint64_t df_runtime_subscriptions(const DfRuntime *runtime);
