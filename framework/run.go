@@ -50,13 +50,25 @@ func Run(ctx context.Context, config Config, log *slog.Logger) error {
 		return fmt.Errorf("configure Dragonfly: %w", err)
 	}
 	srv := dragonflyConfig.New()
-	srv.World().Handle(host.NewWorldHandler())
-	srv.Nether().Handle(host.NewWorldHandler())
-	srv.End().Handle(host.NewWorldHandler())
+	worlds := NewWorldManager()
+	if err := worlds.RegisterCore(OverworldID, srv.World()); err != nil {
+		return err
+	}
+	if err := worlds.RegisterCore(NetherID, srv.Nether()); err != nil {
+		return err
+	}
+	if err := worlds.RegisterCore(EndID, srv.End()); err != nil {
+		return err
+	}
 	srv.Listen()
 	defer func() {
 		if err := srv.Close(); err != nil {
 			log.Error("close Dragonfly server", "error", err)
+		}
+	}()
+	defer func() {
+		if err := worlds.CloseCustom(); err != nil {
+			log.Error("close custom worlds", "error", err)
 		}
 	}()
 

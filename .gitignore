@@ -3,3 +3,4 @@
 /examples/lib/
 /examples/plugins/*
 !/examples/plugins/README.md
+.data
