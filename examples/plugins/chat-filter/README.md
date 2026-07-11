@@ -7,4 +7,3 @@ cargo build --release -p chat-filter-plugin
 ```
 
 Output: `target/release/libchat_filter_plugin.so` on Linux.
-

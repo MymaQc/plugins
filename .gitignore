@@ -1,6 +1,8 @@
 /build/
 /target/
+**/target/
 /examples/lib/
-/examples/plugins/*
-!/examples/plugins/README.md
+/examples/plugins/*.so
+/examples/plugins/*.dylib
+/examples/plugins/*.dll
 .data

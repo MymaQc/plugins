@@ -7,4 +7,3 @@ cargo build --release -p movement-guard-plugin
 ```
 
 Output: `target/release/libmovement_guard_plugin.so` on Linux.
-

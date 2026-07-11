@@ -60,7 +60,7 @@ See [native plugin architecture](docs/plans/rust-plugin-architecture.md).
 
 ## Examples
 
-- [Movement guard](examples/rust/movement-guard): cancels movement below Y=0.
-- [Chat filter](examples/rust/chat-filter): replaces text and cancels a blocked message.
+- [Movement guard](examples/plugins/movement-guard): cancels movement below Y=0.
+- [Chat filter](examples/plugins/chat-filter): replaces text and cancels a blocked message.
 
 Both examples compile as native plugin libraries through `make stage-examples`. Precompiled `.so`, `.dylib`, or `.dll` plugins may also be placed directly in `examples/plugins`.
