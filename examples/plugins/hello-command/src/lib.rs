@@ -1,4 +1,4 @@
-use dragonfly_plugin::{
+use dragonfly::{
     CommandEnum, CommandSource, Context, Dynamic, DynamicCommandEnum, Player, Plugin, Varargs,
     plugin,
 };

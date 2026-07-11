@@ -5,7 +5,9 @@ edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 
+[lib]
+name = "dragonfly"
+
 [dependencies]
 dragonfly-plugin-macros = { path = "../dragonfly-plugin-macros" }
 dragonfly-plugin-sys = { path = "../dragonfly-plugin-sys" }
-

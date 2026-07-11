@@ -1,4 +1,4 @@
-use dragonfly_plugin::{PlayerJoinEvent, PlayerQuitEvent, Plugin, plugin};
+use dragonfly::{PlayerJoinEvent, PlayerQuitEvent, Plugin, plugin};
 
 #[derive(Default)]
 struct LifecycleLogger;

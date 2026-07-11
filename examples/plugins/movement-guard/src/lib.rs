@@ -1,4 +1,4 @@
-use dragonfly_plugin::{PlayerMoveEvent, Plugin, plugin};
+use dragonfly::{PlayerMoveEvent, Plugin, plugin};
 
 #[derive(Default)]
 struct MovementGuard;

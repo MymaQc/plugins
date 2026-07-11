@@ -797,6 +797,9 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
         | (u64::from(handles_quit) << 3);
 
     quote! {
+        #[doc(hidden)]
+        extern crate dragonfly as dragonfly_plugin;
+
         #(#generated_commands)*
         #implementation
         #inherent_commands

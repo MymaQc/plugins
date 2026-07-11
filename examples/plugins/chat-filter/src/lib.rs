@@ -1,4 +1,4 @@
-use dragonfly_plugin::{PlayerChatEvent, Plugin, plugin};
+use dragonfly::{PlayerChatEvent, Plugin, plugin};
 
 #[derive(Default)]
 struct ChatFilter;
