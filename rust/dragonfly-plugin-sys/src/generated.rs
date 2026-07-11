@@ -40,6 +40,7 @@ pub const DF_COMMAND_PARAMETER_FLOAT: u32 = 5;
 pub const DF_COMMAND_PARAMETER_BOOL: u32 = 6;
 pub const DF_COMMAND_PARAMETER_DYNAMIC_ENUM: u32 = 7;
 pub const DF_COMMAND_PARAMETER_PLAYER: u32 = 8;
+pub const DF_COMMAND_PARAMETER_RAW_TEXT: u32 = 9;
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct DfCommandOverload { pub parameters: *const DfCommandParameter, pub parameter_count: u64 }

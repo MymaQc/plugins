@@ -210,6 +210,10 @@ impl CommandParameter {
     pub const fn player(name: &'static str) -> Self {
         Self::typed(name, dragonfly_plugin_sys::DF_COMMAND_PARAMETER_PLAYER)
     }
+
+    pub const fn raw_text(name: &'static str) -> Self {
+        Self::typed(name, dragonfly_plugin_sys::DF_COMMAND_PARAMETER_RAW_TEXT)
+    }
 }
 
 #[repr(transparent)]
@@ -541,6 +545,10 @@ mod tests {
         Target {
             player: Player,
         },
+        Message {
+            #[command(varargs)]
+            text: String,
+        },
         Query,
     }
 
@@ -595,5 +603,10 @@ mod tests {
         };
         assert_eq!(player.id().generation(), 9);
         assert_eq!(player.id().uuid_bytes()[15], 15);
+        let ModeCommand::Message { text } = ModeCommand::parse("message hello from rust").unwrap()
+        else {
+            panic!("wrong command variant");
+        };
+        assert_eq!(text, "hello from rust");
     }
 }

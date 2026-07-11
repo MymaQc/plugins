@@ -502,7 +502,7 @@ Raw commands use one generic Go runnable with `cmd.Varargs`:
 /plugin-command <raw arguments...>
 ```
 
-Structured commands declare overloads containing literal subcommands, enums, strings, integers, floats, and booleans. The Go adapter maps them to Dragonfly `Runnable`, `ParamDescriber`, `Parameter`, and `Enum` implementations so Bedrock clients receive native command metadata.
+Structured commands declare overloads containing literal subcommands, enums, strings, integers, floats, booleans, players, and trailing `#[command(varargs)]` strings. The Go adapter maps them to Dragonfly `Runnable`, `ParamDescriber`, `Parameter`, and `Enum` implementations so Bedrock clients receive native command metadata.
 
 Online players use the typed Rust `Player` argument. Bedrock receives a live-name enum, but Go resolves the chosen name at execution and transports a generation-tagged `PlayerId`; Rust never treats the mutable name as identity. Multi-target selectors remain a separate future `Targets` argument because their transaction-aware Dragonfly resolution has different semantics. Generic dynamic/soft enums are reserved for plugin-defined changing sets such as kits or arenas. Their options cross the ABI on Dragonfly's low-frequency command metadata path and may vary by command source.
 

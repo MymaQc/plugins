@@ -21,12 +21,38 @@ fn command_attribute(attributes: &[Attribute], key: &str) -> syn::Result<Option<
                     value = Some(parsed);
                 }
                 Ok(())
+            } else if meta.path.is_ident("varargs") {
+                Ok(())
             } else {
                 Err(meta.error("unknown command option"))
             }
         })?;
     }
     Ok(value)
+}
+
+fn command_flag(attributes: &[Attribute], key: &str) -> syn::Result<bool> {
+    let mut found = false;
+    for attribute in attributes
+        .iter()
+        .filter(|attribute| attribute.path().is_ident("command"))
+    {
+        attribute.parse_nested_meta(|meta| {
+            if meta.path.is_ident("varargs") {
+                found |= key == "varargs";
+                return Ok(());
+            }
+            if meta.path.is_ident("name")
+                || meta.path.is_ident("description")
+                || meta.path.is_ident("value")
+            {
+                let _ = meta.value()?.parse::<LitStr>()?;
+                return Ok(());
+            }
+            Err(meta.error("unknown command option"))
+        })?;
+    }
+    Ok(found)
 }
 
 fn kebab_case(value: &str) -> String {
@@ -56,12 +82,12 @@ fn type_name(value: &Type) -> Option<String> {
         .map(|segment| segment.ident.to_string())
 }
 
-fn dynamic_provider(value: &Type) -> Option<Type> {
+fn generic_argument(value: &Type, expected: &str) -> Option<Type> {
     let Type::Path(path) = value else {
         return None;
     };
     let segment = path.path.segments.last()?;
-    if segment.ident != "Dynamic" {
+    if segment.ident != expected {
         return None;
     }
     let PathArguments::AngleBracketed(arguments) = &segment.arguments else {
@@ -164,14 +190,35 @@ fn expand_command(input: DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
                 let mut parameters = Vec::new();
                 let mut names = Vec::new();
                 let mut reads = Vec::new();
+                let field_count = fields.named.len();
                 for (field_index, field) in fields.named.into_iter().enumerate() {
                     let field_name = field.ident.expect("named field");
                     let parameter_name = command_attribute(&field.attrs, "name")?
                         .unwrap_or_else(|| kebab_case(&field_name.to_string()));
+                    let varargs = command_flag(&field.attrs, "varargs")?;
                     let field_type = field.ty;
-                    let provider = dynamic_provider(&field_type);
+                    let provider = generic_argument(&field_type, "Dynamic");
                     let field_type_name = type_name(&field_type);
-                    let (parameter, read) = if let Some(provider) = provider {
+                    let (parameter, read) = if varargs {
+                        if field_type_name.as_deref() != Some("String") {
+                            return Err(syn::Error::new_spanned(
+                                &field_type,
+                                "#[command(varargs)] currently requires String",
+                            ));
+                        }
+                        if field_index + 1 != field_count {
+                            return Err(syn::Error::new_spanned(
+                                &field_name,
+                                "#[command(varargs)] must be the final command field",
+                            ));
+                        }
+                        (
+                            quote!(::dragonfly_plugin::CommandParameter::raw_text(#parameter_name)),
+                            quote! {
+                                let #field_name = parts.by_ref().collect::<Vec<_>>().join(" ");
+                            },
+                        )
+                    } else if let Some(provider) = provider {
                         let parameter_index = field_index + 1;
                         dynamic_options.push(quote! {
                             (#overload_index, #parameter_index) => {

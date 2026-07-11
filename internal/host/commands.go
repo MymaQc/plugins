@@ -141,7 +141,7 @@ func (p pluginParameter) Parse(line *cmd.Line, value reflect.Value) error {
 		value.Set(reflect.ValueOf(p))
 		return nil
 	}
-	if p.descriptor.Kind < native.CommandParameterSubcommand || p.descriptor.Kind > native.CommandParameterPlayer {
+	if p.descriptor.Kind < native.CommandParameterSubcommand || p.descriptor.Kind > native.CommandParameterRawText {
 		return fmt.Errorf("unknown plugin parameter kind %d", p.descriptor.Kind)
 	}
 	p.selected = argument
@@ -230,6 +230,8 @@ func describe(parameters ...pluginParameter) []cmd.ParamInfo {
 					players:  parameter.players,
 				},
 			})
+		case native.CommandParameterRawText:
+			result = append(result, cmd.ParamInfo{Name: parameter.descriptor.Name, Value: cmd.Varargs("")})
 		}
 	}
 	return result

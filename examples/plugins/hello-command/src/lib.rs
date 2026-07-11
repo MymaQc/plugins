@@ -22,13 +22,28 @@ enum Style {
 #[derive(Command)]
 #[command(name = "hello", description = "Greets the command source")]
 enum Hello {
-    Say { style: Style, text: String },
-    Add { left: i64, right: i64 },
-    Toggle { enabled: bool },
-    Echo { text: String },
+    Say {
+        style: Style,
+        #[command(varargs)]
+        text: String,
+    },
+    Add {
+        left: i64,
+        right: i64,
+    },
+    Toggle {
+        enabled: bool,
+    },
+    Echo {
+        text: String,
+    },
     About,
-    Greet { target: Dynamic<GreetingTargets> },
-    Direct { player: Player },
+    Greet {
+        target: Dynamic<GreetingTargets>,
+    },
+    Direct {
+        player: Player,
+    },
 }
 
 #[derive(Default)]

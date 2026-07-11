@@ -149,6 +149,7 @@ typedef struct { uint8_t *data; uint64_t len; uint64_t capacity; } DfStringBuffe
 #define DF_COMMAND_PARAMETER_BOOL 6u
 #define DF_COMMAND_PARAMETER_DYNAMIC_ENUM 7u
 #define DF_COMMAND_PARAMETER_PLAYER 8u
+#define DF_COMMAND_PARAMETER_RAW_TEXT 9u
 typedef struct { uint32_t kind; DfStringView name; const DfStringView *values; uint64_t value_count; } DfCommandParameter;
 typedef struct { const DfCommandParameter *parameters; uint64_t parameter_count; } DfCommandOverload;
 typedef struct { DfStringView name; DfStringView description; const DfCommandOverload *overloads; uint64_t overload_count; } DfCommandDescriptor;
@@ -272,6 +273,7 @@ pub const DF_COMMAND_PARAMETER_FLOAT: u32 = 5;
 pub const DF_COMMAND_PARAMETER_BOOL: u32 = 6;
 pub const DF_COMMAND_PARAMETER_DYNAMIC_ENUM: u32 = 7;
 pub const DF_COMMAND_PARAMETER_PLAYER: u32 = 8;
+pub const DF_COMMAND_PARAMETER_RAW_TEXT: u32 = 9;
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct DfCommandOverload { pub parameters: *const DfCommandParameter, pub parameter_count: u64 }
