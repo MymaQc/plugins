@@ -81,12 +81,12 @@ func TestCommand(t *testing.T) {
 	}
 	output, err := runtime.HandleCommand(commands[0].Index, CommandInput{
 		Source:    "Danick",
-		Arguments: "say excited dragonfly",
+		Arguments: "say excited",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if output.Failed || output.Message != "Hello, Danick! You passed: say excited dragonfly" {
+	if output.Failed || output.Message != "HELLO, DANICK!" {
 		t.Fatalf("output = %#v", output)
 	}
 }

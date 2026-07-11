@@ -1,6 +1,8 @@
 //! Safe Rust SDK for native Dragonfly plugins.
 
-pub use dragonfly_plugin_macros::plugin;
+extern crate self as dragonfly_plugin;
+
+pub use dragonfly_plugin_macros::{Command, CommandEnum, plugin};
 
 #[doc(hidden)]
 pub mod __private {
@@ -165,6 +167,36 @@ impl Command {
     }
 }
 
+pub trait CommandEnum: Sized {
+    const VALUES: &'static [CommandValue];
+
+    fn parse(value: &str) -> Option<Self>;
+}
+
+pub trait CommandDefinition: Sized {
+    const COMMAND: Command;
+
+    fn parse(arguments: &str) -> Result<Self, CommandParseError>;
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CommandParseError(String);
+
+impl CommandParseError {
+    #[doc(hidden)]
+    pub fn new(message: impl Into<String>) -> Self {
+        Self(message.into())
+    }
+}
+
+impl core::fmt::Display for CommandParseError {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for CommandParseError {}
+
 pub struct CommandEvent<'a> {
     input: &'a dragonfly_plugin_sys::DfCommandInput,
     state: &'a mut dragonfly_plugin_sys::DfCommandState,
@@ -314,6 +346,19 @@ pub trait Plugin: Default + Send + Sync + 'static {
 mod tests {
     use super::*;
 
+    #[derive(CommandEnum, Debug, Eq, PartialEq)]
+    enum Mode {
+        Survival,
+        Creative,
+    }
+
+    #[derive(Command, Debug, Eq, PartialEq)]
+    #[command(name = "mode", description = "Changes a mode")]
+    enum ModeCommand {
+        Set { mode: Mode },
+        Query,
+    }
+
     #[derive(Default)]
     struct Guard;
 
@@ -339,5 +384,17 @@ mod tests {
         let mut event = unsafe { PlayerMoveEvent::from_raw(&input, &mut state) };
         Guard.on_move(&mut event);
         assert!(event.cancelled());
+    }
+
+    #[test]
+    fn derived_command_parses_subcommands_and_enums() {
+        assert_eq!(
+            ModeCommand::parse("set creative").unwrap(),
+            ModeCommand::Set {
+                mode: Mode::Creative
+            }
+        );
+        assert_eq!(ModeCommand::parse("query").unwrap(), ModeCommand::Query);
+        assert!(ModeCommand::parse("set spectator").is_err());
     }
 }

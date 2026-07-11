@@ -504,7 +504,7 @@ Raw commands use one generic Go runnable with `cmd.Varargs`:
 
 Structured commands declare overloads containing literal subcommands and enum parameters. The Go adapter maps them to Dragonfly `Runnable`, `ParamDescriber`, `Parameter`, and `Enum` implementations so Bedrock clients receive native command metadata.
 
-Rust has no Go-style runtime reflection. Its equivalent plugin API uses derive and attribute proc macros at compile time. The intended author-facing form is a derived enum/struct: enum variants become subcommands, enum-typed fields become Dragonfly enums, and fields become parameters. These macros generate the low-level static command schema and parser; direct `Command`, `CommandOverload`, and `CommandParameter` construction remains available as an escape hatch and ABI test surface.
+Rust has no Go-style runtime reflection. Its equivalent plugin API uses derive and attribute proc macros at compile time. A derived command enum turns variants into subcommands and `CommandEnum` fields into Dragonfly enums. A `#[command]` method inside the bare `#[plugin]` implementation is discovered and routed automatically. These macros generate the low-level static command schema and parser; direct `Command`, `CommandOverload`, and `CommandParameter` construction remains available as an escape hatch and ABI test surface.
 
 ## Scope and parity target
 

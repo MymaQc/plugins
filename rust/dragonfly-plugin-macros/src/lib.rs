@@ -1,6 +1,207 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{ItemImpl, parse_macro_input};
+use syn::{
+    Attribute, Data, DeriveInput, Fields, FnArg, ImplItem, ItemImpl, LitStr, Type,
+    parse_macro_input,
+};
+
+fn command_attribute(attributes: &[Attribute], key: &str) -> syn::Result<Option<String>> {
+    let mut value = None;
+    for attribute in attributes
+        .iter()
+        .filter(|attribute| attribute.path().is_ident("command"))
+    {
+        attribute.parse_nested_meta(|meta| {
+            if meta.path.is_ident("name")
+                || meta.path.is_ident("description")
+                || meta.path.is_ident("value")
+            {
+                let parsed = meta.value()?.parse::<LitStr>()?.value();
+                if meta.path.is_ident(key) {
+                    value = Some(parsed);
+                }
+                Ok(())
+            } else {
+                Err(meta.error("unknown command option"))
+            }
+        })?;
+    }
+    Ok(value)
+}
+
+fn kebab_case(value: &str) -> String {
+    let mut output = String::new();
+    for (index, character) in value.chars().enumerate() {
+        if character.is_uppercase() {
+            if index != 0 {
+                output.push('-');
+            }
+            output.extend(character.to_lowercase());
+        } else if character == '_' {
+            output.push('-');
+        } else {
+            output.push(character);
+        }
+    }
+    output
+}
+
+#[proc_macro_derive(CommandEnum, attributes(command))]
+pub fn command_enum(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    match expand_command_enum(input) {
+        Ok(output) => output.into(),
+        Err(error) => error.into_compile_error().into(),
+    }
+}
+
+fn expand_command_enum(input: DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
+    let name = input.ident;
+    let Data::Enum(data) = input.data else {
+        return Err(syn::Error::new_spanned(
+            name,
+            "CommandEnum requires an enum",
+        ));
+    };
+    let mut values = Vec::new();
+    let mut variants = Vec::new();
+    for variant in data.variants {
+        if !matches!(variant.fields, Fields::Unit) {
+            return Err(syn::Error::new_spanned(
+                variant,
+                "command enum variants must be unit variants",
+            ));
+        }
+        let value = command_attribute(&variant.attrs, "value")?
+            .unwrap_or_else(|| kebab_case(&variant.ident.to_string()));
+        values.push(value);
+        variants.push(variant.ident);
+    }
+    Ok(quote! {
+        impl ::dragonfly_plugin::CommandEnum for #name {
+            const VALUES: &'static [::dragonfly_plugin::CommandValue] = &[
+                #(::dragonfly_plugin::CommandValue::new(#values)),*
+            ];
+
+            fn parse(value: &str) -> ::core::option::Option<Self> {
+                #(if value.eq_ignore_ascii_case(#values) {
+                    return ::core::option::Option::Some(Self::#variants);
+                })*
+                ::core::option::Option::None
+            }
+        }
+    })
+}
+
+#[proc_macro_derive(Command, attributes(command))]
+pub fn command(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    match expand_command(input) {
+        Ok(output) => output.into(),
+        Err(error) => error.into_compile_error().into(),
+    }
+}
+
+fn expand_command(input: DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
+    let command_name = command_attribute(&input.attrs, "name")?
+        .unwrap_or_else(|| kebab_case(&input.ident.to_string()));
+    let description = command_attribute(&input.attrs, "description")?.unwrap_or_default();
+    let name = input.ident;
+    let Data::Enum(data) = input.data else {
+        return Err(syn::Error::new_spanned(
+            name,
+            "Command requires an enum whose variants are subcommands",
+        ));
+    };
+    let mut overloads = Vec::new();
+    let mut parsers = Vec::new();
+    for variant in data.variants {
+        let variant_name = command_attribute(&variant.attrs, "name")?
+            .unwrap_or_else(|| kebab_case(&variant.ident.to_string()));
+        let variant_ident = variant.ident;
+        let (parameters, field_names, field_types): (Vec<_>, Vec<_>, Vec<_>) = match variant.fields
+        {
+            Fields::Unit => (Vec::new(), Vec::new(), Vec::new()),
+            Fields::Named(fields) => {
+                let mut parameters = Vec::new();
+                let mut names = Vec::new();
+                let mut types = Vec::new();
+                for field in fields.named {
+                    let field_name = field.ident.expect("named field");
+                    let parameter_name = command_attribute(&field.attrs, "name")?
+                        .unwrap_or_else(|| kebab_case(&field_name.to_string()));
+                    let field_type = field.ty;
+                    parameters.push(quote! {
+                        ::dragonfly_plugin::CommandParameter::enumeration(
+                            #parameter_name,
+                            <#field_type as ::dragonfly_plugin::CommandEnum>::VALUES,
+                        )
+                    });
+                    names.push(field_name);
+                    types.push(field_type);
+                }
+                (parameters, names, types)
+            }
+            Fields::Unnamed(fields) => {
+                return Err(syn::Error::new_spanned(
+                    fields,
+                    "command variants must use named fields",
+                ));
+            }
+        };
+        if parameters.len() > 3 {
+            return Err(syn::Error::new_spanned(
+                &variant_ident,
+                "a command supports at most three enum fields after its subcommand",
+            ));
+        }
+        overloads.push(quote! {
+            ::dragonfly_plugin::CommandOverload::new(&[
+                ::dragonfly_plugin::CommandParameter::subcommand(#variant_name),
+                #(#parameters),*
+            ])
+        });
+        let reads = field_names.iter().zip(field_types.iter()).map(|(field, ty)| quote! {
+            let raw = parts.next().ok_or_else(|| ::dragonfly_plugin::CommandParseError::new(
+                concat!("missing command argument ", stringify!(#field))
+            ))?;
+            let #field = <#ty as ::dragonfly_plugin::CommandEnum>::parse(raw).ok_or_else(|| {
+                ::dragonfly_plugin::CommandParseError::new(format!("invalid {}: {raw}", stringify!(#field)))
+            })?;
+        });
+        let construct = if field_names.is_empty() {
+            quote!(Self::#variant_ident)
+        } else {
+            quote!(Self::#variant_ident { #(#field_names),* })
+        };
+        parsers.push(quote! {
+            if subcommand.eq_ignore_ascii_case(#variant_name) {
+                #(#reads)*
+                if let Some(extra) = parts.next() {
+                    return Err(::dragonfly_plugin::CommandParseError::new(format!("unexpected command argument: {extra}")));
+                }
+                return Ok(#construct);
+            }
+        });
+    }
+    Ok(quote! {
+        impl ::dragonfly_plugin::CommandDefinition for #name {
+            const COMMAND: ::dragonfly_plugin::Command =
+                ::dragonfly_plugin::Command::new(#command_name, #description).with_overloads(&[
+                    #(#overloads),*
+                ]);
+
+            fn parse(arguments: &str) -> ::core::result::Result<Self, ::dragonfly_plugin::CommandParseError> {
+                let mut parts = arguments.split_whitespace();
+                let subcommand = parts.next().ok_or_else(|| {
+                    ::dragonfly_plugin::CommandParseError::new("missing subcommand")
+                })?;
+                #(#parsers)*
+                Err(::dragonfly_plugin::CommandParseError::new(format!("unknown subcommand: {subcommand}")))
+            }
+        }
+    })
+}
 
 #[proc_macro_attribute]
 pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
@@ -12,8 +213,98 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
         .into_compile_error()
         .into();
     }
-    let implementation = parse_macro_input!(input as ItemImpl);
-    let plugin_type = &implementation.self_ty;
+    let mut implementation = parse_macro_input!(input as ItemImpl);
+    let plugin_type = implementation.self_ty.clone();
+    let mut command_methods = Vec::new();
+    let mut retained = Vec::with_capacity(implementation.items.len());
+    for item in implementation.items {
+        match item {
+            ImplItem::Fn(mut function)
+                if function
+                    .attrs
+                    .iter()
+                    .any(|attribute| attribute.path().is_ident("command")) =>
+            {
+                function
+                    .attrs
+                    .retain(|attribute| !attribute.path().is_ident("command"));
+                command_methods.push(function);
+            }
+            item => retained.push(item),
+        }
+    }
+    implementation.items = retained;
+    if !command_methods.is_empty()
+        && implementation.items.iter().any(|item| {
+            matches!(item, ImplItem::Fn(function) if function.sig.ident == "commands" || function.sig.ident == "on_command")
+        })
+    {
+        return syn::Error::new_spanned(
+            &implementation,
+            "#[command] methods cannot be mixed with manual commands() or on_command() handlers",
+        )
+        .into_compile_error()
+        .into();
+    }
+    let mut command_types: Vec<Type> = Vec::new();
+    let mut command_names = Vec::new();
+    for function in &command_methods {
+        let Some(FnArg::Typed(arguments)) = function.sig.inputs.iter().nth(2) else {
+            return syn::Error::new_spanned(
+                &function.sig,
+                "a #[command] method must take &self, &mut CommandEvent, and a derived command value",
+            )
+            .into_compile_error()
+            .into();
+        };
+        if function.sig.inputs.len() != 3 {
+            return syn::Error::new_spanned(
+                &function.sig,
+                "a #[command] method must take exactly three arguments",
+            )
+            .into_compile_error()
+            .into();
+        }
+        command_types.push((*arguments.ty).clone());
+        command_names.push(function.sig.ident.clone());
+    }
+    if !command_methods.is_empty() {
+        let dispatch_arms = command_types.iter().zip(command_names.iter()).enumerate().map(
+            |(index, (command_type, method))| quote! {
+                #index => match <#command_type as ::dragonfly_plugin::CommandDefinition>::parse(event.arguments()) {
+                    Ok(command) => self.#method(event, command),
+                    Err(error) => {
+                        let _ = event.fail(&error.to_string());
+                    }
+                },
+            },
+        );
+        implementation.items.push(syn::parse_quote! {
+            fn commands(&self) -> &'static [::dragonfly_plugin::Command] {
+                const COMMANDS: &[::dragonfly_plugin::Command] = &[
+                    #(<#command_types as ::dragonfly_plugin::CommandDefinition>::COMMAND),*
+                ];
+                COMMANDS
+            }
+        });
+        implementation.items.push(syn::parse_quote! {
+            fn on_command(&self, command: usize, event: &mut ::dragonfly_plugin::CommandEvent<'_>) {
+                match command {
+                    #(#dispatch_arms)*
+                    _ => {}
+                }
+            }
+        });
+    }
+    let inherent_commands = if command_methods.is_empty() {
+        quote!()
+    } else {
+        quote! {
+            impl #plugin_type {
+                #(#command_methods)*
+            }
+        }
+    };
     let handles_move = implementation
         .items
         .iter()
@@ -26,6 +317,7 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
 
     quote! {
         #implementation
+        #inherent_commands
 
         #[doc(hidden)]
         mod __dragonfly_plugin_export {

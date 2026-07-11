@@ -56,6 +56,8 @@ impl Plugin for MovementGuard {
 Events continue by default. Cancellation is monotonic; no `allow()` API exists.
 Plugin identity defaults to Cargo's package name; handler code does not repeat it.
 
+Commands use compile-time derives in place of Go runtime reflection. Enum variants become subcommands and enum fields become native Dragonfly command enums; `#[plugin]` discovers `#[command]` methods automatically. See the hello-command example for the complete form.
+
 See [native plugin architecture](docs/plans/rust-plugin-architecture.md).
 
 ## Examples
