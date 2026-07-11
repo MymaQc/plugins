@@ -1,4 +1,6 @@
-use dragonfly::{PlayerJoinEvent, PlayerQuitEvent, Plugin, plugin};
+use dragonfly::{
+    PlayerHealEvent, PlayerHurtEvent, PlayerJoinEvent, PlayerQuitEvent, Plugin, plugin,
+};
 
 #[derive(Default)]
 struct LifecycleLogger;
@@ -19,5 +21,13 @@ impl Plugin for LifecycleLogger {
 
     fn on_quit(&self, event: &PlayerQuitEvent<'_>) {
         eprintln!("{} quit", event.name());
+    }
+
+    fn on_hurt(&self, event: &mut PlayerHurtEvent<'_>) {
+        eprintln!("player hurt for {} by {}", event.damage(), event.source());
+    }
+
+    fn on_heal(&self, event: &mut PlayerHealEvent<'_>) {
+        eprintln!("player healed for {} by {}", event.health(), event.source());
     }
 }

@@ -2,6 +2,7 @@ package host
 
 import (
 	"testing"
+	"time"
 
 	"github.com/bedrock-gophers/plugins/internal/native"
 	"github.com/df-mc/dragonfly/server/event"
@@ -20,6 +21,10 @@ type runtimeStub struct {
 	joinInput     native.PlayerJoinInput
 	quitInput     native.PlayerQuitInput
 	joinCancelled bool
+	hurtInput     native.PlayerHurtInput
+	hurtOutput    native.PlayerHurtOutput
+	healInput     native.PlayerHealInput
+	healOutput    native.PlayerHealOutput
 }
 
 func (r *runtimeStub) HandlePlayerJoin(input native.PlayerJoinInput, _ bool) (bool, error) {
@@ -29,6 +34,14 @@ func (r *runtimeStub) HandlePlayerJoin(input native.PlayerJoinInput, _ bool) (bo
 func (r *runtimeStub) HandlePlayerQuit(input native.PlayerQuitInput) error {
 	r.quitInput = input
 	return nil
+}
+func (r *runtimeStub) HandlePlayerHurt(input native.PlayerHurtInput, _ bool) (native.PlayerHurtOutput, error) {
+	r.hurtInput = input
+	return r.hurtOutput, nil
+}
+func (r *runtimeStub) HandlePlayerHeal(input native.PlayerHealInput, _ bool) (native.PlayerHealOutput, error) {
+	r.healInput = input
+	return r.healOutput, nil
 }
 
 func (r *runtimeStub) Subscriptions() uint64 { return r.subscriptions }
@@ -112,6 +125,38 @@ func TestPlayerHandlerJoinAndQuit(t *testing.T) {
 		}
 		if _, ok := players.ID(p); ok {
 			t.Fatal("player remained registered after quit")
+		}
+	})
+}
+
+func TestPlayerHandlerHurtAndHeal(t *testing.T) {
+	runtime := &runtimeStub{
+		subscriptions: native.PlayerHurtSubscription | native.PlayerHealSubscription,
+		hurtOutput: native.PlayerHurtOutput{
+			Cancelled:      true,
+			Damage:         2.5,
+			AttackImmunity: 750 * time.Millisecond,
+		},
+		healOutput: native.PlayerHealOutput{Health: 3.5},
+	}
+	withPlayer(t, func(p *player.Player) {
+		players := NewPlayers()
+		players.Register(p, 13)
+		handler := NewPlayerHandler(runtime, nil, players)
+		hurtContext := event.C(p)
+		damage, immunity := 8.0, 500*time.Millisecond
+		handler.HandleHurt(hurtContext, &damage, false, &immunity, nil)
+		if !hurtContext.Cancelled() || damage != 2.5 || immunity != 750*time.Millisecond {
+			t.Fatalf("cancelled=%v damage=%v immunity=%v", hurtContext.Cancelled(), damage, immunity)
+		}
+		healContext := event.C(p)
+		health := 1.0
+		handler.HandleHeal(healContext, &health, nil)
+		if healContext.Cancelled() || health != 3.5 {
+			t.Fatalf("cancelled=%v health=%v", healContext.Cancelled(), health)
+		}
+		if runtime.hurtInput.Player.Generation != 13 || runtime.healInput.Player.Generation != 13 {
+			t.Fatalf("hurt=%+v heal=%+v", runtime.hurtInput, runtime.healInput)
 		}
 	})
 }

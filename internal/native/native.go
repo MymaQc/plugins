@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"runtime"
 	"strings"
+	"time"
 	"unsafe"
 )
 
@@ -22,6 +23,8 @@ const (
 	PlayerChatSubscription  uint64 = 2
 	PlayerJoinSubscription  uint64 = 4
 	PlayerQuitSubscription  uint64 = 8
+	PlayerHurtSubscription  uint64 = 16
+	PlayerHealSubscription  uint64 = 32
 	MaxChatReplacementBytes        = 4096
 	MaxCommandOutputBytes          = 4096
 	MaxCommandEnumBytes            = 4096
@@ -65,6 +68,31 @@ type PlayerJoinInput struct {
 type PlayerQuitInput struct {
 	Player PlayerID
 	Name   string
+}
+
+type PlayerHurtInput struct {
+	Player         PlayerID
+	Damage         float64
+	Immune         bool
+	AttackImmunity time.Duration
+	Source         string
+}
+
+type PlayerHurtOutput struct {
+	Cancelled      bool
+	Damage         float64
+	AttackImmunity time.Duration
+}
+
+type PlayerHealInput struct {
+	Player PlayerID
+	Health float64
+	Source string
+}
+
+type PlayerHealOutput struct {
+	Cancelled bool
+	Health    float64
 }
 
 type Command struct {
@@ -457,6 +485,62 @@ func (r *Runtime) HandlePlayerQuit(input PlayerQuitInput) error {
 		return fmt.Errorf("native quit handler failed with status %d", int32(status))
 	}
 	return nil
+}
+
+func (r *Runtime) HandlePlayerHurt(input PlayerHurtInput, cancelled bool) (PlayerHurtOutput, error) {
+	output := PlayerHurtOutput{Cancelled: cancelled, Damage: input.Damage, AttackImmunity: input.AttackImmunity}
+	if r == nil || r.ptr == nil {
+		return output, errors.New("native runtime is closed")
+	}
+	source := C.CBytes([]byte(input.Source))
+	defer C.free(source)
+	var nativeInput C.DfPlayerHurtInput
+	fillPlayerID(&nativeInput.player, input.Player)
+	nativeInput.immune = C.uint8_t(boolByte(input.Immune))
+	nativeInput.source = C.DfStringView{data: (*C.uint8_t)(source), len: C.uint64_t(len(input.Source))}
+	state := C.DfPlayerHurtState{
+		damage:                       C.double(input.Damage),
+		attack_immunity_milliseconds: C.uint64_t(max(input.AttackImmunity.Milliseconds(), 0)),
+	}
+	if cancelled {
+		state.cancelled = 1
+	}
+	if status := C.bg_runtime_handle_player_hurt(r.ptr, &nativeInput, &state); status != C.DF_STATUS_OK {
+		return output, fmt.Errorf("native hurt handler failed with status %d", int32(status))
+	}
+	output.Cancelled = state.cancelled != 0
+	output.Damage = float64(state.damage)
+	output.AttackImmunity = time.Duration(state.attack_immunity_milliseconds) * time.Millisecond
+	return output, nil
+}
+
+func (r *Runtime) HandlePlayerHeal(input PlayerHealInput, cancelled bool) (PlayerHealOutput, error) {
+	output := PlayerHealOutput{Cancelled: cancelled, Health: input.Health}
+	if r == nil || r.ptr == nil {
+		return output, errors.New("native runtime is closed")
+	}
+	source := C.CBytes([]byte(input.Source))
+	defer C.free(source)
+	var nativeInput C.DfPlayerHealInput
+	fillPlayerID(&nativeInput.player, input.Player)
+	nativeInput.source = C.DfStringView{data: (*C.uint8_t)(source), len: C.uint64_t(len(input.Source))}
+	state := C.DfPlayerHealState{health: C.double(input.Health)}
+	if cancelled {
+		state.cancelled = 1
+	}
+	if status := C.bg_runtime_handle_player_heal(r.ptr, &nativeInput, &state); status != C.DF_STATUS_OK {
+		return output, fmt.Errorf("native heal handler failed with status %d", int32(status))
+	}
+	output.Cancelled = state.cancelled != 0
+	output.Health = float64(state.health)
+	return output, nil
+}
+
+func boolByte(value bool) uint8 {
+	if value {
+		return 1
+	}
+	return 0
 }
 
 func fillPlayerID(destination *C.DfPlayerId, source PlayerID) {

@@ -17,6 +17,8 @@ typedef DfStatus (*RuntimeMoveFn)(DfRuntime *, const DfPlayerMoveInput *, DfPlay
 typedef DfStatus (*RuntimeChatFn)(DfRuntime *, const DfPlayerChatInput *, DfPlayerChatState *);
 typedef DfStatus (*RuntimeJoinFn)(DfRuntime *, const DfPlayerJoinInput *, DfPlayerJoinState *);
 typedef DfStatus (*RuntimeQuitFn)(DfRuntime *, const DfPlayerQuitInput *, DfPlayerQuitState *);
+typedef DfStatus (*RuntimeHurtFn)(DfRuntime *, const DfPlayerHurtInput *, DfPlayerHurtState *);
+typedef DfStatus (*RuntimeHealFn)(DfRuntime *, const DfPlayerHealInput *, DfPlayerHealState *);
 
 struct BgRuntimeLibrary {
     void *handle;
@@ -34,6 +36,8 @@ struct BgRuntimeLibrary {
     RuntimeChatFn handle_chat;
     RuntimeJoinFn handle_join;
     RuntimeQuitFn handle_quit;
+    RuntimeHurtFn handle_hurt;
+    RuntimeHealFn handle_heal;
 };
 
 static void write_error(uint8_t *error, uint64_t capacity, const char *message) {
@@ -86,7 +90,9 @@ DfStatus bg_runtime_open(
     RuntimeChatFn handle_chat = (RuntimeChatFn) load_symbol(handle, "df_runtime_handle_player_chat", error, error_capacity);
     RuntimeJoinFn handle_join = (RuntimeJoinFn) load_symbol(handle, "df_runtime_handle_player_join", error, error_capacity);
     RuntimeQuitFn handle_quit = (RuntimeQuitFn) load_symbol(handle, "df_runtime_handle_player_quit", error, error_capacity);
-    if (create == NULL || destroy == NULL || enable == NULL || disable == NULL || plugin_count == NULL || subscriptions == NULL || command_count == NULL || command_at == NULL || handle_command == NULL || command_enum_options == NULL || handle_move == NULL || handle_chat == NULL || handle_join == NULL || handle_quit == NULL) {
+    RuntimeHurtFn handle_hurt = (RuntimeHurtFn) load_symbol(handle, "df_runtime_handle_player_hurt", error, error_capacity);
+    RuntimeHealFn handle_heal = (RuntimeHealFn) load_symbol(handle, "df_runtime_handle_player_heal", error, error_capacity);
+    if (create == NULL || destroy == NULL || enable == NULL || disable == NULL || plugin_count == NULL || subscriptions == NULL || command_count == NULL || command_at == NULL || handle_command == NULL || command_enum_options == NULL || handle_move == NULL || handle_chat == NULL || handle_join == NULL || handle_quit == NULL || handle_hurt == NULL || handle_heal == NULL) {
         dlclose(handle);
         return DF_STATUS_ERROR;
     }
@@ -124,6 +130,8 @@ DfStatus bg_runtime_open(
     library->handle_chat = handle_chat;
     library->handle_join = handle_join;
     library->handle_quit = handle_quit;
+    library->handle_hurt = handle_hurt;
+    library->handle_heal = handle_heal;
     *out = library;
     return DF_STATUS_OK;
 }
@@ -238,6 +246,28 @@ DfStatus bg_runtime_handle_player_quit(
         return DF_STATUS_ERROR;
     }
     return library->handle_quit(library->runtime, input, state);
+}
+
+DfStatus bg_runtime_handle_player_hurt(
+    BgRuntimeLibrary *library,
+    const DfPlayerHurtInput *input,
+    DfPlayerHurtState *state
+) {
+    if (library == NULL || input == NULL || state == NULL) {
+        return DF_STATUS_ERROR;
+    }
+    return library->handle_hurt(library->runtime, input, state);
+}
+
+DfStatus bg_runtime_handle_player_heal(
+    BgRuntimeLibrary *library,
+    const DfPlayerHealInput *input,
+    DfPlayerHealState *state
+) {
+    if (library == NULL || input == NULL || state == NULL) {
+        return DF_STATUS_ERROR;
+    }
+    return library->handle_heal(library->runtime, input, state);
 }
 
 uint64_t bg_runtime_handle_player_move_value(

@@ -126,6 +126,38 @@ pub struct DfPlayerQuitState {
     pub _reserved: u8,
 }
 
+pub const DF_EVENT_PLAYER_HURT: DfEventId = 5;
+pub const DF_SUBSCRIPTION_PLAYER_HURT: u64 = 1u64 << 4;
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfPlayerHurtInput {
+    pub player: DfPlayerId,
+    pub immune: u8,
+    pub source: DfStringView,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfPlayerHurtState {
+    pub cancelled: u8,
+    pub damage: f64,
+    pub attack_immunity_milliseconds: u64,
+}
+
+pub const DF_EVENT_PLAYER_HEAL: DfEventId = 6;
+pub const DF_SUBSCRIPTION_PLAYER_HEAL: u64 = 1u64 << 5;
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfPlayerHealInput {
+    pub player: DfPlayerId,
+    pub source: DfStringView,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfPlayerHealState {
+    pub cancelled: u8,
+    pub health: f64,
+}
+
 pub type DfPluginCreateFn = unsafe extern "C" fn() -> *mut c_void;
 pub type DfPluginLifecycleFn = unsafe extern "C" fn(instance: *mut c_void) -> DfStatus;
 pub type DfPluginCommandsFn = unsafe extern "C" fn(instance: *mut c_void, count: *mut u64) -> *const DfCommandDescriptor;

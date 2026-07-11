@@ -94,6 +94,32 @@ typedef struct {
     uint8_t _reserved;
 } DfPlayerQuitState;
 
+#define DF_EVENT_PLAYER_HURT 5u
+
+typedef struct {
+    DfPlayerId player;
+    uint8_t immune;
+    DfStringView source;
+} DfPlayerHurtInput;
+
+typedef struct {
+    uint8_t cancelled;
+    double damage;
+    uint64_t attack_immunity_milliseconds;
+} DfPlayerHurtState;
+
+#define DF_EVENT_PLAYER_HEAL 6u
+
+typedef struct {
+    DfPlayerId player;
+    DfStringView source;
+} DfPlayerHealInput;
+
+typedef struct {
+    uint8_t cancelled;
+    double health;
+} DfPlayerHealState;
+
 typedef DfStatus (*DfHandleEventFn)(void *instance, DfEventId event_id, const void *input, void *state);
 typedef void *(*DfPluginCreateFn)(void);
 typedef DfStatus (*DfPluginLifecycleFn)(void *instance);
@@ -134,6 +160,8 @@ DfStatus df_runtime_handle_player_move(DfRuntime *runtime, const DfPlayerMoveInp
 DfStatus df_runtime_handle_player_chat(DfRuntime *runtime, const DfPlayerChatInput *input, DfPlayerChatState *state);
 DfStatus df_runtime_handle_player_join(DfRuntime *runtime, const DfPlayerJoinInput *input, DfPlayerJoinState *state);
 DfStatus df_runtime_handle_player_quit(DfRuntime *runtime, const DfPlayerQuitInput *input, DfPlayerQuitState *state);
+DfStatus df_runtime_handle_player_hurt(DfRuntime *runtime, const DfPlayerHurtInput *input, DfPlayerHurtState *state);
+DfStatus df_runtime_handle_player_heal(DfRuntime *runtime, const DfPlayerHealInput *input, DfPlayerHealState *state);
 
 #ifdef __cplusplus
 }

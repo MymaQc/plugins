@@ -2,13 +2,14 @@ use dragonfly_plugin_sys::{
     DF_ABI_VERSION, DF_COMMAND_PARAMETER_BOOL, DF_COMMAND_PARAMETER_DYNAMIC_ENUM,
     DF_COMMAND_PARAMETER_ENUM, DF_COMMAND_PARAMETER_FLOAT, DF_COMMAND_PARAMETER_INTEGER,
     DF_COMMAND_PARAMETER_PLAYER, DF_COMMAND_PARAMETER_RAW_TEXT, DF_COMMAND_PARAMETER_STRING,
-    DF_COMMAND_PARAMETER_SUBCOMMAND, DF_EVENT_PLAYER_CHAT, DF_EVENT_PLAYER_JOIN,
-    DF_EVENT_PLAYER_MOVE, DF_EVENT_PLAYER_QUIT, DF_STATUS_ERROR, DF_STATUS_OK,
-    DF_SUBSCRIPTION_PLAYER_CHAT, DF_SUBSCRIPTION_PLAYER_JOIN, DF_SUBSCRIPTION_PLAYER_MOVE,
+    DF_COMMAND_PARAMETER_SUBCOMMAND, DF_EVENT_PLAYER_CHAT, DF_EVENT_PLAYER_HEAL,
+    DF_EVENT_PLAYER_HURT, DF_EVENT_PLAYER_JOIN, DF_EVENT_PLAYER_MOVE, DF_EVENT_PLAYER_QUIT,
+    DF_STATUS_ERROR, DF_STATUS_OK, DF_SUBSCRIPTION_PLAYER_CHAT, DF_SUBSCRIPTION_PLAYER_HEAL,
+    DF_SUBSCRIPTION_PLAYER_HURT, DF_SUBSCRIPTION_PLAYER_JOIN, DF_SUBSCRIPTION_PLAYER_MOVE,
     DF_SUBSCRIPTION_PLAYER_QUIT, DfCommandDescriptor, DfCommandInput, DfCommandState,
-    DfPlayerChatInput, DfPlayerChatState, DfPlayerJoinInput, DfPlayerJoinState, DfPlayerMoveInput,
-    DfPlayerMoveState, DfPlayerQuitInput, DfPlayerQuitState, DfPluginApiV1, DfPluginEntryV1Fn,
-    DfStatus, DfStringView,
+    DfPlayerChatInput, DfPlayerChatState, DfPlayerHealInput, DfPlayerHealState, DfPlayerHurtInput,
+    DfPlayerHurtState, DfPlayerJoinInput, DfPlayerJoinState, DfPlayerMoveInput, DfPlayerMoveState,
+    DfPlayerQuitInput, DfPlayerQuitState, DfPluginApiV1, DfPluginEntryV1Fn, DfStatus, DfStringView,
 };
 use libloading::{Library, Symbol};
 use std::ffi::{OsStr, c_void};
@@ -329,6 +330,64 @@ impl DfRuntime {
             if status != DF_STATUS_OK {
                 return status;
             }
+        }
+        DF_STATUS_OK
+    }
+
+    fn handle_hurt(&self, input: &DfPlayerHurtInput, state: &mut DfPlayerHurtState) -> DfStatus {
+        for plugin in &self.plugins {
+            if !plugin.enabled || plugin.api.header.subscriptions & DF_SUBSCRIPTION_PLAYER_HURT == 0
+            {
+                continue;
+            }
+            let was_cancelled = state.cancelled != 0;
+            let Some(handle) = plugin.api.handle_event else {
+                return DF_STATUS_ERROR;
+            };
+            let status = unsafe {
+                handle(
+                    plugin.instance,
+                    DF_EVENT_PLAYER_HURT,
+                    ptr::from_ref(input).cast(),
+                    ptr::from_mut(state).cast(),
+                )
+            };
+            if was_cancelled {
+                state.cancelled = 1;
+            }
+            if status != DF_STATUS_OK || !state.damage.is_finite() {
+                return DF_STATUS_ERROR;
+            }
+            state.damage = state.damage.max(0.0);
+        }
+        DF_STATUS_OK
+    }
+
+    fn handle_heal(&self, input: &DfPlayerHealInput, state: &mut DfPlayerHealState) -> DfStatus {
+        for plugin in &self.plugins {
+            if !plugin.enabled || plugin.api.header.subscriptions & DF_SUBSCRIPTION_PLAYER_HEAL == 0
+            {
+                continue;
+            }
+            let was_cancelled = state.cancelled != 0;
+            let Some(handle) = plugin.api.handle_event else {
+                return DF_STATUS_ERROR;
+            };
+            let status = unsafe {
+                handle(
+                    plugin.instance,
+                    DF_EVENT_PLAYER_HEAL,
+                    ptr::from_ref(input).cast(),
+                    ptr::from_mut(state).cast(),
+                )
+            };
+            if was_cancelled {
+                state.cancelled = 1;
+            }
+            if status != DF_STATUS_OK || !state.health.is_finite() {
+                return DF_STATUS_ERROR;
+            }
+            state.health = state.health.max(0.0);
         }
         DF_STATUS_OK
     }
@@ -849,6 +908,58 @@ pub unsafe extern "C" fn df_runtime_handle_player_quit(
     }
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         runtime.handle_quit(input, state)
+    }))
+    .unwrap_or(DF_STATUS_ERROR)
+}
+
+#[unsafe(no_mangle)]
+/// Dispatches a player hurt event.
+///
+/// # Safety
+/// All pointers and string views must remain valid for this synchronous call.
+pub unsafe extern "C" fn df_runtime_handle_player_hurt(
+    runtime: *mut DfRuntime,
+    input: *const DfPlayerHurtInput,
+    state: *mut DfPlayerHurtState,
+) -> DfStatus {
+    let (Some(runtime), Some(input), Some(state)) = (
+        unsafe { runtime.as_ref() },
+        unsafe { input.as_ref() },
+        unsafe { state.as_mut() },
+    ) else {
+        return DF_STATUS_ERROR;
+    };
+    if unsafe { string_view(input.source) }.is_err() || !state.damage.is_finite() {
+        return DF_STATUS_ERROR;
+    }
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        runtime.handle_hurt(input, state)
+    }))
+    .unwrap_or(DF_STATUS_ERROR)
+}
+
+#[unsafe(no_mangle)]
+/// Dispatches a player heal event.
+///
+/// # Safety
+/// All pointers and string views must remain valid for this synchronous call.
+pub unsafe extern "C" fn df_runtime_handle_player_heal(
+    runtime: *mut DfRuntime,
+    input: *const DfPlayerHealInput,
+    state: *mut DfPlayerHealState,
+) -> DfStatus {
+    let (Some(runtime), Some(input), Some(state)) = (
+        unsafe { runtime.as_ref() },
+        unsafe { input.as_ref() },
+        unsafe { state.as_mut() },
+    ) else {
+        return DF_STATUS_ERROR;
+    };
+    if unsafe { string_view(input.source) }.is_err() || !state.health.is_finite() {
+        return DF_STATUS_ERROR;
+    }
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        runtime.handle_heal(input, state)
     }))
     .unwrap_or(DF_STATUS_ERROR)
 }

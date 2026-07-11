@@ -31,3 +31,21 @@ events:
       - { name: player, type: player_id }
       - { name: name, type: string_view }
     state: []
+  - name: hurt
+    id: 5
+    input:
+      - { name: player, type: player_id }
+      - { name: immune, type: bool }
+      - { name: source, type: string_view }
+    state:
+      - { name: cancelled, type: bool }
+      - { name: damage, type: f64 }
+      - { name: attack_immunity_milliseconds, type: u64 }
+  - name: heal
+    id: 6
+    input:
+      - { name: player, type: player_id }
+      - { name: source, type: string_view }
+    state:
+      - { name: cancelled, type: bool }
+      - { name: health, type: f64 }

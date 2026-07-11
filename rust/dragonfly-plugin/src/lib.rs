@@ -742,6 +742,101 @@ impl<'a> PlayerChatEvent<'a> {
     }
 }
 
+pub struct PlayerHurtEvent<'a> {
+    input: &'a dragonfly_plugin_sys::DfPlayerHurtInput,
+    state: &'a mut dragonfly_plugin_sys::DfPlayerHurtState,
+}
+
+impl<'a> PlayerHurtEvent<'a> {
+    /// # Safety
+    /// Both references must belong to the same active hurt callback.
+    #[doc(hidden)]
+    pub unsafe fn from_raw(
+        input: &'a dragonfly_plugin_sys::DfPlayerHurtInput,
+        state: &'a mut dragonfly_plugin_sys::DfPlayerHurtState,
+    ) -> Self {
+        Self { input, state }
+    }
+
+    pub fn player(&self) -> Player {
+        Player::from_id(self.input.player)
+    }
+
+    pub fn source(&self) -> &str {
+        unsafe { string_view(self.input.source) }
+    }
+
+    pub fn immune(&self) -> bool {
+        self.input.immune != 0
+    }
+
+    pub fn damage(&self) -> f64 {
+        self.state.damage
+    }
+
+    pub fn set_damage(&mut self, damage: f64) {
+        self.state.damage = damage.max(0.0);
+    }
+
+    pub fn attack_immunity(&self) -> std::time::Duration {
+        std::time::Duration::from_millis(self.state.attack_immunity_milliseconds)
+    }
+
+    pub fn set_attack_immunity(&mut self, duration: std::time::Duration) {
+        self.state.attack_immunity_milliseconds =
+            duration.as_millis().min(u128::from(u64::MAX)) as u64;
+    }
+
+    pub fn cancelled(&self) -> bool {
+        self.state.cancelled != 0
+    }
+
+    pub fn cancel(&mut self) {
+        self.state.cancelled = 1;
+    }
+}
+
+pub struct PlayerHealEvent<'a> {
+    input: &'a dragonfly_plugin_sys::DfPlayerHealInput,
+    state: &'a mut dragonfly_plugin_sys::DfPlayerHealState,
+}
+
+impl<'a> PlayerHealEvent<'a> {
+    /// # Safety
+    /// Both references must belong to the same active heal callback.
+    #[doc(hidden)]
+    pub unsafe fn from_raw(
+        input: &'a dragonfly_plugin_sys::DfPlayerHealInput,
+        state: &'a mut dragonfly_plugin_sys::DfPlayerHealState,
+    ) -> Self {
+        Self { input, state }
+    }
+
+    pub fn player(&self) -> Player {
+        Player::from_id(self.input.player)
+    }
+
+    pub fn source(&self) -> &str {
+        unsafe { string_view(self.input.source) }
+    }
+
+    pub fn health(&self) -> f64 {
+        self.state.health
+    }
+
+    pub fn set_health(&mut self, health: f64) {
+        self.state.health = health.max(0.0);
+    }
+
+    pub fn cancelled(&self) -> bool {
+        self.state.cancelled != 0
+    }
+
+    pub fn cancel(&mut self) {
+        self.state.cancelled = 1;
+    }
+}
+
 pub trait Plugin: Default + Send + Sync + 'static {
     fn on_enable(&self) {}
     fn on_disable(&self) {}
@@ -749,6 +844,8 @@ pub trait Plugin: Default + Send + Sync + 'static {
     fn on_chat(&self, _event: &mut PlayerChatEvent<'_>) {}
     fn on_join(&self, _event: &mut PlayerJoinEvent<'_>) {}
     fn on_quit(&self, _event: &PlayerQuitEvent<'_>) {}
+    fn on_hurt(&self, _event: &mut PlayerHurtEvent<'_>) {}
+    fn on_heal(&self, _event: &mut PlayerHealEvent<'_>) {}
     fn commands(&self) -> &'static [Command] {
         &[]
     }

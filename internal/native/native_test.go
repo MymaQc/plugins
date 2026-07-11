@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 )
 
 func nativeArtifacts(t testing.TB) (string, string) {
@@ -60,7 +61,7 @@ func TestMovementGuard(t *testing.T) {
 		t.Fatal("valid movement cancelled")
 	}
 
-	input.NewPosition.Y = -1
+	input.NewPosition.Y = -65
 	cancelled, err = runtime.HandlePlayerMove(input, false)
 	if err != nil {
 		t.Fatal(err)
@@ -177,6 +178,31 @@ func TestPlayerJoinAndQuit(t *testing.T) {
 	}
 }
 
+func TestPlayerHurtAndHeal(t *testing.T) {
+	runtime := openTestRuntime(t)
+	if runtime.Subscriptions()&PlayerHurtSubscription == 0 || runtime.Subscriptions()&PlayerHealSubscription == 0 {
+		t.Fatal("hurt or heal subscription missing")
+	}
+	hurt, err := runtime.HandlePlayerHurt(PlayerHurtInput{
+		Damage:         4,
+		AttackImmunity: 500 * time.Millisecond,
+		Source:         "testDamageSource",
+	}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hurt.Cancelled || hurt.Damage != 4 || hurt.AttackImmunity != 500*time.Millisecond {
+		t.Fatalf("hurt = %+v", hurt)
+	}
+	heal, err := runtime.HandlePlayerHeal(PlayerHealInput{Health: 2, Source: "testHealingSource"}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if heal.Cancelled || heal.Health != 2 {
+		t.Fatalf("heal = %+v", heal)
+	}
+}
+
 func TestCancellationIsMonotonic(t *testing.T) {
 	runtime := openTestRuntime(t)
 	cancelled, err := runtime.HandlePlayerMove(PlayerMoveInput{NewPosition: Vec3{Y: 64}}, true)
@@ -191,7 +217,7 @@ func TestCancellationIsMonotonic(t *testing.T) {
 func TestLifecycleControlsDispatch(t *testing.T) {
 	runtime := openTestRuntime(t)
 	runtime.Disable()
-	cancelled, err := runtime.HandlePlayerMove(PlayerMoveInput{NewPosition: Vec3{Y: -1}}, false)
+	cancelled, err := runtime.HandlePlayerMove(PlayerMoveInput{NewPosition: Vec3{Y: -65}}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,7 +227,7 @@ func TestLifecycleControlsDispatch(t *testing.T) {
 	if err := runtime.Enable(); err != nil {
 		t.Fatal(err)
 	}
-	cancelled, err = runtime.HandlePlayerMove(PlayerMoveInput{NewPosition: Vec3{Y: -1}}, false)
+	cancelled, err = runtime.HandlePlayerMove(PlayerMoveInput{NewPosition: Vec3{Y: -65}}, false)
 	if err != nil {
 		t.Fatal(err)
 	}

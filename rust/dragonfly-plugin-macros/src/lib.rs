@@ -791,10 +791,20 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
         .items
         .iter()
         .any(|item| matches!(item, syn::ImplItem::Fn(function) if function.sig.ident == "on_quit"));
+    let handles_hurt = implementation
+        .items
+        .iter()
+        .any(|item| matches!(item, syn::ImplItem::Fn(function) if function.sig.ident == "on_hurt"));
+    let handles_heal = implementation
+        .items
+        .iter()
+        .any(|item| matches!(item, syn::ImplItem::Fn(function) if function.sig.ident == "on_heal"));
     let subscriptions = u64::from(handles_move)
         | (u64::from(handles_chat) << 1)
         | (u64::from(handles_join) << 2)
-        | (u64::from(handles_quit) << 3);
+        | (u64::from(handles_quit) << 3)
+        | (u64::from(handles_hurt) << 4)
+        | (u64::from(handles_heal) << 5);
 
     quote! {
         #[doc(hidden)]
@@ -979,6 +989,22 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
                         let input = unsafe { &*input.cast::<sys::DfPlayerQuitInput>() };
                         let event = unsafe { ::dragonfly_plugin::PlayerQuitEvent::from_raw(input) };
                         <PluginType as ::dragonfly_plugin::Plugin>::on_quit(plugin, &event);
+                        sys::DF_STATUS_OK
+                    }
+                    sys::DF_EVENT_PLAYER_HURT => {
+                        let plugin = unsafe { &*instance.cast::<PluginType>() };
+                        let input = unsafe { &*input.cast::<sys::DfPlayerHurtInput>() };
+                        let state = unsafe { &mut *state.cast::<sys::DfPlayerHurtState>() };
+                        let mut event = unsafe { ::dragonfly_plugin::PlayerHurtEvent::from_raw(input, state) };
+                        <PluginType as ::dragonfly_plugin::Plugin>::on_hurt(plugin, &mut event);
+                        sys::DF_STATUS_OK
+                    }
+                    sys::DF_EVENT_PLAYER_HEAL => {
+                        let plugin = unsafe { &*instance.cast::<PluginType>() };
+                        let input = unsafe { &*input.cast::<sys::DfPlayerHealInput>() };
+                        let state = unsafe { &mut *state.cast::<sys::DfPlayerHealState>() };
+                        let mut event = unsafe { ::dragonfly_plugin::PlayerHealEvent::from_raw(input, state) };
+                        <PluginType as ::dragonfly_plugin::Plugin>::on_heal(plugin, &mut event);
                         sys::DF_STATUS_OK
                     }
                     _ => sys::DF_STATUS_ERROR,
