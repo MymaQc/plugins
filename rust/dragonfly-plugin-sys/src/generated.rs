@@ -16,7 +16,7 @@ pub struct DfPlayerId { pub bytes: [u8; 16], pub generation: u64 }
 pub struct DfVec3 { pub x: f64, pub y: f64, pub z: f64 }
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
-pub struct DfRotation { pub yaw: f32, pub pitch: f32 }
+pub struct DfRotation { pub yaw: f64, pub pitch: f64 }
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DfBlockPos { pub x: i32, pub y: i32, pub z: i32 }
@@ -39,14 +39,19 @@ pub const DF_PLAYER_TEXT_MESSAGE: u32 = 0;
 pub const DF_PLAYER_TEXT_TIP: u32 = 1;
 pub const DF_PLAYER_TEXT_POPUP: u32 = 2;
 pub const DF_PLAYER_TEXT_JUKEBOX_POPUP: u32 = 3;
+pub const DF_PLAYER_TRANSFORM_TELEPORT: u32 = 0;
+pub const DF_PLAYER_TRANSFORM_MOVE: u32 = 1;
+pub const DF_PLAYER_TRANSFORM_VELOCITY: u32 = 2;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DfTitleView { pub text: DfStringView, pub subtitle: DfStringView, pub action_text: DfStringView, pub fade_in_milliseconds: u64, pub duration_milliseconds: u64, pub fade_out_milliseconds: u64 }
 pub type DfHostPlayerTextFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, kind: u32, message: DfStringView) -> DfStatus;
 pub type DfHostPlayerTitleFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, title: DfTitleView) -> DfStatus;
+pub type DfHostPlayerTransformFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, kind: u32, vector: DfVec3, yaw: f64, pitch: f64) -> DfStatus;
+pub type DfHostPlayerRotationFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, rotation: *mut DfRotation) -> DfStatus;
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
-pub struct DfHostApiV1 { pub abi_version: u32, pub struct_size: u32, pub context: u64, pub player_text: Option<DfHostPlayerTextFn>, pub player_title: Option<DfHostPlayerTitleFn> }
+pub struct DfHostApiV1 { pub abi_version: u32, pub struct_size: u32, pub context: u64, pub player_text: Option<DfHostPlayerTextFn>, pub player_title: Option<DfHostPlayerTitleFn>, pub player_transform: Option<DfHostPlayerTransformFn>, pub player_rotation: Option<DfHostPlayerRotationFn> }
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct DfCommandParameter { pub kind: u32, pub optional: u8, pub name: DfStringView, pub values: *const DfStringView, pub value_count: u64 }

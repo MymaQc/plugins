@@ -63,7 +63,7 @@ type Vec3 struct {
 }
 
 type Rotation struct {
-	Yaw, Pitch float32
+	Yaw, Pitch float64
 }
 
 type BlockPos struct {
@@ -533,7 +533,7 @@ func (r *Runtime) HandlePlayerMove(input PlayerMoveInput, cancelled bool) (bool,
 	fillPlayerID(&nativeInput.player, input.Player)
 	nativeInput.old_position = C.DfVec3{x: C.double(input.OldPosition.X), y: C.double(input.OldPosition.Y), z: C.double(input.OldPosition.Z)}
 	nativeInput.new_position = C.DfVec3{x: C.double(input.NewPosition.X), y: C.double(input.NewPosition.Y), z: C.double(input.NewPosition.Z)}
-	nativeInput.rotation = C.DfRotation{yaw: C.float(input.Rotation.Yaw), pitch: C.float(input.Rotation.Pitch)}
+	nativeInput.rotation = C.DfRotation{yaw: C.double(input.Rotation.Yaw), pitch: C.double(input.Rotation.Pitch)}
 	var state C.DfPlayerMoveState
 	if cancelled {
 		state.cancelled = 1

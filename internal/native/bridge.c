@@ -7,6 +7,8 @@
 
 extern DfStatus bg_go_player_text(uint64_t context, DfPlayerId player, uint32_t kind, DfStringView message);
 extern DfStatus bg_go_player_title(uint64_t context, DfPlayerId player, DfTitleView title);
+extern DfStatus bg_go_player_transform(uint64_t context, DfPlayerId player, uint32_t kind, DfVec3 vector, double yaw, double pitch);
+extern DfStatus bg_go_player_rotation(uint64_t context, DfPlayerId player, DfRotation *rotation);
 
 static DfStatus host_player_text(uint64_t context, DfPlayerId player, uint32_t kind, DfStringView message) {
     return bg_go_player_text(context, player, kind, message);
@@ -14,6 +16,14 @@ static DfStatus host_player_text(uint64_t context, DfPlayerId player, uint32_t k
 
 static DfStatus host_player_title(uint64_t context, DfPlayerId player, DfTitleView title) {
     return bg_go_player_title(context, player, title);
+}
+
+static DfStatus host_player_transform(uint64_t context, DfPlayerId player, uint32_t kind, DfVec3 vector, double yaw, double pitch) {
+    return bg_go_player_transform(context, player, kind, vector, yaw, pitch);
+}
+
+static DfStatus host_player_rotation(uint64_t context, DfPlayerId player, DfRotation *rotation) {
+    return bg_go_player_rotation(context, player, rotation);
 }
 
 typedef DfStatus (*RuntimeCreateFn)(const DfRuntimeConfig *, DfRuntime **, uint8_t *, uint64_t);
@@ -108,6 +118,8 @@ DfStatus bg_runtime_open(
         .context = host_context,
         .player_text = host_player_text,
         .player_title = host_player_title,
+        .player_transform = host_player_transform,
+        .player_rotation = host_player_rotation,
     };
     DfRuntimeConfig config = {
         .plugin_directory = {

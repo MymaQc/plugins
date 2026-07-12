@@ -17,7 +17,7 @@ typedef uint32_t DfEventId;
 
 typedef struct { uint8_t bytes[16]; uint64_t generation; } DfPlayerId;
 typedef struct { double x; double y; double z; } DfVec3;
-typedef struct { float yaw; float pitch; } DfRotation;
+typedef struct { double yaw; double pitch; } DfRotation;
 typedef struct { int32_t x; int32_t y; int32_t z; } DfBlockPos;
 typedef struct { const uint8_t *data; uint64_t len; } DfStringView;
 typedef struct { uint8_t *data; uint64_t len; uint64_t capacity; } DfStringBuffer;
@@ -26,15 +26,22 @@ typedef struct { DfStringView identifier; int32_t metadata; int32_t count; int32
 #define DF_PLAYER_TEXT_TIP 1u
 #define DF_PLAYER_TEXT_POPUP 2u
 #define DF_PLAYER_TEXT_JUKEBOX_POPUP 3u
+#define DF_PLAYER_TRANSFORM_TELEPORT 0u
+#define DF_PLAYER_TRANSFORM_MOVE 1u
+#define DF_PLAYER_TRANSFORM_VELOCITY 2u
 typedef struct { DfStringView text; DfStringView subtitle; DfStringView action_text; uint64_t fade_in_milliseconds; uint64_t duration_milliseconds; uint64_t fade_out_milliseconds; } DfTitleView;
 typedef DfStatus (*DfHostPlayerTextFn)(uint64_t context, DfPlayerId player, uint32_t kind, DfStringView message);
 typedef DfStatus (*DfHostPlayerTitleFn)(uint64_t context, DfPlayerId player, DfTitleView title);
+typedef DfStatus (*DfHostPlayerTransformFn)(uint64_t context, DfPlayerId player, uint32_t kind, DfVec3 vector, double yaw, double pitch);
+typedef DfStatus (*DfHostPlayerRotationFn)(uint64_t context, DfPlayerId player, DfRotation *rotation);
 typedef struct {
     uint32_t abi_version;
     uint32_t struct_size;
     uint64_t context;
     DfHostPlayerTextFn player_text;
     DfHostPlayerTitleFn player_title;
+    DfHostPlayerTransformFn player_transform;
+    DfHostPlayerRotationFn player_rotation;
 } DfHostApiV1;
 #define DF_COMMAND_PARAMETER_SUBCOMMAND 1u
 #define DF_COMMAND_PARAMETER_ENUM 2u

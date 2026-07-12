@@ -1,6 +1,6 @@
 use dragonfly::{
-    CommandEnum, CommandSource, Context, Dynamic, DynamicCommandEnum, Player, Plugin, Varargs,
-    plugin,
+    CommandEnum, CommandSource, Context, Dynamic, DynamicCommandEnum, Player, Plugin, Rotation,
+    Varargs, Vec3, plugin,
 };
 
 struct GreetingTargets;
@@ -76,5 +76,35 @@ impl Plugin for HelloCommand {
     #[subcommand("maybe")]
     fn maybe(&self, context: &mut Context<'_>, value: Option<i64>) {
         context.reply(&format!("value={value:?}"));
+    }
+
+    #[subcommand("teleport")]
+    fn teleport(&self, context: &mut Context<'_, Player>, x: f64, y: f64, z: f64) {
+        context.source().teleport(Vec3 { x, y, z });
+        context.reply("Teleported.");
+    }
+
+    #[subcommand("move")]
+    fn move_by(&self, context: &mut Context<'_, Player>, x: f64, y: f64, z: f64) {
+        context.source().move_by(Vec3 { x, y, z }, 0.0, 0.0);
+        context.reply("Moved.");
+    }
+
+    #[subcommand("velocity")]
+    fn velocity(&self, context: &mut Context<'_, Player>, x: f64, y: f64, z: f64) {
+        context.source().set_velocity(Vec3 { x, y, z });
+        context.reply("Velocity set.");
+    }
+
+    #[subcommand("rotation")]
+    fn rotation(&self, context: &mut Context<'_, Player>) {
+        let rotation = context.source().rotation();
+        context.reply(&format!("yaw={} pitch={}", rotation.yaw, rotation.pitch));
+    }
+
+    #[subcommand("face")]
+    fn face(&self, context: &mut Context<'_, Player>, yaw: f64, pitch: f64) {
+        context.source().face(Rotation { yaw, pitch });
+        context.reply("Rotation set.");
     }
 }

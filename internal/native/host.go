@@ -7,12 +7,19 @@ import (
 )
 
 type PlayerTextKind uint32
+type PlayerTransformKind uint32
 
 const (
 	PlayerTextMessage PlayerTextKind = iota
 	PlayerTextTip
 	PlayerTextPopup
 	PlayerTextJukeboxPopup
+)
+
+const (
+	PlayerTransformTeleport PlayerTransformKind = iota
+	PlayerTransformMove
+	PlayerTransformVelocity
 )
 
 type PlayerTitle struct {
@@ -28,12 +35,18 @@ type PlayerTitle struct {
 type Host interface {
 	SendPlayerText(PlayerID, PlayerTextKind, string) bool
 	SendPlayerTitle(PlayerID, PlayerTitle) bool
+	TransformPlayer(PlayerID, PlayerTransformKind, Vec3, float64, float64) bool
+	PlayerRotation(PlayerID) (Rotation, bool)
 }
 
 type noopHost struct{}
 
 func (noopHost) SendPlayerText(PlayerID, PlayerTextKind, string) bool { return false }
 func (noopHost) SendPlayerTitle(PlayerID, PlayerTitle) bool           { return false }
+func (noopHost) TransformPlayer(PlayerID, PlayerTransformKind, Vec3, float64, float64) bool {
+	return false
+}
+func (noopHost) PlayerRotation(PlayerID) (Rotation, bool) { return Rotation{}, false }
 
 var (
 	hostSequence atomic.Uint64

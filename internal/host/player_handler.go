@@ -161,7 +161,7 @@ func (h *PlayerHandler) HandleMove(ctx *player.Context, newPosition mgl64.Vec3, 
 		Player:      h.playerID(p),
 		OldPosition: native.Vec3{X: oldPosition.X(), Y: oldPosition.Y(), Z: oldPosition.Z()},
 		NewPosition: native.Vec3{X: newPosition.X(), Y: newPosition.Y(), Z: newPosition.Z()},
-		Rotation:    native.Rotation{Yaw: float32(newRotation.Yaw()), Pitch: float32(newRotation.Pitch())},
+		Rotation:    native.Rotation{Yaw: newRotation.Yaw(), Pitch: newRotation.Pitch()},
 	}, ctx.Cancelled())
 	if err != nil {
 		h.log.Error("native plugin movement handler failed", "player", p.Name(), "error", err)

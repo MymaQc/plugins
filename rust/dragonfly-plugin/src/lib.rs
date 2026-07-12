@@ -29,6 +29,12 @@ pub struct Vec3 {
     pub z: f64,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Rotation {
+    pub yaw: f64,
+    pub pitch: f64,
+}
+
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub struct BlockPos {
     pub x: i32,
@@ -213,6 +219,58 @@ impl Player {
         let _ = unsafe { send(host.context, self.raw_id(), view) };
     }
 
+    pub fn teleport(&self, position: Vec3) {
+        self.transform(
+            dragonfly_plugin_sys::DF_PLAYER_TRANSFORM_TELEPORT,
+            position,
+            0.0,
+            0.0,
+        );
+    }
+
+    pub fn move_by(&self, delta: Vec3, delta_yaw: f64, delta_pitch: f64) {
+        self.transform(
+            dragonfly_plugin_sys::DF_PLAYER_TRANSFORM_MOVE,
+            delta,
+            delta_yaw,
+            delta_pitch,
+        );
+    }
+
+    pub fn set_velocity(&self, velocity: Vec3) {
+        self.transform(
+            dragonfly_plugin_sys::DF_PLAYER_TRANSFORM_VELOCITY,
+            velocity,
+            0.0,
+            0.0,
+        );
+    }
+
+    pub fn rotation(&self) -> Rotation {
+        let host = HOST_API.load(Ordering::Acquire);
+        let Some(host) = (unsafe { host.as_ref() }) else {
+            return Rotation::default();
+        };
+        let Some(read) = host.player_rotation else {
+            return Rotation::default();
+        };
+        let mut raw = dragonfly_plugin_sys::DfRotation::default();
+        let _ = unsafe { read(host.context, self.raw_id(), &mut raw) };
+        Rotation {
+            yaw: raw.yaw,
+            pitch: raw.pitch,
+        }
+    }
+
+    pub fn face(&self, rotation: Rotation) {
+        let current = self.rotation();
+        self.move_by(
+            Vec3::default(),
+            rotation.yaw - current.yaw,
+            rotation.pitch - current.pitch,
+        );
+    }
+
     fn send_text(&self, kind: u32, message: &str) {
         let host = HOST_API.load(Ordering::Acquire);
         let Some(host) = (unsafe { host.as_ref() }) else {
@@ -229,6 +287,22 @@ impl Player {
                 string_view_from_str(message),
             )
         };
+    }
+
+    fn transform(&self, kind: u32, vector: Vec3, yaw: f64, pitch: f64) {
+        let host = HOST_API.load(Ordering::Acquire);
+        let Some(host) = (unsafe { host.as_ref() }) else {
+            return;
+        };
+        let Some(transform) = host.player_transform else {
+            return;
+        };
+        let raw = dragonfly_plugin_sys::DfVec3 {
+            x: vector.x,
+            y: vector.y,
+            z: vector.z,
+        };
+        let _ = unsafe { transform(host.context, self.raw_id(), kind, raw, yaw, pitch) };
     }
 
     fn raw_id(&self) -> dragonfly_plugin_sys::DfPlayerId {

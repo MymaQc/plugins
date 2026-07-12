@@ -3,8 +3,32 @@ package host
 import (
 	"testing"
 
+	"github.com/bedrock-gophers/plugins/internal/native"
 	"github.com/df-mc/dragonfly/server/player"
 )
+
+func TestPlayersTransformsPlayer(t *testing.T) {
+	withPlayer(t, func(player *player.Player) {
+		players := NewPlayers()
+		id := players.Register(player, 1)
+		if !players.TransformPlayer(id, native.PlayerTransformTeleport, native.Vec3{X: 4, Y: 5, Z: 6}, 0, 0) {
+			t.Fatal("teleport failed")
+		}
+		if player.Position() != ([3]float64{4, 5, 6}) {
+			t.Fatalf("position = %v", player.Position())
+		}
+		if !players.TransformPlayer(id, native.PlayerTransformMove, native.Vec3{X: 1}, 20, 5) {
+			t.Fatal("move failed")
+		}
+		rotation, ok := players.PlayerRotation(id)
+		if !ok || rotation.Yaw != 20 || rotation.Pitch != 5 {
+			t.Fatalf("rotation = %+v ok=%v", rotation, ok)
+		}
+		if !players.TransformPlayer(id, native.PlayerTransformVelocity, native.Vec3{Y: 1}, 0, 0) || player.Velocity().Y() != 1 {
+			t.Fatalf("velocity = %v", player.Velocity())
+		}
+	})
+}
 
 func TestPlayersTracksStableGenerationAndNames(t *testing.T) {
 	withPlayer(t, func(player *player.Player) {

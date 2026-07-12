@@ -45,10 +45,15 @@ func openTestRuntime(t testing.TB) *Runtime {
 }
 
 type recordingHost struct {
-	player PlayerID
-	texts  []string
-	kinds  []PlayerTextKind
-	title  PlayerTitle
+	player     PlayerID
+	texts      []string
+	kinds      []PlayerTextKind
+	title      PlayerTitle
+	rotation   Rotation
+	transforms []PlayerTransformKind
+	vectors    []Vec3
+	yaws       []float64
+	pitches    []float64
 }
 
 func (h *recordingHost) SendPlayerText(player PlayerID, kind PlayerTextKind, message string) bool {
@@ -61,6 +66,18 @@ func (h *recordingHost) SendPlayerText(player PlayerID, kind PlayerTextKind, mes
 func (h *recordingHost) SendPlayerTitle(player PlayerID, title PlayerTitle) bool {
 	h.player, h.title = player, title
 	return true
+}
+
+func (h *recordingHost) TransformPlayer(_ PlayerID, kind PlayerTransformKind, vector Vec3, yaw, pitch float64) bool {
+	h.transforms = append(h.transforms, kind)
+	h.vectors = append(h.vectors, vector)
+	h.yaws = append(h.yaws, yaw)
+	h.pitches = append(h.pitches, pitch)
+	return true
+}
+
+func (h *recordingHost) PlayerRotation(PlayerID) (Rotation, bool) {
+	return h.rotation, true
 }
 
 func TestPluginCanMessagePlayer(t *testing.T) {
@@ -116,6 +133,43 @@ func TestMovementGuard(t *testing.T) {
 	}
 }
 
+func TestPlayerTransformHostCalls(t *testing.T) {
+	library, plugins := nativeArtifacts(t)
+	host := &recordingHost{rotation: Rotation{Yaw: 10, Pitch: 5}}
+	runtime, err := OpenWithHost(library, plugins, host)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(runtime.Close)
+	if err := runtime.Enable(); err != nil {
+		t.Fatal(err)
+	}
+	commands, err := runtime.Commands()
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := PlayerID{Generation: 7}
+	for _, arguments := range []string{"velocity 1 2 3", "face 90 20", "teleport 10 64 20", "move 1 0 -1"} {
+		output, err := runtime.HandleCommand(commands[0].Index, CommandInput{
+			Source: "TestPlayer", SourceKind: CommandSourcePlayer, SourcePlayer: &id,
+			OnlinePlayers: []CommandPlayer{{Player: id, Name: "TestPlayer"}}, Arguments: arguments,
+		})
+		if err != nil || output.Failed {
+			t.Fatalf("%s: output=%+v error=%v", arguments, output, err)
+		}
+	}
+	want := []PlayerTransformKind{PlayerTransformVelocity, PlayerTransformMove, PlayerTransformTeleport, PlayerTransformMove}
+	if !slices.Equal(host.transforms, want) {
+		t.Fatalf("transforms = %v", host.transforms)
+	}
+	if host.yaws[1] != 80 || host.pitches[1] != 15 {
+		t.Fatalf("face delta = %v/%v", host.yaws[1], host.pitches[1])
+	}
+	if host.vectors[2] != (Vec3{X: 10, Y: 64, Z: 20}) {
+		t.Fatalf("teleport = %+v", host.vectors[2])
+	}
+}
+
 func TestCommand(t *testing.T) {
 	runtime := openTestRuntime(t)
 	commands, err := runtime.Commands()
@@ -125,9 +179,14 @@ func TestCommand(t *testing.T) {
 	if len(commands) != 2 || commands[0].Name != "hello" || commands[1].Name != "ping" {
 		t.Fatalf("commands = %#v, want hello and ping", commands)
 	}
-	last := commands[0].Overloads[len(commands[0].Overloads)-1]
-	if len(last.Parameters) != 2 || !last.Parameters[1].Optional {
-		t.Fatalf("optional overload = %#v", last)
+	optionalFound := false
+	for _, overload := range commands[0].Overloads {
+		for _, parameter := range overload.Parameters {
+			optionalFound = optionalFound || parameter.Optional
+		}
+	}
+	if !optionalFound {
+		t.Fatal("hello command lost its optional argument")
 	}
 	output, err := runtime.HandleCommand(commands[0].Index, CommandInput{
 		Source:    "Danick",

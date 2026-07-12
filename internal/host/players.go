@@ -1,6 +1,7 @@
 package host
 
 import (
+	"math"
 	"slices"
 	"strings"
 	"sync"
@@ -8,6 +9,7 @@ import (
 	"github.com/bedrock-gophers/plugins/internal/native"
 	"github.com/df-mc/dragonfly/server/player"
 	"github.com/df-mc/dragonfly/server/player/title"
+	"github.com/go-gl/mathgl/mgl64"
 )
 
 // Players owns stable native IDs for the lifetime of connected Dragonfly players.
@@ -136,5 +138,42 @@ func (p *Players) SendPlayerTitle(id native.PlayerID, value native.PlayerTitle) 
 		WithDuration(value.Duration).
 		WithFadeOutDuration(value.FadeOut)
 	connected.SendTitle(t)
+	return true
+}
+
+func (p *Players) TransformPlayer(id native.PlayerID, kind native.PlayerTransformKind, vector native.Vec3, yaw, pitch float64) bool {
+	connected, ok := p.ResolveID(id)
+	if !ok || !finite(vector.X, vector.Y, vector.Z, yaw, pitch) {
+		return false
+	}
+	v := mgl64.Vec3{vector.X, vector.Y, vector.Z}
+	switch kind {
+	case native.PlayerTransformTeleport:
+		connected.Teleport(v)
+	case native.PlayerTransformMove:
+		connected.Move(v, yaw, pitch)
+	case native.PlayerTransformVelocity:
+		connected.SetVelocity(v)
+	default:
+		return false
+	}
+	return true
+}
+
+func (p *Players) PlayerRotation(id native.PlayerID) (native.Rotation, bool) {
+	connected, ok := p.ResolveID(id)
+	if !ok {
+		return native.Rotation{}, false
+	}
+	rotation := connected.Rotation()
+	return native.Rotation{Yaw: rotation.Yaw(), Pitch: rotation.Pitch()}, true
+}
+
+func finite(values ...float64) bool {
+	for _, value := range values {
+		if math.IsNaN(value) || math.IsInf(value, 0) {
+			return false
+		}
+	}
 	return true
 }
