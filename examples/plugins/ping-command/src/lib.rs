@@ -1,4 +1,4 @@
-use dragonfly::{Context, Player, Plugin, plugin};
+use dragonfly::{plugin, Context, Player, Plugin};
 
 #[plugin]
 #[command("ping")]
