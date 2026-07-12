@@ -41,6 +41,8 @@ type playerRuntime interface {
 	HandlePlayerSignEdit(native.PlayerSignEditInput, bool) (bool, error)
 	HandlePlayerItemUse(native.PlayerID, bool) (bool, error)
 	HandlePlayerItemUseOnBlock(native.PlayerItemUseOnBlockInput, bool) (bool, error)
+	HandlePlayerItemConsume(native.PlayerID, native.ItemStackView, bool) (bool, error)
+	HandlePlayerItemRelease(native.PlayerID, native.ItemStackView, time.Duration, bool) (bool, error)
 }
 
 func (h *PlayerHandler) HandleJump(p *player.Player) {
@@ -351,6 +353,36 @@ func (h *PlayerHandler) HandleItemUseOnBlock(ctx *player.Context, position cube.
 	}
 }
 
+func (h *PlayerHandler) HandleItemConsume(ctx *player.Context, stack item.Stack) {
+	if h.runtime.Subscriptions()&native.PlayerItemConsumeSubscription == 0 {
+		return
+	}
+	p := ctx.Val()
+	cancelled, err := h.runtime.HandlePlayerItemConsume(h.playerID(p), nativeItemStack(stack), ctx.Cancelled())
+	if err != nil {
+		h.log.Error("native plugin item-consume handler failed", "player", p.Name(), "error", err)
+		return
+	}
+	if cancelled {
+		ctx.Cancel()
+	}
+}
+
+func (h *PlayerHandler) HandleItemRelease(ctx *player.Context, stack item.Stack, duration time.Duration) {
+	if h.runtime.Subscriptions()&native.PlayerItemReleaseSubscription == 0 {
+		return
+	}
+	p := ctx.Val()
+	cancelled, err := h.runtime.HandlePlayerItemRelease(h.playerID(p), nativeItemStack(stack), duration, ctx.Cancelled())
+	if err != nil {
+		h.log.Error("native plugin item-release handler failed", "player", p.Name(), "error", err)
+		return
+	}
+	if cancelled {
+		ctx.Cancel()
+	}
+}
+
 func (h *PlayerHandler) HandleFoodLoss(ctx *player.Context, from int, to *int) {
 	if h.runtime.Subscriptions()&native.PlayerFoodLossSubscription == 0 {
 		return
@@ -440,6 +472,15 @@ func blockName(block world.Block) string {
 	}
 	name, _ := block.EncodeBlock()
 	return name
+}
+
+func nativeItemStack(stack item.Stack) native.ItemStackView {
+	name, metadata := stack.Item().EncodeItem()
+	damage := 0
+	if maximum := stack.MaxDurability(); maximum >= 0 {
+		damage = maximum - stack.Durability()
+	}
+	return native.ItemStackView{Identifier: name, Metadata: int(metadata), Count: stack.Count(), Damage: damage}
 }
 
 func (h *PlayerHandler) playerID(p *player.Player) native.PlayerID {

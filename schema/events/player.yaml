@@ -191,3 +191,18 @@ events:
       - { name: click_position, type: vec3 }
     state:
       - { name: cancelled, type: bool }
+  - name: item_consume
+    id: 26
+    input:
+      - { name: player, type: player_id }
+      - { name: item, type: item_stack }
+    state:
+      - { name: cancelled, type: bool }
+  - name: item_release
+    id: 27
+    input:
+      - { name: player, type: player_id }
+      - { name: item, type: item_stack }
+      - { name: duration_milliseconds, type: u64 }
+    state:
+      - { name: cancelled, type: bool }

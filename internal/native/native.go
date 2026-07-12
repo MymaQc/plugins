@@ -44,6 +44,8 @@ const (
 	PlayerSignEditSubscription        uint64 = 4194304
 	PlayerItemUseSubscription         uint64 = 8388608
 	PlayerItemUseOnBlockSubscription  uint64 = 16777216
+	PlayerItemConsumeSubscription     uint64 = 33554432
+	PlayerItemReleaseSubscription     uint64 = 67108864
 	MaxChatReplacementBytes                  = 4096
 	MaxCommandOutputBytes                    = 4096
 	MaxCommandEnumBytes                      = 4096
@@ -204,6 +206,12 @@ type PlayerItemUseOnBlockInput struct {
 	Position      BlockPos
 	Face          int
 	ClickPosition Vec3
+}
+type ItemStackView struct {
+	Identifier string
+	Metadata   int
+	Count      int
+	Damage     int
 }
 
 type Command struct {
@@ -983,6 +991,47 @@ func (r *Runtime) HandlePlayerItemUseOnBlock(input PlayerItemUseOnBlockInput, ca
 	}
 	if status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_ITEM_USE_ON_BLOCK, unsafe.Pointer(&nativeInput), unsafe.Pointer(&state)); status != C.DF_STATUS_OK {
 		return state.cancelled != 0, fmt.Errorf("native item-use-on-block handler failed with status %d", int32(status))
+	}
+	return state.cancelled != 0, nil
+}
+
+func (r *Runtime) HandlePlayerItemConsume(player PlayerID, item ItemStackView, cancelled bool) (bool, error) {
+	return r.handlePlayerItemStackEvent(C.DF_EVENT_PLAYER_ITEM_CONSUME, player, item, 0, cancelled)
+}
+
+func (r *Runtime) HandlePlayerItemRelease(player PlayerID, item ItemStackView, duration time.Duration, cancelled bool) (bool, error) {
+	milliseconds := duration.Milliseconds()
+	if milliseconds < 0 {
+		milliseconds = 0
+	}
+	return r.handlePlayerItemStackEvent(C.DF_EVENT_PLAYER_ITEM_RELEASE, player, item, uint64(milliseconds), cancelled)
+}
+
+func (r *Runtime) handlePlayerItemStackEvent(event C.DfEventId, player PlayerID, item ItemStackView, duration uint64, cancelled bool) (bool, error) {
+	if r == nil || r.ptr == nil {
+		return cancelled, errors.New("native runtime is closed")
+	}
+	identifier := unsafe.StringData(item.Identifier)
+	stack := C.DfItemStackView{identifier: C.DfStringView{data: (*C.uint8_t)(unsafe.Pointer(identifier)), len: C.uint64_t(len(item.Identifier))}, metadata: C.int32_t(item.Metadata), count: C.int32_t(item.Count), damage: C.int32_t(item.Damage)}
+	var state C.DfPlayerItemConsumeState
+	if cancelled {
+		state.cancelled = 1
+	}
+	if event == C.DF_EVENT_PLAYER_ITEM_CONSUME {
+		var input C.DfPlayerItemConsumeInput
+		fillPlayerID(&input.player, player)
+		input.item = stack
+		if status := C.bg_runtime_handle_event(r.ptr, event, unsafe.Pointer(&input), unsafe.Pointer(&state)); status != C.DF_STATUS_OK {
+			return state.cancelled != 0, fmt.Errorf("native item-consume handler failed with status %d", int32(status))
+		}
+		return state.cancelled != 0, nil
+	}
+	var input C.DfPlayerItemReleaseInput
+	fillPlayerID(&input.player, player)
+	input.item = stack
+	input.duration_milliseconds = C.uint64_t(duration)
+	if status := C.bg_runtime_handle_event(r.ptr, event, unsafe.Pointer(&input), unsafe.Pointer(&state)); status != C.DF_STATUS_OK {
+		return state.cancelled != 0, fmt.Errorf("native item-release handler failed with status %d", int32(status))
 	}
 	return state.cancelled != 0, nil
 }

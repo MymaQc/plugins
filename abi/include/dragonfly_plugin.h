@@ -21,6 +21,7 @@ typedef struct { float yaw; float pitch; } DfRotation;
 typedef struct { int32_t x; int32_t y; int32_t z; } DfBlockPos;
 typedef struct { const uint8_t *data; uint64_t len; } DfStringView;
 typedef struct { uint8_t *data; uint64_t len; uint64_t capacity; } DfStringBuffer;
+typedef struct { DfStringView identifier; int32_t metadata; int32_t count; int32_t damage; } DfItemStackView;
 #define DF_COMMAND_PARAMETER_SUBCOMMAND 1u
 #define DF_COMMAND_PARAMETER_ENUM 2u
 #define DF_COMMAND_PARAMETER_STRING 3u
@@ -339,6 +340,29 @@ typedef struct {
 typedef struct {
     uint8_t cancelled;
 } DfPlayerItemUseOnBlockState;
+
+#define DF_EVENT_PLAYER_ITEM_CONSUME 26u
+
+typedef struct {
+    DfPlayerId player;
+    DfItemStackView item;
+} DfPlayerItemConsumeInput;
+
+typedef struct {
+    uint8_t cancelled;
+} DfPlayerItemConsumeState;
+
+#define DF_EVENT_PLAYER_ITEM_RELEASE 27u
+
+typedef struct {
+    DfPlayerId player;
+    DfItemStackView item;
+    uint64_t duration_milliseconds;
+} DfPlayerItemReleaseInput;
+
+typedef struct {
+    uint8_t cancelled;
+} DfPlayerItemReleaseState;
 
 typedef DfStatus (*DfHandleEventFn)(void *instance, DfEventId event_id, const void *input, void *state);
 typedef void *(*DfPluginCreateFn)(void);

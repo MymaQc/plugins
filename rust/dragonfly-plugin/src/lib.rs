@@ -35,6 +35,29 @@ pub enum BlockFace {
     East = 5,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct ItemStack<'a> {
+    raw: &'a dragonfly_plugin_sys::DfItemStackView,
+}
+
+impl<'a> ItemStack<'a> {
+    fn from_raw(raw: &'a dragonfly_plugin_sys::DfItemStackView) -> Self {
+        Self { raw }
+    }
+    pub fn identifier(&self) -> &'a str {
+        unsafe { string_view(self.raw.identifier) }
+    }
+    pub fn metadata(&self) -> i32 {
+        self.raw.metadata
+    }
+    pub fn count(&self) -> i32 {
+        self.raw.count
+    }
+    pub fn damage(&self) -> i32 {
+        self.raw.damage
+    }
+}
+
 impl From<dragonfly_plugin_sys::DfBlockPos> for BlockPos {
     fn from(value: dragonfly_plugin_sys::DfBlockPos) -> Self {
         Self {
@@ -1365,6 +1388,67 @@ pub struct PlayerItemUseOnBlockEvent<'a> {
     state: &'a mut dragonfly_plugin_sys::DfPlayerItemUseOnBlockState,
 }
 
+pub struct PlayerItemConsumeEvent<'a> {
+    input: &'a dragonfly_plugin_sys::DfPlayerItemConsumeInput,
+    state: &'a mut dragonfly_plugin_sys::DfPlayerItemConsumeState,
+}
+
+impl<'a> PlayerItemConsumeEvent<'a> {
+    /// # Safety
+    /// Both references must belong to the same active item-consume callback.
+    #[doc(hidden)]
+    pub unsafe fn from_raw(
+        input: &'a dragonfly_plugin_sys::DfPlayerItemConsumeInput,
+        state: &'a mut dragonfly_plugin_sys::DfPlayerItemConsumeState,
+    ) -> Self {
+        Self { input, state }
+    }
+    pub fn player(&self) -> Player {
+        Player::from_id(self.input.player)
+    }
+    pub fn item(&self) -> ItemStack<'_> {
+        ItemStack::from_raw(&self.input.item)
+    }
+    pub fn cancelled(&self) -> bool {
+        self.state.cancelled != 0
+    }
+    pub fn cancel(&mut self) {
+        self.state.cancelled = 1;
+    }
+}
+
+pub struct PlayerItemReleaseEvent<'a> {
+    input: &'a dragonfly_plugin_sys::DfPlayerItemReleaseInput,
+    state: &'a mut dragonfly_plugin_sys::DfPlayerItemReleaseState,
+}
+
+impl<'a> PlayerItemReleaseEvent<'a> {
+    /// # Safety
+    /// Both references must belong to the same active item-release callback.
+    #[doc(hidden)]
+    pub unsafe fn from_raw(
+        input: &'a dragonfly_plugin_sys::DfPlayerItemReleaseInput,
+        state: &'a mut dragonfly_plugin_sys::DfPlayerItemReleaseState,
+    ) -> Self {
+        Self { input, state }
+    }
+    pub fn player(&self) -> Player {
+        Player::from_id(self.input.player)
+    }
+    pub fn item(&self) -> ItemStack<'_> {
+        ItemStack::from_raw(&self.input.item)
+    }
+    pub fn duration(&self) -> std::time::Duration {
+        std::time::Duration::from_millis(self.input.duration_milliseconds)
+    }
+    pub fn cancelled(&self) -> bool {
+        self.state.cancelled != 0
+    }
+    pub fn cancel(&mut self) {
+        self.state.cancelled = 1;
+    }
+}
+
 impl<'a> PlayerItemUseOnBlockEvent<'a> {
     /// # Safety
     /// Both references must belong to the same active item-use-on-block callback.
@@ -1478,6 +1562,8 @@ pub trait Plugin: Default + Send + Sync + 'static {
     fn on_sign_edit(&self, _event: &mut PlayerSignEditEvent<'_>) {}
     fn on_item_use(&self, _event: &mut PlayerItemUseEvent<'_>) {}
     fn on_item_use_on_block(&self, _event: &mut PlayerItemUseOnBlockEvent<'_>) {}
+    fn on_item_consume(&self, _event: &mut PlayerItemConsumeEvent<'_>) {}
+    fn on_item_release(&self, _event: &mut PlayerItemReleaseEvent<'_>) {}
     fn commands(&self) -> &'static [Command] {
         &[]
     }

@@ -33,6 +33,9 @@ impl Default for DfStringBuffer {
     fn default() -> Self { Self { data: core::ptr::null_mut(), len: 0, capacity: 0 } }
 }
 #[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfItemStackView { pub identifier: DfStringView, pub metadata: i32, pub count: i32, pub damage: i32 }
+#[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct DfCommandParameter { pub kind: u32, pub optional: u8, pub name: DfStringView, pub values: *const DfStringView, pub value_count: u64 }
 pub const DF_COMMAND_PARAMETER_SUBCOMMAND: u32 = 1;
@@ -434,6 +437,35 @@ pub struct DfPlayerItemUseOnBlockInput {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DfPlayerItemUseOnBlockState {
+    pub cancelled: u8,
+}
+
+pub const DF_EVENT_PLAYER_ITEM_CONSUME: DfEventId = 26;
+pub const DF_SUBSCRIPTION_PLAYER_ITEM_CONSUME: u64 = 1u64 << 25;
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfPlayerItemConsumeInput {
+    pub player: DfPlayerId,
+    pub item: DfItemStackView,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfPlayerItemConsumeState {
+    pub cancelled: u8,
+}
+
+pub const DF_EVENT_PLAYER_ITEM_RELEASE: DfEventId = 27;
+pub const DF_SUBSCRIPTION_PLAYER_ITEM_RELEASE: u64 = 1u64 << 26;
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfPlayerItemReleaseInput {
+    pub player: DfPlayerId,
+    pub item: DfItemStackView,
+    pub duration_milliseconds: u64,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfPlayerItemReleaseState {
     pub cancelled: u8,
 }
 

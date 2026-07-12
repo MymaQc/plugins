@@ -386,6 +386,28 @@ func TestPlayerItemUseOnBlock(t *testing.T) {
 	}
 }
 
+func TestPlayerItemConsumeAndRelease(t *testing.T) {
+	runtime := openTestRuntime(t)
+	if runtime.Subscriptions()&PlayerItemConsumeSubscription == 0 || runtime.Subscriptions()&PlayerItemReleaseSubscription == 0 {
+		t.Fatal("item-consume or item-release subscription missing")
+	}
+	stack := ItemStackView{Identifier: "minecraft:apple", Count: 1}
+	cancelled, err := runtime.HandlePlayerItemConsume(PlayerID{}, stack, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cancelled {
+		t.Fatal("item consume cancelled")
+	}
+	cancelled, err = runtime.HandlePlayerItemRelease(PlayerID{}, stack, time.Second, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cancelled {
+		t.Fatal("item release cancelled")
+	}
+}
+
 func TestCancellationIsMonotonic(t *testing.T) {
 	runtime := openTestRuntime(t)
 	cancelled, err := runtime.HandlePlayerMove(PlayerMoveInput{NewPosition: Vec3{Y: 64}}, true)

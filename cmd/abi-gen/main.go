@@ -103,7 +103,7 @@ func validateFields(eventName string, fields []field) error {
 	valid := map[string]bool{
 		"bool": true, "player_id": true, "rotation": true, "string_buffer": true,
 		"string_view": true, "vec3": true, "f64": true, "u64": true, "i32": true,
-		"block_pos": true,
+		"block_pos": true, "item_stack": true,
 	}
 	seen := map[string]bool{}
 	for _, f := range fields {
@@ -143,6 +143,7 @@ typedef struct { float yaw; float pitch; } DfRotation;
 typedef struct { int32_t x; int32_t y; int32_t z; } DfBlockPos;
 typedef struct { const uint8_t *data; uint64_t len; } DfStringView;
 typedef struct { uint8_t *data; uint64_t len; uint64_t capacity; } DfStringBuffer;
+typedef struct { DfStringView identifier; int32_t metadata; int32_t count; int32_t damage; } DfItemStackView;
 #define DF_COMMAND_PARAMETER_SUBCOMMAND 1u
 #define DF_COMMAND_PARAMETER_ENUM 2u
 #define DF_COMMAND_PARAMETER_STRING 3u
@@ -275,6 +276,9 @@ impl Default for DfStringBuffer {
     fn default() -> Self { Self { data: core::ptr::null_mut(), len: 0, capacity: 0 } }
 }
 #[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfItemStackView { pub identifier: DfStringView, pub metadata: i32, pub count: i32, pub damage: i32 }
+#[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct DfCommandParameter { pub kind: u32, pub optional: u8, pub name: DfStringView, pub values: *const DfStringView, pub value_count: u64 }
 pub const DF_COMMAND_PARAMETER_SUBCOMMAND: u32 = 1;
@@ -370,7 +374,7 @@ func cType(t string) string {
 		"bool": "uint8_t", "player_id": "DfPlayerId", "rotation": "DfRotation",
 		"string_buffer": "DfStringBuffer", "string_view": "DfStringView", "vec3": "DfVec3",
 		"f64": "double", "u64": "uint64_t",
-		"i32": "int32_t", "block_pos": "DfBlockPos",
+		"i32": "int32_t", "block_pos": "DfBlockPos", "item_stack": "DfItemStackView",
 	}[t]
 }
 
@@ -379,7 +383,7 @@ func rustType(t string) string {
 		"bool": "u8", "player_id": "DfPlayerId", "rotation": "DfRotation",
 		"string_buffer": "DfStringBuffer", "string_view": "DfStringView", "vec3": "DfVec3",
 		"f64": "f64", "u64": "u64",
-		"i32": "i32", "block_pos": "DfBlockPos",
+		"i32": "i32", "block_pos": "DfBlockPos", "item_stack": "DfItemStackView",
 	}[t]
 }
 
