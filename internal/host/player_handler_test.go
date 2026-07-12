@@ -91,6 +91,12 @@ func (r *runtimeStub) HandlePlayerExperienceGain(_ native.PlayerID, amount int, 
 func (r *runtimeStub) HandlePlayerPunchAir(_ native.PlayerID, cancelled bool) (bool, error) {
 	return cancelled, nil
 }
+func (r *runtimeStub) HandlePlayerHeldSlotChange(_ native.PlayerHeldSlotChangeInput, cancelled bool) (bool, error) {
+	return cancelled, nil
+}
+func (r *runtimeStub) HandlePlayerSleep(_ native.PlayerID, sendReminder, cancelled bool) (native.PlayerSleepOutput, error) {
+	return native.PlayerSleepOutput{Cancelled: cancelled, SendReminder: sendReminder}, nil
+}
 
 func (r *runtimeStub) Subscriptions() uint64 { return r.subscriptions }
 func (r *runtimeStub) HandlePlayerMove(input native.PlayerMoveInput, _ bool) (bool, error) {

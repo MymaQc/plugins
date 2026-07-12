@@ -1184,6 +1184,70 @@ pub struct PlayerPunchAirEvent<'a> {
     state: &'a mut dragonfly_plugin_sys::DfPlayerPunchAirState,
 }
 
+pub struct PlayerHeldSlotChangeEvent<'a> {
+    input: &'a dragonfly_plugin_sys::DfPlayerHeldSlotChangeInput,
+    state: &'a mut dragonfly_plugin_sys::DfPlayerHeldSlotChangeState,
+}
+
+impl<'a> PlayerHeldSlotChangeEvent<'a> {
+    /// # Safety
+    /// Both references must belong to the same active held-slot callback.
+    #[doc(hidden)]
+    pub unsafe fn from_raw(
+        input: &'a dragonfly_plugin_sys::DfPlayerHeldSlotChangeInput,
+        state: &'a mut dragonfly_plugin_sys::DfPlayerHeldSlotChangeState,
+    ) -> Self {
+        Self { input, state }
+    }
+    pub fn player(&self) -> Player {
+        Player::from_id(self.input.player)
+    }
+    pub fn from(&self) -> i32 {
+        self.input.from
+    }
+    pub fn to(&self) -> i32 {
+        self.input.to
+    }
+    pub fn cancelled(&self) -> bool {
+        self.state.cancelled != 0
+    }
+    pub fn cancel(&mut self) {
+        self.state.cancelled = 1;
+    }
+}
+
+pub struct PlayerSleepEvent<'a> {
+    input: &'a dragonfly_plugin_sys::DfPlayerSleepInput,
+    state: &'a mut dragonfly_plugin_sys::DfPlayerSleepState,
+}
+
+impl<'a> PlayerSleepEvent<'a> {
+    /// # Safety
+    /// Both references must belong to the same active sleep callback.
+    #[doc(hidden)]
+    pub unsafe fn from_raw(
+        input: &'a dragonfly_plugin_sys::DfPlayerSleepInput,
+        state: &'a mut dragonfly_plugin_sys::DfPlayerSleepState,
+    ) -> Self {
+        Self { input, state }
+    }
+    pub fn player(&self) -> Player {
+        Player::from_id(self.input.player)
+    }
+    pub fn send_reminder(&self) -> bool {
+        self.state.send_reminder != 0
+    }
+    pub fn set_send_reminder(&mut self, send: bool) {
+        self.state.send_reminder = u8::from(send);
+    }
+    pub fn cancelled(&self) -> bool {
+        self.state.cancelled != 0
+    }
+    pub fn cancel(&mut self) {
+        self.state.cancelled = 1;
+    }
+}
+
 impl<'a> PlayerPunchAirEvent<'a> {
     /// # Safety
     /// Both references must belong to the same active punch-air callback.
@@ -1226,6 +1290,8 @@ pub trait Plugin: Default + Send + Sync + 'static {
     fn on_teleport(&self, _event: &mut PlayerTeleportEvent<'_>) {}
     fn on_experience_gain(&self, _event: &mut PlayerExperienceGainEvent<'_>) {}
     fn on_punch_air(&self, _event: &mut PlayerPunchAirEvent<'_>) {}
+    fn on_held_slot_change(&self, _event: &mut PlayerHeldSlotChangeEvent<'_>) {}
+    fn on_sleep(&self, _event: &mut PlayerSleepEvent<'_>) {}
     fn commands(&self) -> &'static [Command] {
         &[]
     }

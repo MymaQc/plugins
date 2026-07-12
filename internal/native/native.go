@@ -37,6 +37,8 @@ const (
 	PlayerTeleportSubscription       uint64 = 32768
 	PlayerExperienceGainSubscription uint64 = 65536
 	PlayerPunchAirSubscription       uint64 = 131072
+	PlayerHeldSlotChangeSubscription uint64 = 262144
+	PlayerSleepSubscription          uint64 = 524288
 	MaxChatReplacementBytes                 = 4096
 	MaxCommandOutputBytes                   = 4096
 	MaxCommandEnumBytes                     = 4096
@@ -160,6 +162,15 @@ type PlayerTeleportInput struct {
 type PlayerExperienceGainOutput struct {
 	Cancelled bool
 	Amount    int
+}
+type PlayerHeldSlotChangeInput struct {
+	Player PlayerID
+	From   int
+	To     int
+}
+type PlayerSleepOutput struct {
+	Cancelled    bool
+	SendReminder bool
 }
 
 type Command struct {
@@ -813,6 +824,41 @@ func (r *Runtime) HandlePlayerPunchAir(player PlayerID, cancelled bool) (bool, e
 		return state.cancelled != 0, fmt.Errorf("native punch-air handler failed with status %d", int32(status))
 	}
 	return state.cancelled != 0, nil
+}
+
+func (r *Runtime) HandlePlayerHeldSlotChange(input PlayerHeldSlotChangeInput, cancelled bool) (bool, error) {
+	if r == nil || r.ptr == nil {
+		return cancelled, errors.New("native runtime is closed")
+	}
+	var nativeInput C.DfPlayerHeldSlotChangeInput
+	fillPlayerID(&nativeInput.player, input.Player)
+	nativeInput.from = C.int32_t(input.From)
+	nativeInput.to = C.int32_t(input.To)
+	var state C.DfPlayerHeldSlotChangeState
+	if cancelled {
+		state.cancelled = 1
+	}
+	if status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_HELD_SLOT_CHANGE, unsafe.Pointer(&nativeInput), unsafe.Pointer(&state)); status != C.DF_STATUS_OK {
+		return state.cancelled != 0, fmt.Errorf("native held-slot-change handler failed with status %d", int32(status))
+	}
+	return state.cancelled != 0, nil
+}
+
+func (r *Runtime) HandlePlayerSleep(player PlayerID, sendReminder, cancelled bool) (PlayerSleepOutput, error) {
+	output := PlayerSleepOutput{Cancelled: cancelled, SendReminder: sendReminder}
+	if r == nil || r.ptr == nil {
+		return output, errors.New("native runtime is closed")
+	}
+	var input C.DfPlayerSleepInput
+	fillPlayerID(&input.player, player)
+	state := C.DfPlayerSleepState{send_reminder: C.uint8_t(boolByte(sendReminder))}
+	if cancelled {
+		state.cancelled = 1
+	}
+	if status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_SLEEP, unsafe.Pointer(&input), unsafe.Pointer(&state)); status != C.DF_STATUS_OK {
+		return output, fmt.Errorf("native sleep handler failed with status %d", int32(status))
+	}
+	return PlayerSleepOutput{Cancelled: state.cancelled != 0, SendReminder: state.send_reminder != 0}, nil
 }
 
 func nativeBlockPos(position BlockPos) C.DfBlockPos {

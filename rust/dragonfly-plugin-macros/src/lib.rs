@@ -836,6 +836,12 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
     let handles_punch_air = implementation.items.iter().any(
         |item| matches!(item, syn::ImplItem::Fn(function) if function.sig.ident == "on_punch_air"),
     );
+    let handles_held_slot_change = implementation.items.iter().any(
+        |item| matches!(item, syn::ImplItem::Fn(function) if function.sig.ident == "on_held_slot_change"),
+    );
+    let handles_sleep = implementation.items.iter().any(
+        |item| matches!(item, syn::ImplItem::Fn(function) if function.sig.ident == "on_sleep"),
+    );
     let subscriptions = u64::from(handles_move)
         | (u64::from(handles_chat) << 1)
         | (u64::from(handles_join) << 2)
@@ -853,7 +859,9 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
         | (u64::from(handles_jump) << 14)
         | (u64::from(handles_teleport) << 15)
         | (u64::from(handles_experience_gain) << 16)
-        | (u64::from(handles_punch_air) << 17);
+        | (u64::from(handles_punch_air) << 17)
+        | (u64::from(handles_held_slot_change) << 18)
+        | (u64::from(handles_sleep) << 19);
 
     quote! {
         #[doc(hidden)]
@@ -1149,6 +1157,22 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
                         let state = unsafe { &mut *state.cast::<sys::DfPlayerPunchAirState>() };
                         let mut event = unsafe { ::dragonfly_plugin::PlayerPunchAirEvent::from_raw(input, state) };
                         <PluginType as ::dragonfly_plugin::Plugin>::on_punch_air(plugin, &mut event);
+                        sys::DF_STATUS_OK
+                    }
+                    sys::DF_EVENT_PLAYER_HELD_SLOT_CHANGE => {
+                        let plugin = unsafe { &*instance.cast::<PluginType>() };
+                        let input = unsafe { &*input.cast::<sys::DfPlayerHeldSlotChangeInput>() };
+                        let state = unsafe { &mut *state.cast::<sys::DfPlayerHeldSlotChangeState>() };
+                        let mut event = unsafe { ::dragonfly_plugin::PlayerHeldSlotChangeEvent::from_raw(input, state) };
+                        <PluginType as ::dragonfly_plugin::Plugin>::on_held_slot_change(plugin, &mut event);
+                        sys::DF_STATUS_OK
+                    }
+                    sys::DF_EVENT_PLAYER_SLEEP => {
+                        let plugin = unsafe { &*instance.cast::<PluginType>() };
+                        let input = unsafe { &*input.cast::<sys::DfPlayerSleepInput>() };
+                        let state = unsafe { &mut *state.cast::<sys::DfPlayerSleepState>() };
+                        let mut event = unsafe { ::dragonfly_plugin::PlayerSleepEvent::from_raw(input, state) };
+                        <PluginType as ::dragonfly_plugin::Plugin>::on_sleep(plugin, &mut event);
                         sys::DF_STATUS_OK
                     }
                     _ => sys::DF_STATUS_ERROR,

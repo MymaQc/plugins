@@ -255,6 +255,29 @@ typedef struct {
     uint8_t cancelled;
 } DfPlayerPunchAirState;
 
+#define DF_EVENT_PLAYER_HELD_SLOT_CHANGE 19u
+
+typedef struct {
+    DfPlayerId player;
+    int32_t from;
+    int32_t to;
+} DfPlayerHeldSlotChangeInput;
+
+typedef struct {
+    uint8_t cancelled;
+} DfPlayerHeldSlotChangeState;
+
+#define DF_EVENT_PLAYER_SLEEP 20u
+
+typedef struct {
+    DfPlayerId player;
+} DfPlayerSleepInput;
+
+typedef struct {
+    uint8_t cancelled;
+    uint8_t send_reminder;
+} DfPlayerSleepState;
+
 typedef DfStatus (*DfHandleEventFn)(void *instance, DfEventId event_id, const void *input, void *state);
 typedef void *(*DfPluginCreateFn)(void);
 typedef DfStatus (*DfPluginLifecycleFn)(void *instance);

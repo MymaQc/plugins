@@ -34,6 +34,8 @@ type playerRuntime interface {
 	HandlePlayerTeleport(native.PlayerTeleportInput, bool) (bool, error)
 	HandlePlayerExperienceGain(native.PlayerID, int, bool) (native.PlayerExperienceGainOutput, error)
 	HandlePlayerPunchAir(native.PlayerID, bool) (bool, error)
+	HandlePlayerHeldSlotChange(native.PlayerHeldSlotChangeInput, bool) (bool, error)
+	HandlePlayerSleep(native.PlayerID, bool, bool) (native.PlayerSleepOutput, error)
 }
 
 func (h *PlayerHandler) HandleJump(p *player.Player) {
@@ -87,6 +89,37 @@ func (h *PlayerHandler) HandlePunchAir(ctx *player.Context) {
 		return
 	}
 	if cancelled {
+		ctx.Cancel()
+	}
+}
+
+func (h *PlayerHandler) HandleHeldSlotChange(ctx *player.Context, from, to int) {
+	if h.runtime.Subscriptions()&native.PlayerHeldSlotChangeSubscription == 0 {
+		return
+	}
+	p := ctx.Val()
+	cancelled, err := h.runtime.HandlePlayerHeldSlotChange(native.PlayerHeldSlotChangeInput{Player: h.playerID(p), From: from, To: to}, ctx.Cancelled())
+	if err != nil {
+		h.log.Error("native plugin held-slot handler failed", "player", p.Name(), "error", err)
+		return
+	}
+	if cancelled {
+		ctx.Cancel()
+	}
+}
+
+func (h *PlayerHandler) HandleSleep(ctx *player.Context, sendReminder *bool) {
+	if h.runtime.Subscriptions()&native.PlayerSleepSubscription == 0 {
+		return
+	}
+	p := ctx.Val()
+	output, err := h.runtime.HandlePlayerSleep(h.playerID(p), *sendReminder, ctx.Cancelled())
+	if err != nil {
+		h.log.Error("native plugin sleep handler failed", "player", p.Name(), "error", err)
+		return
+	}
+	*sendReminder = output.SendReminder
+	if output.Cancelled {
 		ctx.Cancel()
 	}
 }

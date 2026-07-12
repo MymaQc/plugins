@@ -5,15 +5,17 @@ use dragonfly_plugin_sys::{
     DF_COMMAND_PARAMETER_SUBCOMMAND, DF_EVENT_PLAYER_BLOCK_BREAK, DF_EVENT_PLAYER_BLOCK_PLACE,
     DF_EVENT_PLAYER_CHAT, DF_EVENT_PLAYER_DEATH, DF_EVENT_PLAYER_EXPERIENCE_GAIN,
     DF_EVENT_PLAYER_FIRE_EXTINGUISH, DF_EVENT_PLAYER_FOOD_LOSS, DF_EVENT_PLAYER_HEAL,
-    DF_EVENT_PLAYER_HURT, DF_EVENT_PLAYER_JOIN, DF_EVENT_PLAYER_JUMP, DF_EVENT_PLAYER_MOVE,
-    DF_EVENT_PLAYER_PUNCH_AIR, DF_EVENT_PLAYER_QUIT, DF_EVENT_PLAYER_START_BREAK,
-    DF_EVENT_PLAYER_TELEPORT, DF_EVENT_PLAYER_TOGGLE_SNEAK, DF_EVENT_PLAYER_TOGGLE_SPRINT,
-    DF_STATUS_ERROR, DF_STATUS_OK, DF_SUBSCRIPTION_PLAYER_BLOCK_BREAK,
-    DF_SUBSCRIPTION_PLAYER_BLOCK_PLACE, DF_SUBSCRIPTION_PLAYER_CHAT, DF_SUBSCRIPTION_PLAYER_DEATH,
+    DF_EVENT_PLAYER_HELD_SLOT_CHANGE, DF_EVENT_PLAYER_HURT, DF_EVENT_PLAYER_JOIN,
+    DF_EVENT_PLAYER_JUMP, DF_EVENT_PLAYER_MOVE, DF_EVENT_PLAYER_PUNCH_AIR, DF_EVENT_PLAYER_QUIT,
+    DF_EVENT_PLAYER_SLEEP, DF_EVENT_PLAYER_START_BREAK, DF_EVENT_PLAYER_TELEPORT,
+    DF_EVENT_PLAYER_TOGGLE_SNEAK, DF_EVENT_PLAYER_TOGGLE_SPRINT, DF_STATUS_ERROR, DF_STATUS_OK,
+    DF_SUBSCRIPTION_PLAYER_BLOCK_BREAK, DF_SUBSCRIPTION_PLAYER_BLOCK_PLACE,
+    DF_SUBSCRIPTION_PLAYER_CHAT, DF_SUBSCRIPTION_PLAYER_DEATH,
     DF_SUBSCRIPTION_PLAYER_EXPERIENCE_GAIN, DF_SUBSCRIPTION_PLAYER_FIRE_EXTINGUISH,
-    DF_SUBSCRIPTION_PLAYER_FOOD_LOSS, DF_SUBSCRIPTION_PLAYER_HEAL, DF_SUBSCRIPTION_PLAYER_HURT,
+    DF_SUBSCRIPTION_PLAYER_FOOD_LOSS, DF_SUBSCRIPTION_PLAYER_HEAL,
+    DF_SUBSCRIPTION_PLAYER_HELD_SLOT_CHANGE, DF_SUBSCRIPTION_PLAYER_HURT,
     DF_SUBSCRIPTION_PLAYER_JOIN, DF_SUBSCRIPTION_PLAYER_JUMP, DF_SUBSCRIPTION_PLAYER_MOVE,
-    DF_SUBSCRIPTION_PLAYER_PUNCH_AIR, DF_SUBSCRIPTION_PLAYER_QUIT,
+    DF_SUBSCRIPTION_PLAYER_PUNCH_AIR, DF_SUBSCRIPTION_PLAYER_QUIT, DF_SUBSCRIPTION_PLAYER_SLEEP,
     DF_SUBSCRIPTION_PLAYER_START_BREAK, DF_SUBSCRIPTION_PLAYER_TELEPORT,
     DF_SUBSCRIPTION_PLAYER_TOGGLE_SNEAK, DF_SUBSCRIPTION_PLAYER_TOGGLE_SPRINT, DfCommandDescriptor,
     DfCommandInput, DfCommandState, DfPlayerBlockBreakInput, DfPlayerBlockBreakState,
@@ -21,9 +23,10 @@ use dragonfly_plugin_sys::{
     DfPlayerDeathInput, DfPlayerDeathState, DfPlayerExperienceGainInput,
     DfPlayerExperienceGainState, DfPlayerFireExtinguishInput, DfPlayerFireExtinguishState,
     DfPlayerFoodLossInput, DfPlayerFoodLossState, DfPlayerHealInput, DfPlayerHealState,
-    DfPlayerHurtInput, DfPlayerHurtState, DfPlayerJoinInput, DfPlayerJoinState, DfPlayerJumpInput,
-    DfPlayerJumpState, DfPlayerMoveInput, DfPlayerMoveState, DfPlayerPunchAirInput,
-    DfPlayerPunchAirState, DfPlayerQuitInput, DfPlayerQuitState, DfPlayerStartBreakInput,
+    DfPlayerHeldSlotChangeInput, DfPlayerHeldSlotChangeState, DfPlayerHurtInput, DfPlayerHurtState,
+    DfPlayerJoinInput, DfPlayerJoinState, DfPlayerJumpInput, DfPlayerJumpState, DfPlayerMoveInput,
+    DfPlayerMoveState, DfPlayerPunchAirInput, DfPlayerPunchAirState, DfPlayerQuitInput,
+    DfPlayerQuitState, DfPlayerSleepInput, DfPlayerSleepState, DfPlayerStartBreakInput,
     DfPlayerStartBreakState, DfPlayerTeleportInput, DfPlayerTeleportState,
     DfPlayerToggleSneakInput, DfPlayerToggleSneakState, DfPlayerToggleSprintInput,
     DfPlayerToggleSprintState, DfPluginApiV1, DfPluginEntryV1Fn, DfStatus, DfStringView,
@@ -790,6 +793,68 @@ impl DfRuntime {
         }
         DF_STATUS_OK
     }
+
+    fn handle_held_slot_change(
+        &self,
+        input: &DfPlayerHeldSlotChangeInput,
+        state: &mut DfPlayerHeldSlotChangeState,
+    ) -> DfStatus {
+        for plugin in &self.plugins {
+            if !plugin.enabled
+                || plugin.api.header.subscriptions & DF_SUBSCRIPTION_PLAYER_HELD_SLOT_CHANGE == 0
+            {
+                continue;
+            }
+            let was_cancelled = state.cancelled != 0;
+            let Some(handle) = plugin.api.handle_event else {
+                return DF_STATUS_ERROR;
+            };
+            let status = unsafe {
+                handle(
+                    plugin.instance,
+                    DF_EVENT_PLAYER_HELD_SLOT_CHANGE,
+                    ptr::from_ref(input).cast(),
+                    ptr::from_mut(state).cast(),
+                )
+            };
+            if was_cancelled {
+                state.cancelled = 1;
+            }
+            if status != DF_STATUS_OK {
+                return status;
+            }
+        }
+        DF_STATUS_OK
+    }
+
+    fn handle_sleep(&self, input: &DfPlayerSleepInput, state: &mut DfPlayerSleepState) -> DfStatus {
+        for plugin in &self.plugins {
+            if !plugin.enabled
+                || plugin.api.header.subscriptions & DF_SUBSCRIPTION_PLAYER_SLEEP == 0
+            {
+                continue;
+            }
+            let was_cancelled = state.cancelled != 0;
+            let Some(handle) = plugin.api.handle_event else {
+                return DF_STATUS_ERROR;
+            };
+            let status = unsafe {
+                handle(
+                    plugin.instance,
+                    DF_EVENT_PLAYER_SLEEP,
+                    ptr::from_ref(input).cast(),
+                    ptr::from_mut(state).cast(),
+                )
+            };
+            if was_cancelled {
+                state.cancelled = 1;
+            }
+            if status != DF_STATUS_OK {
+                return status;
+            }
+        }
+        DF_STATUS_OK
+    }
 }
 
 impl Drop for DfRuntime {
@@ -1288,6 +1353,32 @@ pub unsafe extern "C" fn df_runtime_handle_event(
         DF_EVENT_PLAYER_PUNCH_AIR => unsafe {
             df_runtime_handle_player_punch_air(runtime, input.cast(), state.cast())
         },
+        DF_EVENT_PLAYER_HELD_SLOT_CHANGE => {
+            let (Some(runtime), Some(input), Some(state)) = (
+                unsafe { runtime.as_ref() },
+                unsafe { input.cast::<DfPlayerHeldSlotChangeInput>().as_ref() },
+                unsafe { state.cast::<DfPlayerHeldSlotChangeState>().as_mut() },
+            ) else {
+                return DF_STATUS_ERROR;
+            };
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                runtime.handle_held_slot_change(input, state)
+            }))
+            .unwrap_or(DF_STATUS_ERROR)
+        }
+        DF_EVENT_PLAYER_SLEEP => {
+            let (Some(runtime), Some(input), Some(state)) = (
+                unsafe { runtime.as_ref() },
+                unsafe { input.cast::<DfPlayerSleepInput>().as_ref() },
+                unsafe { state.cast::<DfPlayerSleepState>().as_mut() },
+            ) else {
+                return DF_STATUS_ERROR;
+            };
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                runtime.handle_sleep(input, state)
+            }))
+            .unwrap_or(DF_STATUS_ERROR)
+        }
         _ => DF_STATUS_ERROR,
     }
 }

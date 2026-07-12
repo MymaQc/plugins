@@ -309,6 +309,27 @@ func TestPlayerExperienceGainAndPunchAir(t *testing.T) {
 	}
 }
 
+func TestPlayerHeldSlotChangeAndSleep(t *testing.T) {
+	runtime := openTestRuntime(t)
+	if runtime.Subscriptions()&PlayerHeldSlotChangeSubscription == 0 || runtime.Subscriptions()&PlayerSleepSubscription == 0 {
+		t.Fatal("held-slot-change or sleep subscription missing")
+	}
+	cancelled, err := runtime.HandlePlayerHeldSlotChange(PlayerHeldSlotChangeInput{From: 1, To: 2}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cancelled {
+		t.Fatal("held-slot change cancelled")
+	}
+	output, err := runtime.HandlePlayerSleep(PlayerID{}, true, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if output.Cancelled || !output.SendReminder {
+		t.Fatalf("sleep = %+v", output)
+	}
+}
+
 func TestCancellationIsMonotonic(t *testing.T) {
 	runtime := openTestRuntime(t)
 	cancelled, err := runtime.HandlePlayerMove(PlayerMoveInput{NewPosition: Vec3{Y: 64}}, true)

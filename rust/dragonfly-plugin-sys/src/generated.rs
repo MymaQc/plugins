@@ -331,6 +331,35 @@ pub struct DfPlayerPunchAirState {
     pub cancelled: u8,
 }
 
+pub const DF_EVENT_PLAYER_HELD_SLOT_CHANGE: DfEventId = 19;
+pub const DF_SUBSCRIPTION_PLAYER_HELD_SLOT_CHANGE: u64 = 1u64 << 18;
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfPlayerHeldSlotChangeInput {
+    pub player: DfPlayerId,
+    pub from: i32,
+    pub to: i32,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfPlayerHeldSlotChangeState {
+    pub cancelled: u8,
+}
+
+pub const DF_EVENT_PLAYER_SLEEP: DfEventId = 20;
+pub const DF_SUBSCRIPTION_PLAYER_SLEEP: u64 = 1u64 << 19;
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfPlayerSleepInput {
+    pub player: DfPlayerId,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfPlayerSleepState {
+    pub cancelled: u8,
+    pub send_reminder: u8,
+}
+
 pub type DfPluginCreateFn = unsafe extern "C" fn() -> *mut c_void;
 pub type DfPluginLifecycleFn = unsafe extern "C" fn(instance: *mut c_void) -> DfStatus;
 pub type DfPluginCommandsFn = unsafe extern "C" fn(instance: *mut c_void, count: *mut u64) -> *const DfCommandDescriptor;

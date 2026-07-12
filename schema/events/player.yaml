@@ -134,3 +134,18 @@ events:
       - { name: player, type: player_id }
     state:
       - { name: cancelled, type: bool }
+  - name: held_slot_change
+    id: 19
+    input:
+      - { name: player, type: player_id }
+      - { name: from, type: i32 }
+      - { name: to, type: i32 }
+    state:
+      - { name: cancelled, type: bool }
+  - name: sleep
+    id: 20
+    input:
+      - { name: player, type: player_id }
+    state:
+      - { name: cancelled, type: bool }
+      - { name: send_reminder, type: bool }
