@@ -31,6 +31,8 @@ const (
 	PlayerDeathSubscription          uint64 = 512
 	PlayerStartBreakSubscription     uint64 = 1024
 	PlayerFireExtinguishSubscription uint64 = 2048
+	PlayerToggleSprintSubscription   uint64 = 4096
+	PlayerToggleSneakSubscription    uint64 = 8192
 	MaxChatReplacementBytes                 = 4096
 	MaxCommandOutputBytes                   = 4096
 	MaxCommandEnumBytes                     = 4096
@@ -142,6 +144,10 @@ type PlayerDeathInput struct {
 type PlayerPositionInput struct {
 	Player   PlayerID
 	Position BlockPos
+}
+type PlayerToggleInput struct {
+	Player PlayerID
+	After  bool
 }
 
 type Command struct {
@@ -697,6 +703,39 @@ func (r *Runtime) HandlePlayerFireExtinguish(input PlayerPositionInput, cancelle
 	}
 	if status := C.bg_runtime_handle_player_fire_extinguish(r.ptr, &nativeInput, &state); status != C.DF_STATUS_OK {
 		return state.cancelled != 0, fmt.Errorf("native fire-extinguish handler failed with status %d", int32(status))
+	}
+	return state.cancelled != 0, nil
+}
+
+func (r *Runtime) HandlePlayerToggleSprint(input PlayerToggleInput, cancelled bool) (bool, error) {
+	if r == nil || r.ptr == nil {
+		return cancelled, errors.New("native runtime is closed")
+	}
+	var nativeInput C.DfPlayerToggleSprintInput
+	fillPlayerID(&nativeInput.player, input.Player)
+	nativeInput.after = C.uint8_t(boolByte(input.After))
+	var state C.DfPlayerToggleSprintState
+	if cancelled {
+		state.cancelled = 1
+	}
+	if status := C.bg_runtime_handle_player_toggle_sprint(r.ptr, &nativeInput, &state); status != C.DF_STATUS_OK {
+		return state.cancelled != 0, fmt.Errorf("native toggle-sprint handler failed with status %d", int32(status))
+	}
+	return state.cancelled != 0, nil
+}
+func (r *Runtime) HandlePlayerToggleSneak(input PlayerToggleInput, cancelled bool) (bool, error) {
+	if r == nil || r.ptr == nil {
+		return cancelled, errors.New("native runtime is closed")
+	}
+	var nativeInput C.DfPlayerToggleSneakInput
+	fillPlayerID(&nativeInput.player, input.Player)
+	nativeInput.after = C.uint8_t(boolByte(input.After))
+	var state C.DfPlayerToggleSneakState
+	if cancelled {
+		state.cancelled = 1
+	}
+	if status := C.bg_runtime_handle_player_toggle_sneak(r.ptr, &nativeInput, &state); status != C.DF_STATUS_OK {
+		return state.cancelled != 0, fmt.Errorf("native toggle-sneak handler failed with status %d", int32(status))
 	}
 	return state.cancelled != 0, nil
 }

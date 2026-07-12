@@ -95,3 +95,17 @@ events:
       - { name: position, type: block_pos }
     state:
       - { name: cancelled, type: bool }
+  - name: toggle_sprint
+    id: 13
+    input:
+      - { name: player, type: player_id }
+      - { name: after, type: bool }
+    state:
+      - { name: cancelled, type: bool }
+  - name: toggle_sneak
+    id: 14
+    input:
+      - { name: player, type: player_id }
+      - { name: after, type: bool }
+    state:
+      - { name: cancelled, type: bool }

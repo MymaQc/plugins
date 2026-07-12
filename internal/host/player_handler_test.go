@@ -75,6 +75,12 @@ func (r *runtimeStub) HandlePlayerStartBreak(_ native.PlayerPositionInput, cance
 func (r *runtimeStub) HandlePlayerFireExtinguish(_ native.PlayerPositionInput, cancelled bool) (bool, error) {
 	return cancelled, nil
 }
+func (r *runtimeStub) HandlePlayerToggleSprint(_ native.PlayerToggleInput, cancelled bool) (bool, error) {
+	return cancelled, nil
+}
+func (r *runtimeStub) HandlePlayerToggleSneak(_ native.PlayerToggleInput, cancelled bool) (bool, error) {
+	return cancelled, nil
+}
 
 func (r *runtimeStub) Subscriptions() uint64 { return r.subscriptions }
 func (r *runtimeStub) HandlePlayerMove(input native.PlayerMoveInput, _ bool) (bool, error) {

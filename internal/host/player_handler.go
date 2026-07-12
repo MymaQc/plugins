@@ -28,6 +28,8 @@ type playerRuntime interface {
 	HandlePlayerDeath(native.PlayerDeathInput, bool) (bool, error)
 	HandlePlayerStartBreak(native.PlayerPositionInput, bool) (bool, error)
 	HandlePlayerFireExtinguish(native.PlayerPositionInput, bool) (bool, error)
+	HandlePlayerToggleSprint(native.PlayerToggleInput, bool) (bool, error)
+	HandlePlayerToggleSneak(native.PlayerToggleInput, bool) (bool, error)
 }
 
 // PlayerHandler forwards supported Dragonfly player events into the native runtime.
@@ -214,6 +216,27 @@ func (h *PlayerHandler) HandleStartBreak(ctx *player.Context, position cube.Pos)
 
 func (h *PlayerHandler) HandleFireExtinguish(ctx *player.Context, position cube.Pos) {
 	h.handlePositionEvent(ctx, position, native.PlayerFireExtinguishSubscription, h.runtime.HandlePlayerFireExtinguish, "fire-extinguish")
+}
+
+func (h *PlayerHandler) HandleToggleSprint(ctx *player.Context, after bool) {
+	h.handleToggleEvent(ctx, after, native.PlayerToggleSprintSubscription, h.runtime.HandlePlayerToggleSprint, "toggle-sprint")
+}
+func (h *PlayerHandler) HandleToggleSneak(ctx *player.Context, after bool) {
+	h.handleToggleEvent(ctx, after, native.PlayerToggleSneakSubscription, h.runtime.HandlePlayerToggleSneak, "toggle-sneak")
+}
+func (h *PlayerHandler) handleToggleEvent(ctx *player.Context, after bool, subscription uint64, handle func(native.PlayerToggleInput, bool) (bool, error), name string) {
+	if h.runtime.Subscriptions()&subscription == 0 {
+		return
+	}
+	p := ctx.Val()
+	cancelled, err := handle(native.PlayerToggleInput{Player: h.playerID(p), After: after}, ctx.Cancelled())
+	if err != nil {
+		h.log.Error("native plugin toggle handler failed", "event", name, "player", p.Name(), "error", err)
+		return
+	}
+	if cancelled {
+		ctx.Cancel()
+	}
 }
 
 func (h *PlayerHandler) handlePositionEvent(ctx *player.Context, position cube.Pos, subscription uint64, handle func(native.PlayerPositionInput, bool) (bool, error), name string) {

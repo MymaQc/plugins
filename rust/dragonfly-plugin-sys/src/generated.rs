@@ -249,6 +249,34 @@ pub struct DfPlayerFireExtinguishState {
     pub cancelled: u8,
 }
 
+pub const DF_EVENT_PLAYER_TOGGLE_SPRINT: DfEventId = 13;
+pub const DF_SUBSCRIPTION_PLAYER_TOGGLE_SPRINT: u64 = 1u64 << 12;
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfPlayerToggleSprintInput {
+    pub player: DfPlayerId,
+    pub after: u8,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfPlayerToggleSprintState {
+    pub cancelled: u8,
+}
+
+pub const DF_EVENT_PLAYER_TOGGLE_SNEAK: DfEventId = 14;
+pub const DF_SUBSCRIPTION_PLAYER_TOGGLE_SNEAK: u64 = 1u64 << 13;
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfPlayerToggleSneakInput {
+    pub player: DfPlayerId,
+    pub after: u8,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfPlayerToggleSneakState {
+    pub cancelled: u8,
+}
+
 pub type DfPluginCreateFn = unsafe extern "C" fn() -> *mut c_void;
 pub type DfPluginLifecycleFn = unsafe extern "C" fn(instance: *mut c_void) -> DfStatus;
 pub type DfPluginCommandsFn = unsafe extern "C" fn(instance: *mut c_void, count: *mut u64) -> *const DfCommandDescriptor;

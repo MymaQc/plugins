@@ -817,6 +817,12 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
     let handles_fire_extinguish = implementation.items.iter().any(
         |item| matches!(item, syn::ImplItem::Fn(function) if function.sig.ident == "on_fire_extinguish"),
     );
+    let handles_toggle_sprint = implementation.items.iter().any(
+        |item| matches!(item, syn::ImplItem::Fn(function) if function.sig.ident == "on_toggle_sprint"),
+    );
+    let handles_toggle_sneak = implementation.items.iter().any(
+        |item| matches!(item, syn::ImplItem::Fn(function) if function.sig.ident == "on_toggle_sneak"),
+    );
     let subscriptions = u64::from(handles_move)
         | (u64::from(handles_chat) << 1)
         | (u64::from(handles_join) << 2)
@@ -828,7 +834,9 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
         | (u64::from(handles_food_loss) << 8)
         | (u64::from(handles_death) << 9)
         | (u64::from(handles_start_break) << 10)
-        | (u64::from(handles_fire_extinguish) << 11);
+        | (u64::from(handles_fire_extinguish) << 11)
+        | (u64::from(handles_toggle_sprint) << 12)
+        | (u64::from(handles_toggle_sneak) << 13);
 
     quote! {
         #[doc(hidden)]
@@ -1077,6 +1085,22 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
                         let state = unsafe { &mut *state.cast::<sys::DfPlayerFireExtinguishState>() };
                         let mut event = unsafe { ::dragonfly_plugin::PlayerFireExtinguishEvent::from_raw(input, state) };
                         <PluginType as ::dragonfly_plugin::Plugin>::on_fire_extinguish(plugin, &mut event);
+                        sys::DF_STATUS_OK
+                    }
+                    sys::DF_EVENT_PLAYER_TOGGLE_SPRINT => {
+                        let plugin = unsafe { &*instance.cast::<PluginType>() };
+                        let input = unsafe { &*input.cast::<sys::DfPlayerToggleSprintInput>() };
+                        let state = unsafe { &mut *state.cast::<sys::DfPlayerToggleSprintState>() };
+                        let mut event = unsafe { ::dragonfly_plugin::PlayerToggleSprintEvent::from_raw(input, state) };
+                        <PluginType as ::dragonfly_plugin::Plugin>::on_toggle_sprint(plugin, &mut event);
+                        sys::DF_STATUS_OK
+                    }
+                    sys::DF_EVENT_PLAYER_TOGGLE_SNEAK => {
+                        let plugin = unsafe { &*instance.cast::<PluginType>() };
+                        let input = unsafe { &*input.cast::<sys::DfPlayerToggleSneakInput>() };
+                        let state = unsafe { &mut *state.cast::<sys::DfPlayerToggleSneakState>() };
+                        let mut event = unsafe { ::dragonfly_plugin::PlayerToggleSneakEvent::from_raw(input, state) };
+                        <PluginType as ::dragonfly_plugin::Plugin>::on_toggle_sneak(plugin, &mut event);
                         sys::DF_STATUS_OK
                     }
                     _ => sys::DF_STATUS_ERROR,

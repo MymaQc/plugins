@@ -252,6 +252,25 @@ func TestPlayerFoodLossAndDeath(t *testing.T) {
 	}
 }
 
+func TestPlayerToggleSprintAndSneak(t *testing.T) {
+	runtime := openTestRuntime(t)
+	if runtime.Subscriptions()&PlayerToggleSprintSubscription == 0 || runtime.Subscriptions()&PlayerToggleSneakSubscription == 0 {
+		t.Fatal("sprint-toggle or sneak-toggle subscription missing")
+	}
+	for name, handle := range map[string]func(PlayerToggleInput, bool) (bool, error){
+		"sprint": runtime.HandlePlayerToggleSprint,
+		"sneak":  runtime.HandlePlayerToggleSneak,
+	} {
+		cancelled, err := handle(PlayerToggleInput{After: true}, false)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if cancelled {
+			t.Fatalf("%s toggle cancelled", name)
+		}
+	}
+}
+
 func TestCancellationIsMonotonic(t *testing.T) {
 	runtime := openTestRuntime(t)
 	cancelled, err := runtime.HandlePlayerMove(PlayerMoveInput{NewPosition: Vec3{Y: 64}}, true)

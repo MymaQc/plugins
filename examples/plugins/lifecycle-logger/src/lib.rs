@@ -1,7 +1,7 @@
 use dragonfly::{
     PlayerBlockBreakEvent, PlayerBlockPlaceEvent, PlayerDeathEvent, PlayerFireExtinguishEvent,
     PlayerFoodLossEvent, PlayerHealEvent, PlayerHurtEvent, PlayerJoinEvent, PlayerQuitEvent,
-    PlayerStartBreakEvent, Plugin, plugin,
+    PlayerStartBreakEvent, PlayerToggleSneakEvent, PlayerToggleSprintEvent, Plugin, plugin,
 };
 
 #[derive(Default)]
@@ -55,5 +55,11 @@ impl Plugin for LifecycleLogger {
 
     fn on_fire_extinguish(&self, event: &mut PlayerFireExtinguishEvent<'_>) {
         eprintln!("extinguished fire at {:?}", event.position());
+    }
+    fn on_toggle_sprint(&self, event: &mut PlayerToggleSprintEvent<'_>) {
+        eprintln!("sprint={}", event.after());
+    }
+    fn on_toggle_sneak(&self, event: &mut PlayerToggleSneakEvent<'_>) {
+        eprintln!("sneak={}", event.after());
     }
 }
