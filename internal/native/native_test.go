@@ -201,7 +201,7 @@ func TestPlayerStateHostCalls(t *testing.T) {
 		t.Fatal(err)
 	}
 	id := PlayerID{Generation: 8}
-	for _, arguments := range []string{"gamemode creative", "heal 4", "hurt 3", "food 15", "max-health 40"} {
+	for _, arguments := range []string{"gamemode creative", "heal 4", "hurt 3", "food 15", "max-health 40", "experience-level 12", "experience-progress 0.5"} {
 		output, err := runtime.HandleCommand(commands[0].Index, CommandInput{
 			Source: "TestPlayer", SourceKind: CommandSourcePlayer, SourcePlayer: &id,
 			OnlinePlayers: []CommandPlayer{{Player: id, Name: "TestPlayer"}}, Arguments: arguments,
@@ -210,14 +210,17 @@ func TestPlayerStateHostCalls(t *testing.T) {
 			t.Fatalf("%s: output=%+v error=%v", arguments, output, err)
 		}
 	}
-	want := []PlayerStateKind{PlayerStateGameMode, PlayerStateHeal, PlayerStateHurt, PlayerStateFood, PlayerStateMaxHealth}
+	want := []PlayerStateKind{PlayerStateGameMode, PlayerStateHeal, PlayerStateHurt, PlayerStateFood, PlayerStateMaxHealth, PlayerStateExperienceLevel, PlayerStateExperienceProgress}
 	if !slices.Equal(host.states, want) {
 		t.Fatalf("states = %v, want %v", host.states, want)
 	}
 	if host.values[0].Integer != 1 || host.values[1].Number != 4 || host.values[3].Integer != 15 || host.values[4].Number != 40 {
 		t.Fatalf("values = %+v", host.values)
 	}
-	wantReads := []PlayerStateKind{PlayerStateHealth, PlayerStateHealth, PlayerStateFood, PlayerStateMaxHealth}
+	if host.values[5].Integer != 12 || host.values[6].Number != 0.5 {
+		t.Fatalf("experience values = %+v", host.values[5:])
+	}
+	wantReads := []PlayerStateKind{PlayerStateHealth, PlayerStateHealth, PlayerStateFood, PlayerStateMaxHealth, PlayerStateExperienceLevel, PlayerStateExperienceProgress}
 	if !slices.Equal(host.reads, wantReads) {
 		t.Fatalf("reads = %v, want %v", host.reads, wantReads)
 	}

@@ -1,0 +1,59 @@
+states:
+  - name: game_mode
+    id: 0
+    type: game_mode
+    set: SetGameMode
+    get: GameMode
+    rust_set: set_game_mode
+    rust_get: game_mode
+    adapter: game_mode
+  - name: heal
+    id: 1
+    type: f64
+    set: Heal
+    rust_set: heal
+    adapter: healing_source
+    validate: non_negative
+  - name: hurt
+    id: 2
+    type: f64
+    set: Hurt
+    rust_set: hurt
+    adapter: damage_source
+    validate: non_negative
+  - name: food
+    id: 3
+    type: i32
+    set: SetFood
+    get: Food
+    rust_set: set_food
+    rust_get: food
+  - name: max_health
+    id: 4
+    type: f64
+    set: SetMaxHealth
+    get: MaxHealth
+    rust_set: set_max_health
+    rust_get: max_health
+    validate: positive
+  - name: health
+    id: 5
+    type: f64
+    get: Health
+    rust_get: health
+  - name: experience_level
+    id: 6
+    type: i32
+    set: SetExperienceLevel
+    get: ExperienceLevel
+    rust_set: set_experience_level
+    rust_get: experience_level
+    validate: non_negative
+  - name: experience_progress
+    id: 7
+    type: f64
+    set: SetExperienceProgress
+    get: ExperienceProgress
+    rust_set: set_experience_progress
+    rust_get: experience_progress
+    validate: unit_interval

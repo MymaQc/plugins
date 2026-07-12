@@ -9,7 +9,6 @@ import (
 	"github.com/bedrock-gophers/plugins/internal/native"
 	"github.com/df-mc/dragonfly/server/player"
 	"github.com/df-mc/dragonfly/server/player/title"
-	"github.com/df-mc/dragonfly/server/world"
 	"github.com/go-gl/mathgl/mgl64"
 )
 
@@ -175,34 +174,7 @@ func (p *Players) SetPlayerState(id native.PlayerID, kind native.PlayerStateKind
 	if !ok {
 		return false
 	}
-	switch kind {
-	case native.PlayerStateGameMode:
-		mode, found := world.GameModeByID(int(value.Integer))
-		if !found {
-			return false
-		}
-		connected.SetGameMode(mode)
-	case native.PlayerStateHeal:
-		if !finite(value.Number) || value.Number < 0 {
-			return false
-		}
-		connected.Heal(value.Number, pluginHealingSource{})
-	case native.PlayerStateHurt:
-		if !finite(value.Number) || value.Number < 0 {
-			return false
-		}
-		connected.Hurt(value.Number, pluginDamageSource{})
-	case native.PlayerStateFood:
-		connected.SetFood(int(value.Integer))
-	case native.PlayerStateMaxHealth:
-		if !finite(value.Number) || value.Number <= 0 {
-			return false
-		}
-		connected.SetMaxHealth(value.Number)
-	default:
-		return false
-	}
-	return true
+	return setPlayerState(connected, kind, value)
 }
 
 func (p *Players) PlayerState(id native.PlayerID, kind native.PlayerStateKind) (native.PlayerStateValue, bool) {
@@ -210,19 +182,7 @@ func (p *Players) PlayerState(id native.PlayerID, kind native.PlayerStateKind) (
 	if !ok {
 		return native.PlayerStateValue{}, false
 	}
-	switch kind {
-	case native.PlayerStateGameMode:
-		mode, found := world.GameModeID(connected.GameMode())
-		return native.PlayerStateValue{Integer: int64(mode)}, found
-	case native.PlayerStateFood:
-		return native.PlayerStateValue{Integer: int64(connected.Food())}, true
-	case native.PlayerStateMaxHealth:
-		return native.PlayerStateValue{Number: connected.MaxHealth()}, true
-	case native.PlayerStateHealth:
-		return native.PlayerStateValue{Number: connected.Health()}, true
-	default:
-		return native.PlayerStateValue{}, false
-	}
+	return readPlayerState(connected, kind)
 }
 
 type pluginHealingSource struct{}

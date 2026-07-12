@@ -1,6 +1,7 @@
 package host
 
 import (
+	"math"
 	"testing"
 
 	"github.com/bedrock-gophers/plugins/internal/native"
@@ -64,6 +65,8 @@ func TestPlayersReadsAndChangesState(t *testing.T) {
 			{native.PlayerStateMaxHealth, native.PlayerStateValue{Number: 40}},
 			{native.PlayerStateHurt, native.PlayerStateValue{Number: 4}},
 			{native.PlayerStateHeal, native.PlayerStateValue{Number: 3}},
+			{native.PlayerStateExperienceLevel, native.PlayerStateValue{Integer: 12}},
+			{native.PlayerStateExperienceProgress, native.PlayerStateValue{Number: 0.5}},
 			{native.PlayerStateGameMode, native.PlayerStateValue{Integer: 1}},
 		}
 		for _, change := range changes {
@@ -75,8 +78,10 @@ func TestPlayersReadsAndChangesState(t *testing.T) {
 		food, _ := players.PlayerState(id, native.PlayerStateFood)
 		maxHealth, _ := players.PlayerState(id, native.PlayerStateMaxHealth)
 		health, _ := players.PlayerState(id, native.PlayerStateHealth)
-		if gameMode.Integer != 1 || food.Integer != 12 || maxHealth.Number != 40 || health.Number != 19 {
-			t.Fatalf("game mode=%+v food=%+v max=%+v health=%+v", gameMode, food, maxHealth, health)
+		level, _ := players.PlayerState(id, native.PlayerStateExperienceLevel)
+		progress, _ := players.PlayerState(id, native.PlayerStateExperienceProgress)
+		if gameMode.Integer != 1 || food.Integer != 12 || maxHealth.Number != 40 || health.Number != 19 || level.Integer != 12 || math.Abs(progress.Number-0.5) > 0.02 {
+			t.Fatalf("game mode=%+v food=%+v max=%+v health=%+v level=%+v progress=%+v", gameMode, food, maxHealth, health, level, progress)
 		}
 	})
 }

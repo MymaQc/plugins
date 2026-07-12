@@ -35,6 +35,9 @@ typedef struct { DfStringView identifier; int32_t metadata; int32_t count; int32
 #define DF_PLAYER_STATE_FOOD 3u
 #define DF_PLAYER_STATE_MAX_HEALTH 4u
 #define DF_PLAYER_STATE_HEALTH 5u
+#define DF_PLAYER_STATE_EXPERIENCE_LEVEL 6u
+#define DF_PLAYER_STATE_EXPERIENCE_PROGRESS 7u
+
 typedef struct { DfStringView text; DfStringView subtitle; DfStringView action_text; uint64_t fade_in_milliseconds; uint64_t duration_milliseconds; uint64_t fade_out_milliseconds; } DfTitleView;
 typedef struct { double number; int64_t integer; } DfPlayerStateValue;
 typedef DfStatus (*DfHostPlayerTextFn)(uint64_t context, DfPlayerId player, uint32_t kind, DfStringView message);

@@ -67,11 +67,11 @@ The ABI must not expose Go pointers, Go interfaces, `player.Player`, `world.Enti
 
 ## Minimise adapter code
 
-Maintain one language-neutral event schema:
+Maintain one language-neutral API schema:
 
 ```text
 schema/
-  types.yaml
+  player.yaml
   events/
     player.yaml
     world.yaml
@@ -87,38 +87,32 @@ schema/
 Example schema:
 
 ```yaml
-events:
-  player_move:
-    id: 1
-    input:
-      player: player_id
-      old_position: vec3
-      new_position: vec3
-      rotation: rotation
-    output:
-      cancel: bool
-
-  player_chat:
-    id: 2
-    input:
-      player: player_id
-      message: string_view
-    output:
-      cancel: bool
-      replacement: optional_string
+states:
+  - name: experience_level
+    id: 6
+    type: i32
+    set: SetExperienceLevel
+    get: ExperienceLevel
+    rust_set: set_experience_level
+    rust_get: experience_level
+    validate: non_negative
 ```
+
+Player entries map the stable ABI ID, Dragonfly method, idiomatic Rust method, wire value type, validation, and optional named adapter. Named adapters cover semantics that method reflection cannot express, such as game-mode conversion and damage/healing sources.
 
 A generator produces:
 
 - C structs, event IDs, ABI tables, and layout assertions.
 - Go ABI types and conversion skeletons.
+- Go player dispatch and validation.
 - Rust raw `#[repr(C)]` bindings.
+- Idiomatic Rust `Player` methods.
 - Rust safe mutable event types.
 - Rust handler dispatch code.
 - Event reference documentation.
 - Test fixtures containing known ABI layouts.
 
-Adding an event then requires:
+Adding a direct player action or property requires only a schema entry. Adding an event requires:
 
 1. Add schema entry.
 2. Implement Dragonfly-to-schema mapping in Go.

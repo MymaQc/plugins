@@ -281,61 +281,6 @@ impl Player {
         );
     }
 
-    pub fn set_game_mode(&self, mode: GameMode) {
-        self.set_state(
-            dragonfly_plugin_sys::DF_PLAYER_STATE_GAME_MODE,
-            0.0,
-            mode as i64,
-        );
-    }
-
-    pub fn game_mode(&self) -> GameMode {
-        match self
-            .state(dragonfly_plugin_sys::DF_PLAYER_STATE_GAME_MODE)
-            .integer
-        {
-            1 => GameMode::Creative,
-            2 => GameMode::Adventure,
-            3 => GameMode::Spectator,
-            _ => GameMode::Survival,
-        }
-    }
-
-    pub fn heal(&self, amount: f64) {
-        self.set_state(dragonfly_plugin_sys::DF_PLAYER_STATE_HEAL, amount, 0);
-    }
-
-    pub fn hurt(&self, amount: f64) {
-        self.set_state(dragonfly_plugin_sys::DF_PLAYER_STATE_HURT, amount, 0);
-    }
-
-    pub fn health(&self) -> f64 {
-        self.state(dragonfly_plugin_sys::DF_PLAYER_STATE_HEALTH)
-            .number
-    }
-
-    pub fn max_health(&self) -> f64 {
-        self.state(dragonfly_plugin_sys::DF_PLAYER_STATE_MAX_HEALTH)
-            .number
-    }
-
-    pub fn set_max_health(&self, health: f64) {
-        self.set_state(dragonfly_plugin_sys::DF_PLAYER_STATE_MAX_HEALTH, health, 0);
-    }
-
-    pub fn food(&self) -> i32 {
-        self.state(dragonfly_plugin_sys::DF_PLAYER_STATE_FOOD)
-            .integer as i32
-    }
-
-    pub fn set_food(&self, food: i32) {
-        self.set_state(
-            dragonfly_plugin_sys::DF_PLAYER_STATE_FOOD,
-            0.0,
-            i64::from(food),
-        );
-    }
-
     fn send_text(&self, kind: u32, message: &str) {
         let host = HOST_API.load(Ordering::Acquire);
         let Some(host) = (unsafe { host.as_ref() }) else {
@@ -467,6 +412,8 @@ impl Player {
         Ok(player)
     }
 }
+
+include!("player_state_generated.rs");
 
 impl From<dragonfly_plugin_sys::DfVec3> for Vec3 {
     fn from(value: dragonfly_plugin_sys::DfVec3) -> Self {

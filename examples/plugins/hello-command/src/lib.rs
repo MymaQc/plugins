@@ -156,4 +156,19 @@ impl Plugin for HelloCommand {
         context.source().set_max_health(health);
         context.reply(&format!("Max health: {}", context.source().max_health()));
     }
+
+    #[subcommand("experience-level")]
+    fn experience_level(&self, context: &mut Context<'_, Player>, level: i32) {
+        context.source().set_experience_level(level);
+        context.reply(&format!("Level: {}", context.source().experience_level()));
+    }
+
+    #[subcommand("experience-progress")]
+    fn experience_progress(&self, context: &mut Context<'_, Player>, progress: f64) {
+        context.source().set_experience_progress(progress);
+        context.reply(&format!(
+            "Progress: {}",
+            context.source().experience_progress()
+        ));
+    }
 }

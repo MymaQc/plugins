@@ -8,7 +8,6 @@ import (
 
 type PlayerTextKind uint32
 type PlayerTransformKind uint32
-type PlayerStateKind uint32
 
 const (
 	PlayerTextMessage PlayerTextKind = iota
@@ -16,20 +15,6 @@ const (
 	PlayerTextPopup
 	PlayerTextJukeboxPopup
 )
-
-const (
-	PlayerStateGameMode PlayerStateKind = iota
-	PlayerStateHeal
-	PlayerStateHurt
-	PlayerStateFood
-	PlayerStateMaxHealth
-	PlayerStateHealth
-)
-
-type PlayerStateValue struct {
-	Number  float64
-	Integer int64
-}
 
 const (
 	PlayerTransformTeleport PlayerTransformKind = iota

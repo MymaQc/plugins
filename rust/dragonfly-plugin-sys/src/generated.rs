@@ -48,6 +48,9 @@ pub const DF_PLAYER_STATE_HURT: u32 = 2;
 pub const DF_PLAYER_STATE_FOOD: u32 = 3;
 pub const DF_PLAYER_STATE_MAX_HEALTH: u32 = 4;
 pub const DF_PLAYER_STATE_HEALTH: u32 = 5;
+pub const DF_PLAYER_STATE_EXPERIENCE_LEVEL: u32 = 6;
+pub const DF_PLAYER_STATE_EXPERIENCE_PROGRESS: u32 = 7;
+
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DfTitleView { pub text: DfStringView, pub subtitle: DfStringView, pub action_text: DfStringView, pub fade_in_milliseconds: u64, pub duration_milliseconds: u64, pub fade_out_milliseconds: u64 }
