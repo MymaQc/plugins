@@ -811,6 +811,12 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
     let handles_death = implementation.items.iter().any(
         |item| matches!(item, syn::ImplItem::Fn(function) if function.sig.ident == "on_death"),
     );
+    let handles_start_break = implementation.items.iter().any(
+        |item| matches!(item, syn::ImplItem::Fn(function) if function.sig.ident == "on_start_break"),
+    );
+    let handles_fire_extinguish = implementation.items.iter().any(
+        |item| matches!(item, syn::ImplItem::Fn(function) if function.sig.ident == "on_fire_extinguish"),
+    );
     let subscriptions = u64::from(handles_move)
         | (u64::from(handles_chat) << 1)
         | (u64::from(handles_join) << 2)
@@ -820,7 +826,9 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
         | (u64::from(handles_block_break) << 6)
         | (u64::from(handles_block_place) << 7)
         | (u64::from(handles_food_loss) << 8)
-        | (u64::from(handles_death) << 9);
+        | (u64::from(handles_death) << 9)
+        | (u64::from(handles_start_break) << 10)
+        | (u64::from(handles_fire_extinguish) << 11);
 
     quote! {
         #[doc(hidden)]
@@ -1053,6 +1061,22 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
                         let state = unsafe { &mut *state.cast::<sys::DfPlayerDeathState>() };
                         let mut event = unsafe { ::dragonfly_plugin::PlayerDeathEvent::from_raw(input, state) };
                         <PluginType as ::dragonfly_plugin::Plugin>::on_death(plugin, &mut event);
+                        sys::DF_STATUS_OK
+                    }
+                    sys::DF_EVENT_PLAYER_START_BREAK => {
+                        let plugin = unsafe { &*instance.cast::<PluginType>() };
+                        let input = unsafe { &*input.cast::<sys::DfPlayerStartBreakInput>() };
+                        let state = unsafe { &mut *state.cast::<sys::DfPlayerStartBreakState>() };
+                        let mut event = unsafe { ::dragonfly_plugin::PlayerStartBreakEvent::from_raw(input, state) };
+                        <PluginType as ::dragonfly_plugin::Plugin>::on_start_break(plugin, &mut event);
+                        sys::DF_STATUS_OK
+                    }
+                    sys::DF_EVENT_PLAYER_FIRE_EXTINGUISH => {
+                        let plugin = unsafe { &*instance.cast::<PluginType>() };
+                        let input = unsafe { &*input.cast::<sys::DfPlayerFireExtinguishInput>() };
+                        let state = unsafe { &mut *state.cast::<sys::DfPlayerFireExtinguishState>() };
+                        let mut event = unsafe { ::dragonfly_plugin::PlayerFireExtinguishEvent::from_raw(input, state) };
+                        <PluginType as ::dragonfly_plugin::Plugin>::on_fire_extinguish(plugin, &mut event);
                         sys::DF_STATUS_OK
                     }
                     _ => sys::DF_STATUS_ERROR,

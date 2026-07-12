@@ -19,19 +19,21 @@ import (
 )
 
 const (
-	PlayerMoveSubscription       uint64 = 1
-	PlayerChatSubscription       uint64 = 2
-	PlayerJoinSubscription       uint64 = 4
-	PlayerQuitSubscription       uint64 = 8
-	PlayerHurtSubscription       uint64 = 16
-	PlayerHealSubscription       uint64 = 32
-	PlayerBlockBreakSubscription uint64 = 64
-	PlayerBlockPlaceSubscription uint64 = 128
-	PlayerFoodLossSubscription   uint64 = 256
-	PlayerDeathSubscription      uint64 = 512
-	MaxChatReplacementBytes             = 4096
-	MaxCommandOutputBytes               = 4096
-	MaxCommandEnumBytes                 = 4096
+	PlayerMoveSubscription           uint64 = 1
+	PlayerChatSubscription           uint64 = 2
+	PlayerJoinSubscription           uint64 = 4
+	PlayerQuitSubscription           uint64 = 8
+	PlayerHurtSubscription           uint64 = 16
+	PlayerHealSubscription           uint64 = 32
+	PlayerBlockBreakSubscription     uint64 = 64
+	PlayerBlockPlaceSubscription     uint64 = 128
+	PlayerFoodLossSubscription       uint64 = 256
+	PlayerDeathSubscription          uint64 = 512
+	PlayerStartBreakSubscription     uint64 = 1024
+	PlayerFireExtinguishSubscription uint64 = 2048
+	MaxChatReplacementBytes                 = 4096
+	MaxCommandOutputBytes                   = 4096
+	MaxCommandEnumBytes                     = 4096
 )
 
 type PlayerID struct {
@@ -135,6 +137,11 @@ type PlayerFoodLossOutput struct {
 type PlayerDeathInput struct {
 	Player PlayerID
 	Source string
+}
+
+type PlayerPositionInput struct {
+	Player   PlayerID
+	Position BlockPos
 }
 
 type Command struct {
@@ -658,6 +665,40 @@ func (r *Runtime) HandlePlayerDeath(input PlayerDeathInput, keepInventory bool) 
 		return keepInventory, fmt.Errorf("native death handler failed with status %d", int32(status))
 	}
 	return state.keep_inventory != 0, nil
+}
+
+func (r *Runtime) HandlePlayerStartBreak(input PlayerPositionInput, cancelled bool) (bool, error) {
+	if r == nil || r.ptr == nil {
+		return cancelled, errors.New("native runtime is closed")
+	}
+	var nativeInput C.DfPlayerStartBreakInput
+	fillPlayerID(&nativeInput.player, input.Player)
+	nativeInput.position = nativeBlockPos(input.Position)
+	var state C.DfPlayerStartBreakState
+	if cancelled {
+		state.cancelled = 1
+	}
+	if status := C.bg_runtime_handle_player_start_break(r.ptr, &nativeInput, &state); status != C.DF_STATUS_OK {
+		return state.cancelled != 0, fmt.Errorf("native start-break handler failed with status %d", int32(status))
+	}
+	return state.cancelled != 0, nil
+}
+
+func (r *Runtime) HandlePlayerFireExtinguish(input PlayerPositionInput, cancelled bool) (bool, error) {
+	if r == nil || r.ptr == nil {
+		return cancelled, errors.New("native runtime is closed")
+	}
+	var nativeInput C.DfPlayerFireExtinguishInput
+	fillPlayerID(&nativeInput.player, input.Player)
+	nativeInput.position = nativeBlockPos(input.Position)
+	var state C.DfPlayerFireExtinguishState
+	if cancelled {
+		state.cancelled = 1
+	}
+	if status := C.bg_runtime_handle_player_fire_extinguish(r.ptr, &nativeInput, &state); status != C.DF_STATUS_OK {
+		return state.cancelled != 0, fmt.Errorf("native fire-extinguish handler failed with status %d", int32(status))
+	}
+	return state.cancelled != 0, nil
 }
 
 func nativeBlockPos(position BlockPos) C.DfBlockPos {

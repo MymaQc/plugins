@@ -26,6 +26,8 @@ type playerRuntime interface {
 	HandlePlayerBlockPlace(native.PlayerBlockPlaceInput, bool) (bool, error)
 	HandlePlayerFoodLoss(native.PlayerFoodLossInput, bool) (native.PlayerFoodLossOutput, error)
 	HandlePlayerDeath(native.PlayerDeathInput, bool) (bool, error)
+	HandlePlayerStartBreak(native.PlayerPositionInput, bool) (bool, error)
+	HandlePlayerFireExtinguish(native.PlayerPositionInput, bool) (bool, error)
 }
 
 // PlayerHandler forwards supported Dragonfly player events into the native runtime.
@@ -204,6 +206,29 @@ func (h *PlayerHandler) HandleDeath(p *player.Player, source world.DamageSource,
 		return
 	}
 	*keepInventory = keep
+}
+
+func (h *PlayerHandler) HandleStartBreak(ctx *player.Context, position cube.Pos) {
+	h.handlePositionEvent(ctx, position, native.PlayerStartBreakSubscription, h.runtime.HandlePlayerStartBreak, "start-break")
+}
+
+func (h *PlayerHandler) HandleFireExtinguish(ctx *player.Context, position cube.Pos) {
+	h.handlePositionEvent(ctx, position, native.PlayerFireExtinguishSubscription, h.runtime.HandlePlayerFireExtinguish, "fire-extinguish")
+}
+
+func (h *PlayerHandler) handlePositionEvent(ctx *player.Context, position cube.Pos, subscription uint64, handle func(native.PlayerPositionInput, bool) (bool, error), name string) {
+	if h.runtime.Subscriptions()&subscription == 0 {
+		return
+	}
+	p := ctx.Val()
+	cancelled, err := handle(native.PlayerPositionInput{Player: h.playerID(p), Position: nativeBlockPos(position)}, ctx.Cancelled())
+	if err != nil {
+		h.log.Error("native plugin position handler failed", "event", name, "player", p.Name(), "error", err)
+		return
+	}
+	if cancelled {
+		ctx.Cancel()
+	}
 }
 
 func nativeBlockPos(position cube.Pos) native.BlockPos {

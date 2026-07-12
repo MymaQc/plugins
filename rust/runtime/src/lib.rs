@@ -3,18 +3,22 @@ use dragonfly_plugin_sys::{
     DF_COMMAND_PARAMETER_ENUM, DF_COMMAND_PARAMETER_FLOAT, DF_COMMAND_PARAMETER_INTEGER,
     DF_COMMAND_PARAMETER_PLAYER, DF_COMMAND_PARAMETER_RAW_TEXT, DF_COMMAND_PARAMETER_STRING,
     DF_COMMAND_PARAMETER_SUBCOMMAND, DF_EVENT_PLAYER_BLOCK_BREAK, DF_EVENT_PLAYER_BLOCK_PLACE,
-    DF_EVENT_PLAYER_CHAT, DF_EVENT_PLAYER_DEATH, DF_EVENT_PLAYER_FOOD_LOSS, DF_EVENT_PLAYER_HEAL,
-    DF_EVENT_PLAYER_HURT, DF_EVENT_PLAYER_JOIN, DF_EVENT_PLAYER_MOVE, DF_EVENT_PLAYER_QUIT,
-    DF_STATUS_ERROR, DF_STATUS_OK, DF_SUBSCRIPTION_PLAYER_BLOCK_BREAK,
-    DF_SUBSCRIPTION_PLAYER_BLOCK_PLACE, DF_SUBSCRIPTION_PLAYER_CHAT, DF_SUBSCRIPTION_PLAYER_DEATH,
-    DF_SUBSCRIPTION_PLAYER_FOOD_LOSS, DF_SUBSCRIPTION_PLAYER_HEAL, DF_SUBSCRIPTION_PLAYER_HURT,
-    DF_SUBSCRIPTION_PLAYER_JOIN, DF_SUBSCRIPTION_PLAYER_MOVE, DF_SUBSCRIPTION_PLAYER_QUIT,
+    DF_EVENT_PLAYER_CHAT, DF_EVENT_PLAYER_DEATH, DF_EVENT_PLAYER_FIRE_EXTINGUISH,
+    DF_EVENT_PLAYER_FOOD_LOSS, DF_EVENT_PLAYER_HEAL, DF_EVENT_PLAYER_HURT, DF_EVENT_PLAYER_JOIN,
+    DF_EVENT_PLAYER_MOVE, DF_EVENT_PLAYER_QUIT, DF_EVENT_PLAYER_START_BREAK, DF_STATUS_ERROR,
+    DF_STATUS_OK, DF_SUBSCRIPTION_PLAYER_BLOCK_BREAK, DF_SUBSCRIPTION_PLAYER_BLOCK_PLACE,
+    DF_SUBSCRIPTION_PLAYER_CHAT, DF_SUBSCRIPTION_PLAYER_DEATH,
+    DF_SUBSCRIPTION_PLAYER_FIRE_EXTINGUISH, DF_SUBSCRIPTION_PLAYER_FOOD_LOSS,
+    DF_SUBSCRIPTION_PLAYER_HEAL, DF_SUBSCRIPTION_PLAYER_HURT, DF_SUBSCRIPTION_PLAYER_JOIN,
+    DF_SUBSCRIPTION_PLAYER_MOVE, DF_SUBSCRIPTION_PLAYER_QUIT, DF_SUBSCRIPTION_PLAYER_START_BREAK,
     DfCommandDescriptor, DfCommandInput, DfCommandState, DfPlayerBlockBreakInput,
     DfPlayerBlockBreakState, DfPlayerBlockPlaceInput, DfPlayerBlockPlaceState, DfPlayerChatInput,
-    DfPlayerChatState, DfPlayerDeathInput, DfPlayerDeathState, DfPlayerFoodLossInput,
-    DfPlayerFoodLossState, DfPlayerHealInput, DfPlayerHealState, DfPlayerHurtInput,
-    DfPlayerHurtState, DfPlayerJoinInput, DfPlayerJoinState, DfPlayerMoveInput, DfPlayerMoveState,
-    DfPlayerQuitInput, DfPlayerQuitState, DfPluginApiV1, DfPluginEntryV1Fn, DfStatus, DfStringView,
+    DfPlayerChatState, DfPlayerDeathInput, DfPlayerDeathState, DfPlayerFireExtinguishInput,
+    DfPlayerFireExtinguishState, DfPlayerFoodLossInput, DfPlayerFoodLossState, DfPlayerHealInput,
+    DfPlayerHealState, DfPlayerHurtInput, DfPlayerHurtState, DfPlayerJoinInput, DfPlayerJoinState,
+    DfPlayerMoveInput, DfPlayerMoveState, DfPlayerQuitInput, DfPlayerQuitState,
+    DfPlayerStartBreakInput, DfPlayerStartBreakState, DfPluginApiV1, DfPluginEntryV1Fn, DfStatus,
+    DfStringView,
 };
 use libloading::{Library, Symbol};
 use std::ffi::{OsStr, c_void};
@@ -516,6 +520,72 @@ impl DfRuntime {
                     ptr::from_mut(state).cast(),
                 )
             };
+            if status != DF_STATUS_OK {
+                return status;
+            }
+        }
+        DF_STATUS_OK
+    }
+
+    fn handle_start_break(
+        &self,
+        input: &DfPlayerStartBreakInput,
+        state: &mut DfPlayerStartBreakState,
+    ) -> DfStatus {
+        for plugin in &self.plugins {
+            if !plugin.enabled
+                || plugin.api.header.subscriptions & DF_SUBSCRIPTION_PLAYER_START_BREAK == 0
+            {
+                continue;
+            }
+            let was_cancelled = state.cancelled != 0;
+            let Some(handle) = plugin.api.handle_event else {
+                return DF_STATUS_ERROR;
+            };
+            let status = unsafe {
+                handle(
+                    plugin.instance,
+                    DF_EVENT_PLAYER_START_BREAK,
+                    ptr::from_ref(input).cast(),
+                    ptr::from_mut(state).cast(),
+                )
+            };
+            if was_cancelled {
+                state.cancelled = 1;
+            }
+            if status != DF_STATUS_OK {
+                return status;
+            }
+        }
+        DF_STATUS_OK
+    }
+
+    fn handle_fire_extinguish(
+        &self,
+        input: &DfPlayerFireExtinguishInput,
+        state: &mut DfPlayerFireExtinguishState,
+    ) -> DfStatus {
+        for plugin in &self.plugins {
+            if !plugin.enabled
+                || plugin.api.header.subscriptions & DF_SUBSCRIPTION_PLAYER_FIRE_EXTINGUISH == 0
+            {
+                continue;
+            }
+            let was_cancelled = state.cancelled != 0;
+            let Some(handle) = plugin.api.handle_event else {
+                return DF_STATUS_ERROR;
+            };
+            let status = unsafe {
+                handle(
+                    plugin.instance,
+                    DF_EVENT_PLAYER_FIRE_EXTINGUISH,
+                    ptr::from_ref(input).cast(),
+                    ptr::from_mut(state).cast(),
+                )
+            };
+            if was_cancelled {
+                state.cancelled = 1;
+            }
             if status != DF_STATUS_OK {
                 return status;
             }
@@ -1192,6 +1262,52 @@ pub unsafe extern "C" fn df_runtime_handle_player_death(
     }
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         runtime.handle_death(input, state)
+    }))
+    .unwrap_or(DF_STATUS_ERROR)
+}
+
+#[unsafe(no_mangle)]
+/// Dispatches a player start-break event.
+///
+/// # Safety
+/// All pointers must remain valid for this synchronous call.
+pub unsafe extern "C" fn df_runtime_handle_player_start_break(
+    runtime: *mut DfRuntime,
+    input: *const DfPlayerStartBreakInput,
+    state: *mut DfPlayerStartBreakState,
+) -> DfStatus {
+    let (Some(runtime), Some(input), Some(state)) = (
+        unsafe { runtime.as_ref() },
+        unsafe { input.as_ref() },
+        unsafe { state.as_mut() },
+    ) else {
+        return DF_STATUS_ERROR;
+    };
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        runtime.handle_start_break(input, state)
+    }))
+    .unwrap_or(DF_STATUS_ERROR)
+}
+
+#[unsafe(no_mangle)]
+/// Dispatches a player fire-extinguish event.
+///
+/// # Safety
+/// All pointers must remain valid for this synchronous call.
+pub unsafe extern "C" fn df_runtime_handle_player_fire_extinguish(
+    runtime: *mut DfRuntime,
+    input: *const DfPlayerFireExtinguishInput,
+    state: *mut DfPlayerFireExtinguishState,
+) -> DfStatus {
+    let (Some(runtime), Some(input), Some(state)) = (
+        unsafe { runtime.as_ref() },
+        unsafe { input.as_ref() },
+        unsafe { state.as_mut() },
+    ) else {
+        return DF_STATUS_ERROR;
+    };
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        runtime.handle_fire_extinguish(input, state)
     }))
     .unwrap_or(DF_STATUS_ERROR)
 }

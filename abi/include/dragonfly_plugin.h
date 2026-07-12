@@ -169,6 +169,28 @@ typedef struct {
     uint8_t keep_inventory;
 } DfPlayerDeathState;
 
+#define DF_EVENT_PLAYER_START_BREAK 11u
+
+typedef struct {
+    DfPlayerId player;
+    DfBlockPos position;
+} DfPlayerStartBreakInput;
+
+typedef struct {
+    uint8_t cancelled;
+} DfPlayerStartBreakState;
+
+#define DF_EVENT_PLAYER_FIRE_EXTINGUISH 12u
+
+typedef struct {
+    DfPlayerId player;
+    DfBlockPos position;
+} DfPlayerFireExtinguishInput;
+
+typedef struct {
+    uint8_t cancelled;
+} DfPlayerFireExtinguishState;
+
 typedef DfStatus (*DfHandleEventFn)(void *instance, DfEventId event_id, const void *input, void *state);
 typedef void *(*DfPluginCreateFn)(void);
 typedef DfStatus (*DfPluginLifecycleFn)(void *instance);
@@ -215,6 +237,8 @@ DfStatus df_runtime_handle_player_block_break(DfRuntime *runtime, const DfPlayer
 DfStatus df_runtime_handle_player_block_place(DfRuntime *runtime, const DfPlayerBlockPlaceInput *input, DfPlayerBlockPlaceState *state);
 DfStatus df_runtime_handle_player_food_loss(DfRuntime *runtime, const DfPlayerFoodLossInput *input, DfPlayerFoodLossState *state);
 DfStatus df_runtime_handle_player_death(DfRuntime *runtime, const DfPlayerDeathInput *input, DfPlayerDeathState *state);
+DfStatus df_runtime_handle_player_start_break(DfRuntime *runtime, const DfPlayerStartBreakInput *input, DfPlayerStartBreakState *state);
+DfStatus df_runtime_handle_player_fire_extinguish(DfRuntime *runtime, const DfPlayerFireExtinguishInput *input, DfPlayerFireExtinguishState *state);
 
 #ifdef __cplusplus
 }

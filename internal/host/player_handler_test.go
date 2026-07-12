@@ -69,6 +69,12 @@ func (r *runtimeStub) HandlePlayerDeath(input native.PlayerDeathInput, _ bool) (
 	r.deathInput = input
 	return r.keepInventory, nil
 }
+func (r *runtimeStub) HandlePlayerStartBreak(_ native.PlayerPositionInput, cancelled bool) (bool, error) {
+	return cancelled, nil
+}
+func (r *runtimeStub) HandlePlayerFireExtinguish(_ native.PlayerPositionInput, cancelled bool) (bool, error) {
+	return cancelled, nil
+}
 
 func (r *runtimeStub) Subscriptions() uint64 { return r.subscriptions }
 func (r *runtimeStub) HandlePlayerMove(input native.PlayerMoveInput, _ bool) (bool, error) {

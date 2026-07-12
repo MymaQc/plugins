@@ -1010,6 +1010,51 @@ impl<'a> PlayerDeathEvent<'a> {
     }
 }
 
+macro_rules! cancellable_position_event {
+    ($name:ident, $input:ty, $state:ty) => {
+        pub struct $name<'a> {
+            input: &'a $input,
+            state: &'a mut $state,
+        }
+
+        impl<'a> $name<'a> {
+            /// # Safety
+            /// Both references must belong to the same active event callback.
+            #[doc(hidden)]
+            pub unsafe fn from_raw(input: &'a $input, state: &'a mut $state) -> Self {
+                Self { input, state }
+            }
+
+            pub fn player(&self) -> Player {
+                Player::from_id(self.input.player)
+            }
+
+            pub fn position(&self) -> BlockPos {
+                self.input.position.into()
+            }
+
+            pub fn cancelled(&self) -> bool {
+                self.state.cancelled != 0
+            }
+
+            pub fn cancel(&mut self) {
+                self.state.cancelled = 1;
+            }
+        }
+    };
+}
+
+cancellable_position_event!(
+    PlayerStartBreakEvent,
+    dragonfly_plugin_sys::DfPlayerStartBreakInput,
+    dragonfly_plugin_sys::DfPlayerStartBreakState
+);
+cancellable_position_event!(
+    PlayerFireExtinguishEvent,
+    dragonfly_plugin_sys::DfPlayerFireExtinguishInput,
+    dragonfly_plugin_sys::DfPlayerFireExtinguishState
+);
+
 pub trait Plugin: Default + Send + Sync + 'static {
     fn on_enable(&self) {}
     fn on_disable(&self) {}
@@ -1023,6 +1068,8 @@ pub trait Plugin: Default + Send + Sync + 'static {
     fn on_block_place(&self, _event: &mut PlayerBlockPlaceEvent<'_>) {}
     fn on_food_loss(&self, _event: &mut PlayerFoodLossEvent<'_>) {}
     fn on_death(&self, _event: &mut PlayerDeathEvent<'_>) {}
+    fn on_start_break(&self, _event: &mut PlayerStartBreakEvent<'_>) {}
+    fn on_fire_extinguish(&self, _event: &mut PlayerFireExtinguishEvent<'_>) {}
     fn commands(&self) -> &'static [Command] {
         &[]
     }

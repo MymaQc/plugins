@@ -23,6 +23,8 @@ typedef DfStatus (*RuntimeBlockBreakFn)(DfRuntime *, const DfPlayerBlockBreakInp
 typedef DfStatus (*RuntimeBlockPlaceFn)(DfRuntime *, const DfPlayerBlockPlaceInput *, DfPlayerBlockPlaceState *);
 typedef DfStatus (*RuntimeFoodLossFn)(DfRuntime *, const DfPlayerFoodLossInput *, DfPlayerFoodLossState *);
 typedef DfStatus (*RuntimeDeathFn)(DfRuntime *, const DfPlayerDeathInput *, DfPlayerDeathState *);
+typedef DfStatus (*RuntimeStartBreakFn)(DfRuntime *, const DfPlayerStartBreakInput *, DfPlayerStartBreakState *);
+typedef DfStatus (*RuntimeFireExtinguishFn)(DfRuntime *, const DfPlayerFireExtinguishInput *, DfPlayerFireExtinguishState *);
 
 struct BgRuntimeLibrary {
     void *handle;
@@ -46,6 +48,8 @@ struct BgRuntimeLibrary {
     RuntimeBlockPlaceFn handle_block_place;
     RuntimeFoodLossFn handle_food_loss;
     RuntimeDeathFn handle_death;
+    RuntimeStartBreakFn handle_start_break;
+    RuntimeFireExtinguishFn handle_fire_extinguish;
 };
 
 static void write_error(uint8_t *error, uint64_t capacity, const char *message) {
@@ -104,7 +108,9 @@ DfStatus bg_runtime_open(
     RuntimeBlockPlaceFn handle_block_place = (RuntimeBlockPlaceFn) load_symbol(handle, "df_runtime_handle_player_block_place", error, error_capacity);
     RuntimeFoodLossFn handle_food_loss = (RuntimeFoodLossFn) load_symbol(handle, "df_runtime_handle_player_food_loss", error, error_capacity);
     RuntimeDeathFn handle_death = (RuntimeDeathFn) load_symbol(handle, "df_runtime_handle_player_death", error, error_capacity);
-    if (create == NULL || destroy == NULL || enable == NULL || disable == NULL || plugin_count == NULL || subscriptions == NULL || command_count == NULL || command_at == NULL || handle_command == NULL || command_enum_options == NULL || handle_move == NULL || handle_chat == NULL || handle_join == NULL || handle_quit == NULL || handle_hurt == NULL || handle_heal == NULL || handle_block_break == NULL || handle_block_place == NULL || handle_food_loss == NULL || handle_death == NULL) {
+    RuntimeStartBreakFn handle_start_break = (RuntimeStartBreakFn) load_symbol(handle, "df_runtime_handle_player_start_break", error, error_capacity);
+    RuntimeFireExtinguishFn handle_fire_extinguish = (RuntimeFireExtinguishFn) load_symbol(handle, "df_runtime_handle_player_fire_extinguish", error, error_capacity);
+    if (create == NULL || destroy == NULL || enable == NULL || disable == NULL || plugin_count == NULL || subscriptions == NULL || command_count == NULL || command_at == NULL || handle_command == NULL || command_enum_options == NULL || handle_move == NULL || handle_chat == NULL || handle_join == NULL || handle_quit == NULL || handle_hurt == NULL || handle_heal == NULL || handle_block_break == NULL || handle_block_place == NULL || handle_food_loss == NULL || handle_death == NULL || handle_start_break == NULL || handle_fire_extinguish == NULL) {
         dlclose(handle);
         return DF_STATUS_ERROR;
     }
@@ -148,6 +154,8 @@ DfStatus bg_runtime_open(
     library->handle_block_place = handle_block_place;
     library->handle_food_loss = handle_food_loss;
     library->handle_death = handle_death;
+    library->handle_start_break = handle_start_break;
+    library->handle_fire_extinguish = handle_fire_extinguish;
     *out = library;
     return DF_STATUS_OK;
 }
@@ -328,6 +336,16 @@ DfStatus bg_runtime_handle_player_death(
         return DF_STATUS_ERROR;
     }
     return library->handle_death(library->runtime, input, state);
+}
+
+DfStatus bg_runtime_handle_player_start_break(BgRuntimeLibrary *library, const DfPlayerStartBreakInput *input, DfPlayerStartBreakState *state) {
+    if (library == NULL || input == NULL || state == NULL) return DF_STATUS_ERROR;
+    return library->handle_start_break(library->runtime, input, state);
+}
+
+DfStatus bg_runtime_handle_player_fire_extinguish(BgRuntimeLibrary *library, const DfPlayerFireExtinguishInput *input, DfPlayerFireExtinguishState *state) {
+    if (library == NULL || input == NULL || state == NULL) return DF_STATUS_ERROR;
+    return library->handle_fire_extinguish(library->runtime, input, state);
 }
 
 uint64_t bg_runtime_handle_player_move_value(

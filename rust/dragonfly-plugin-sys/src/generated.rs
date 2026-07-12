@@ -221,6 +221,34 @@ pub struct DfPlayerDeathState {
     pub keep_inventory: u8,
 }
 
+pub const DF_EVENT_PLAYER_START_BREAK: DfEventId = 11;
+pub const DF_SUBSCRIPTION_PLAYER_START_BREAK: u64 = 1u64 << 10;
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfPlayerStartBreakInput {
+    pub player: DfPlayerId,
+    pub position: DfBlockPos,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfPlayerStartBreakState {
+    pub cancelled: u8,
+}
+
+pub const DF_EVENT_PLAYER_FIRE_EXTINGUISH: DfEventId = 12;
+pub const DF_SUBSCRIPTION_PLAYER_FIRE_EXTINGUISH: u64 = 1u64 << 11;
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfPlayerFireExtinguishInput {
+    pub player: DfPlayerId,
+    pub position: DfBlockPos,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfPlayerFireExtinguishState {
+    pub cancelled: u8,
+}
+
 pub type DfPluginCreateFn = unsafe extern "C" fn() -> *mut c_void;
 pub type DfPluginLifecycleFn = unsafe extern "C" fn(instance: *mut c_void) -> DfStatus;
 pub type DfPluginCommandsFn = unsafe extern "C" fn(instance: *mut c_void, count: *mut u64) -> *const DfCommandDescriptor;

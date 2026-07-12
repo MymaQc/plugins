@@ -81,3 +81,17 @@ events:
       - { name: source, type: string_view }
     state:
       - { name: keep_inventory, type: bool }
+  - name: start_break
+    id: 11
+    input:
+      - { name: player, type: player_id }
+      - { name: position, type: block_pos }
+    state:
+      - { name: cancelled, type: bool }
+  - name: fire_extinguish
+    id: 12
+    input:
+      - { name: player, type: player_id }
+      - { name: position, type: block_pos }
+    state:
+      - { name: cancelled, type: bool }

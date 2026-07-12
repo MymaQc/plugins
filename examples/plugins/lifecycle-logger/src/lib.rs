@@ -1,6 +1,7 @@
 use dragonfly::{
-    PlayerBlockBreakEvent, PlayerBlockPlaceEvent, PlayerDeathEvent, PlayerFoodLossEvent,
-    PlayerHealEvent, PlayerHurtEvent, PlayerJoinEvent, PlayerQuitEvent, Plugin, plugin,
+    PlayerBlockBreakEvent, PlayerBlockPlaceEvent, PlayerDeathEvent, PlayerFireExtinguishEvent,
+    PlayerFoodLossEvent, PlayerHealEvent, PlayerHurtEvent, PlayerJoinEvent, PlayerQuitEvent,
+    PlayerStartBreakEvent, Plugin, plugin,
 };
 
 #[derive(Default)]
@@ -46,5 +47,13 @@ impl Plugin for LifecycleLogger {
 
     fn on_death(&self, event: &mut PlayerDeathEvent<'_>) {
         eprintln!("player died from {}", event.source());
+    }
+
+    fn on_start_break(&self, event: &mut PlayerStartBreakEvent<'_>) {
+        eprintln!("started breaking at {:?}", event.position());
+    }
+
+    fn on_fire_extinguish(&self, event: &mut PlayerFireExtinguishEvent<'_>) {
+        eprintln!("extinguished fire at {:?}", event.position());
     }
 }
