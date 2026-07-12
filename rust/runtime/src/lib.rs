@@ -2324,7 +2324,8 @@ mod tests {
             abi_version: DF_ABI_VERSION,
             struct_size: size_of::<DfHostApiV1>() as u32,
             context: 0,
-            player_message: None,
+            player_text: None,
+            player_title: None,
         };
         let runtime = DfRuntime::load(&directory, ptr::from_ref(&host)).unwrap();
         assert!(runtime.plugins.is_empty());

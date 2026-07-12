@@ -5,10 +5,15 @@
 #include <stdlib.h>
 #include <string.h>
 
-extern DfStatus bg_go_player_message(uint64_t context, DfPlayerId player, DfStringView message);
+extern DfStatus bg_go_player_text(uint64_t context, DfPlayerId player, uint32_t kind, DfStringView message);
+extern DfStatus bg_go_player_title(uint64_t context, DfPlayerId player, DfTitleView title);
 
-static DfStatus host_player_message(uint64_t context, DfPlayerId player, DfStringView message) {
-    return bg_go_player_message(context, player, message);
+static DfStatus host_player_text(uint64_t context, DfPlayerId player, uint32_t kind, DfStringView message) {
+    return bg_go_player_text(context, player, kind, message);
+}
+
+static DfStatus host_player_title(uint64_t context, DfPlayerId player, DfTitleView title) {
+    return bg_go_player_title(context, player, title);
 }
 
 typedef DfStatus (*RuntimeCreateFn)(const DfRuntimeConfig *, DfRuntime **, uint8_t *, uint64_t);
@@ -101,7 +106,8 @@ DfStatus bg_runtime_open(
         .abi_version = DF_ABI_VERSION,
         .struct_size = sizeof(DfHostApiV1),
         .context = host_context,
-        .player_message = host_player_message,
+        .player_text = host_player_text,
+        .player_title = host_player_title,
     };
     DfRuntimeConfig config = {
         .plugin_directory = {

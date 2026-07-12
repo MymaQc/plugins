@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"testing"
 	"time"
 )
@@ -44,12 +45,21 @@ func openTestRuntime(t testing.TB) *Runtime {
 }
 
 type recordingHost struct {
-	player  PlayerID
-	message string
+	player PlayerID
+	texts  []string
+	kinds  []PlayerTextKind
+	title  PlayerTitle
 }
 
-func (h *recordingHost) MessagePlayer(player PlayerID, message string) bool {
-	h.player, h.message = player, message
+func (h *recordingHost) SendPlayerText(player PlayerID, kind PlayerTextKind, message string) bool {
+	h.player = player
+	h.kinds = append(h.kinds, kind)
+	h.texts = append(h.texts, message)
+	return true
+}
+
+func (h *recordingHost) SendPlayerTitle(player PlayerID, title PlayerTitle) bool {
+	h.player, h.title = player, title
 	return true
 }
 
@@ -68,8 +78,13 @@ func TestPluginCanMessagePlayer(t *testing.T) {
 	if _, err := runtime.HandlePlayerJoin(PlayerJoinInput{Player: id, Name: "TestPlayer"}, false); err != nil {
 		t.Fatal(err)
 	}
-	if host.player != id || host.message != "Welcome from a Rust plugin." {
-		t.Fatalf("host call = player %+v message %q", host.player, host.message)
+	wantTexts := []string{"Welcome from a Rust plugin.", "Rust tip", "Rust popup", "Rust jukebox popup"}
+	wantKinds := []PlayerTextKind{PlayerTextMessage, PlayerTextTip, PlayerTextPopup, PlayerTextJukeboxPopup}
+	if host.player != id || !slices.Equal(host.texts, wantTexts) || !slices.Equal(host.kinds, wantKinds) {
+		t.Fatalf("host calls = player %+v kinds %v texts %q", host.player, host.kinds, host.texts)
+	}
+	if host.title.Text != "Rust plugin" || host.title.Subtitle != "Native Dragonfly" || host.title.Duration != 2*time.Second {
+		t.Fatalf("title = %+v", host.title)
 	}
 }
 

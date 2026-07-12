@@ -105,6 +105,49 @@ impl From<dragonfly_plugin_sys::DfPlayerId> for PlayerId {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Title {
+    text: String,
+    subtitle: String,
+    action_text: String,
+    fade_in: std::time::Duration,
+    duration: std::time::Duration,
+    fade_out: std::time::Duration,
+}
+
+impl Title {
+    pub fn new(text: impl Into<String>) -> Self {
+        Self {
+            text: text.into(),
+            subtitle: String::new(),
+            action_text: String::new(),
+            fade_in: std::time::Duration::from_millis(50),
+            duration: std::time::Duration::from_secs(2),
+            fade_out: std::time::Duration::from_millis(50),
+        }
+    }
+    pub fn subtitle(mut self, text: impl Into<String>) -> Self {
+        self.subtitle = text.into();
+        self
+    }
+    pub fn action_text(mut self, text: impl Into<String>) -> Self {
+        self.action_text = text.into();
+        self
+    }
+    pub fn fade_in(mut self, duration: std::time::Duration) -> Self {
+        self.fade_in = duration;
+        self
+    }
+    pub fn duration(mut self, duration: std::time::Duration) -> Self {
+        self.duration = duration;
+        self
+    }
+    pub fn fade_out(mut self, duration: std::time::Duration) -> Self {
+        self.fade_out = duration;
+        self
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct Player {
     id: PlayerId,
@@ -136,22 +179,63 @@ impl Player {
     }
 
     pub fn message(&self, message: &str) {
+        self.send_text(dragonfly_plugin_sys::DF_PLAYER_TEXT_MESSAGE, message);
+    }
+
+    pub fn send_tip(&self, message: &str) {
+        self.send_text(dragonfly_plugin_sys::DF_PLAYER_TEXT_TIP, message);
+    }
+
+    pub fn send_popup(&self, message: &str) {
+        self.send_text(dragonfly_plugin_sys::DF_PLAYER_TEXT_POPUP, message);
+    }
+
+    pub fn send_jukebox_popup(&self, message: &str) {
+        self.send_text(dragonfly_plugin_sys::DF_PLAYER_TEXT_JUKEBOX_POPUP, message);
+    }
+
+    pub fn send_title(&self, title: &Title) {
         let host = HOST_API.load(Ordering::Acquire);
         let Some(host) = (unsafe { host.as_ref() }) else {
             return;
         };
-        let Some(send) = host.player_message else {
+        let Some(send) = host.player_title else {
             return;
         };
-        let view = dragonfly_plugin_sys::DfStringView {
-            data: message.as_ptr(),
-            len: message.len() as u64,
+        let view = dragonfly_plugin_sys::DfTitleView {
+            text: string_view_from_str(&title.text),
+            subtitle: string_view_from_str(&title.subtitle),
+            action_text: string_view_from_str(&title.action_text),
+            fade_in_milliseconds: duration_milliseconds(title.fade_in),
+            duration_milliseconds: duration_milliseconds(title.duration),
+            fade_out_milliseconds: duration_milliseconds(title.fade_out),
         };
-        let id = dragonfly_plugin_sys::DfPlayerId {
+        let _ = unsafe { send(host.context, self.raw_id(), view) };
+    }
+
+    fn send_text(&self, kind: u32, message: &str) {
+        let host = HOST_API.load(Ordering::Acquire);
+        let Some(host) = (unsafe { host.as_ref() }) else {
+            return;
+        };
+        let Some(send) = host.player_text else {
+            return;
+        };
+        let _ = unsafe {
+            send(
+                host.context,
+                self.raw_id(),
+                kind,
+                string_view_from_str(message),
+            )
+        };
+    }
+
+    fn raw_id(&self) -> dragonfly_plugin_sys::DfPlayerId {
+        dragonfly_plugin_sys::DfPlayerId {
             bytes: self.id.uuid,
             generation: self.id.generation,
-        };
-        let _ = unsafe { send(host.context, id, view) };
+        }
     }
 
     fn from_id(id: dragonfly_plugin_sys::DfPlayerId) -> Self {
@@ -747,6 +831,17 @@ unsafe fn string_view<'a>(view: dragonfly_plugin_sys::DfStringView) -> &'a str {
     unsafe {
         core::str::from_utf8_unchecked(core::slice::from_raw_parts(view.data, view.len as usize))
     }
+}
+
+fn string_view_from_str(value: &str) -> dragonfly_plugin_sys::DfStringView {
+    dragonfly_plugin_sys::DfStringView {
+        data: value.as_ptr(),
+        len: value.len() as u64,
+    }
+}
+
+fn duration_milliseconds(duration: std::time::Duration) -> u64 {
+    duration.as_millis().min(u128::from(u64::MAX)) as u64
 }
 
 pub struct PlayerChatEvent<'a> {

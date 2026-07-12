@@ -3,16 +3,37 @@ package native
 import (
 	"sync"
 	"sync/atomic"
+	"time"
 )
+
+type PlayerTextKind uint32
+
+const (
+	PlayerTextMessage PlayerTextKind = iota
+	PlayerTextTip
+	PlayerTextPopup
+	PlayerTextJukeboxPopup
+)
+
+type PlayerTitle struct {
+	Text       string
+	Subtitle   string
+	ActionText string
+	FadeIn     time.Duration
+	Duration   time.Duration
+	FadeOut    time.Duration
+}
 
 // Host executes synchronous actions requested by native plugins.
 type Host interface {
-	MessagePlayer(PlayerID, string) bool
+	SendPlayerText(PlayerID, PlayerTextKind, string) bool
+	SendPlayerTitle(PlayerID, PlayerTitle) bool
 }
 
 type noopHost struct{}
 
-func (noopHost) MessagePlayer(PlayerID, string) bool { return false }
+func (noopHost) SendPlayerText(PlayerID, PlayerTextKind, string) bool { return false }
+func (noopHost) SendPlayerTitle(PlayerID, PlayerTitle) bool           { return false }
 
 var (
 	hostSequence atomic.Uint64

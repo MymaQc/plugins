@@ -22,12 +22,19 @@ typedef struct { int32_t x; int32_t y; int32_t z; } DfBlockPos;
 typedef struct { const uint8_t *data; uint64_t len; } DfStringView;
 typedef struct { uint8_t *data; uint64_t len; uint64_t capacity; } DfStringBuffer;
 typedef struct { DfStringView identifier; int32_t metadata; int32_t count; int32_t damage; } DfItemStackView;
-typedef DfStatus (*DfHostPlayerMessageFn)(uint64_t context, DfPlayerId player, DfStringView message);
+#define DF_PLAYER_TEXT_MESSAGE 0u
+#define DF_PLAYER_TEXT_TIP 1u
+#define DF_PLAYER_TEXT_POPUP 2u
+#define DF_PLAYER_TEXT_JUKEBOX_POPUP 3u
+typedef struct { DfStringView text; DfStringView subtitle; DfStringView action_text; uint64_t fade_in_milliseconds; uint64_t duration_milliseconds; uint64_t fade_out_milliseconds; } DfTitleView;
+typedef DfStatus (*DfHostPlayerTextFn)(uint64_t context, DfPlayerId player, uint32_t kind, DfStringView message);
+typedef DfStatus (*DfHostPlayerTitleFn)(uint64_t context, DfPlayerId player, DfTitleView title);
 typedef struct {
     uint32_t abi_version;
     uint32_t struct_size;
     uint64_t context;
-    DfHostPlayerMessageFn player_message;
+    DfHostPlayerTextFn player_text;
+    DfHostPlayerTitleFn player_title;
 } DfHostApiV1;
 #define DF_COMMAND_PARAMETER_SUBCOMMAND 1u
 #define DF_COMMAND_PARAMETER_ENUM 2u

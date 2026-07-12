@@ -35,10 +35,18 @@ impl Default for DfStringBuffer {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DfItemStackView { pub identifier: DfStringView, pub metadata: i32, pub count: i32, pub damage: i32 }
-pub type DfHostPlayerMessageFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, message: DfStringView) -> DfStatus;
+pub const DF_PLAYER_TEXT_MESSAGE: u32 = 0;
+pub const DF_PLAYER_TEXT_TIP: u32 = 1;
+pub const DF_PLAYER_TEXT_POPUP: u32 = 2;
+pub const DF_PLAYER_TEXT_JUKEBOX_POPUP: u32 = 3;
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfTitleView { pub text: DfStringView, pub subtitle: DfStringView, pub action_text: DfStringView, pub fade_in_milliseconds: u64, pub duration_milliseconds: u64, pub fade_out_milliseconds: u64 }
+pub type DfHostPlayerTextFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, kind: u32, message: DfStringView) -> DfStatus;
+pub type DfHostPlayerTitleFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, title: DfTitleView) -> DfStatus;
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
-pub struct DfHostApiV1 { pub abi_version: u32, pub struct_size: u32, pub context: u64, pub player_message: Option<DfHostPlayerMessageFn> }
+pub struct DfHostApiV1 { pub abi_version: u32, pub struct_size: u32, pub context: u64, pub player_text: Option<DfHostPlayerTextFn>, pub player_title: Option<DfHostPlayerTitleFn> }
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct DfCommandParameter { pub kind: u32, pub optional: u8, pub name: DfStringView, pub values: *const DfStringView, pub value_count: u64 }

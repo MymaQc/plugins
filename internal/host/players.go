@@ -7,6 +7,7 @@ import (
 
 	"github.com/bedrock-gophers/plugins/internal/native"
 	"github.com/df-mc/dragonfly/server/player"
+	"github.com/df-mc/dragonfly/server/player/title"
 )
 
 // Players owns stable native IDs for the lifetime of connected Dragonfly players.
@@ -103,11 +104,37 @@ func (p *Players) ResolveID(id native.PlayerID) (*player.Player, bool) {
 	return nil, false
 }
 
-func (p *Players) MessagePlayer(id native.PlayerID, message string) bool {
+func (p *Players) SendPlayerText(id native.PlayerID, kind native.PlayerTextKind, message string) bool {
 	connected, ok := p.ResolveID(id)
 	if !ok {
 		return false
 	}
-	connected.Message(message)
+	switch kind {
+	case native.PlayerTextMessage:
+		connected.Message(message)
+	case native.PlayerTextTip:
+		connected.SendTip(message)
+	case native.PlayerTextPopup:
+		connected.SendPopup(message)
+	case native.PlayerTextJukeboxPopup:
+		connected.SendJukeboxPopup(message)
+	default:
+		return false
+	}
+	return true
+}
+
+func (p *Players) SendPlayerTitle(id native.PlayerID, value native.PlayerTitle) bool {
+	connected, ok := p.ResolveID(id)
+	if !ok {
+		return false
+	}
+	t := title.New(value.Text).
+		WithSubtitle(value.Subtitle).
+		WithActionText(value.ActionText).
+		WithFadeInDuration(value.FadeIn).
+		WithDuration(value.Duration).
+		WithFadeOutDuration(value.FadeOut)
+	connected.SendTitle(t)
 	return true
 }

@@ -5,7 +5,7 @@ use dragonfly::{
     PlayerItemDropEvent, PlayerItemReleaseEvent, PlayerItemUseEvent, PlayerItemUseOnBlockEvent,
     PlayerJoinEvent, PlayerJumpEvent, PlayerLecternPageTurnEvent, PlayerPunchAirEvent,
     PlayerQuitEvent, PlayerSignEditEvent, PlayerSleepEvent, PlayerStartBreakEvent,
-    PlayerTeleportEvent, PlayerToggleSneakEvent, PlayerToggleSprintEvent, Plugin, plugin,
+    PlayerTeleportEvent, PlayerToggleSneakEvent, PlayerToggleSprintEvent, Plugin, Title, plugin,
 };
 
 #[derive(Default)]
@@ -23,7 +23,12 @@ impl Plugin for LifecycleLogger {
 
     fn on_join(&self, event: &mut PlayerJoinEvent<'_>) {
         eprintln!("{} joined", event.name());
-        event.player().message("Welcome from a Rust plugin.");
+        let player = event.player();
+        player.message("Welcome from a Rust plugin.");
+        player.send_tip("Rust tip");
+        player.send_popup("Rust popup");
+        player.send_jukebox_popup("Rust jukebox popup");
+        player.send_title(&Title::new("Rust plugin").subtitle("Native Dragonfly"));
     }
 
     fn on_quit(&self, event: &PlayerQuitEvent<'_>) {

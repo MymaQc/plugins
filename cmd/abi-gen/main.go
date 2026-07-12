@@ -144,12 +144,19 @@ typedef struct { int32_t x; int32_t y; int32_t z; } DfBlockPos;
 typedef struct { const uint8_t *data; uint64_t len; } DfStringView;
 typedef struct { uint8_t *data; uint64_t len; uint64_t capacity; } DfStringBuffer;
 typedef struct { DfStringView identifier; int32_t metadata; int32_t count; int32_t damage; } DfItemStackView;
-typedef DfStatus (*DfHostPlayerMessageFn)(uint64_t context, DfPlayerId player, DfStringView message);
+#define DF_PLAYER_TEXT_MESSAGE 0u
+#define DF_PLAYER_TEXT_TIP 1u
+#define DF_PLAYER_TEXT_POPUP 2u
+#define DF_PLAYER_TEXT_JUKEBOX_POPUP 3u
+typedef struct { DfStringView text; DfStringView subtitle; DfStringView action_text; uint64_t fade_in_milliseconds; uint64_t duration_milliseconds; uint64_t fade_out_milliseconds; } DfTitleView;
+typedef DfStatus (*DfHostPlayerTextFn)(uint64_t context, DfPlayerId player, uint32_t kind, DfStringView message);
+typedef DfStatus (*DfHostPlayerTitleFn)(uint64_t context, DfPlayerId player, DfTitleView title);
 typedef struct {
     uint32_t abi_version;
     uint32_t struct_size;
     uint64_t context;
-    DfHostPlayerMessageFn player_message;
+    DfHostPlayerTextFn player_text;
+    DfHostPlayerTitleFn player_title;
 } DfHostApiV1;
 #define DF_COMMAND_PARAMETER_SUBCOMMAND 1u
 #define DF_COMMAND_PARAMETER_ENUM 2u
@@ -287,10 +294,18 @@ impl Default for DfStringBuffer {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DfItemStackView { pub identifier: DfStringView, pub metadata: i32, pub count: i32, pub damage: i32 }
-pub type DfHostPlayerMessageFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, message: DfStringView) -> DfStatus;
+pub const DF_PLAYER_TEXT_MESSAGE: u32 = 0;
+pub const DF_PLAYER_TEXT_TIP: u32 = 1;
+pub const DF_PLAYER_TEXT_POPUP: u32 = 2;
+pub const DF_PLAYER_TEXT_JUKEBOX_POPUP: u32 = 3;
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfTitleView { pub text: DfStringView, pub subtitle: DfStringView, pub action_text: DfStringView, pub fade_in_milliseconds: u64, pub duration_milliseconds: u64, pub fade_out_milliseconds: u64 }
+pub type DfHostPlayerTextFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, kind: u32, message: DfStringView) -> DfStatus;
+pub type DfHostPlayerTitleFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, title: DfTitleView) -> DfStatus;
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
-pub struct DfHostApiV1 { pub abi_version: u32, pub struct_size: u32, pub context: u64, pub player_message: Option<DfHostPlayerMessageFn> }
+pub struct DfHostApiV1 { pub abi_version: u32, pub struct_size: u32, pub context: u64, pub player_text: Option<DfHostPlayerTextFn>, pub player_title: Option<DfHostPlayerTitleFn> }
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct DfCommandParameter { pub kind: u32, pub optional: u8, pub name: DfStringView, pub values: *const DfStringView, pub value_count: u64 }
