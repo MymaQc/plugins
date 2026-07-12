@@ -2328,6 +2328,8 @@ mod tests {
             player_title: None,
             player_transform: None,
             player_rotation: None,
+            player_state_set: None,
+            player_state_get: None,
         };
         let runtime = DfRuntime::load(&directory, ptr::from_ref(&host)).unwrap();
         assert!(runtime.plugins.is_empty());

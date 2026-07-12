@@ -77,6 +77,32 @@ func bg_go_player_rotation(context C.uint64_t, player C.DfPlayerId, rotation *C.
 	return C.DF_STATUS_OK
 }
 
+//export bg_go_player_state_set
+func bg_go_player_state_set(context C.uint64_t, player C.DfPlayerId, kind C.uint32_t, value C.DfPlayerStateValue) C.DfStatus {
+	host, ok := resolveHost(uint64(context))
+	if !ok || !host.SetPlayerState(playerID(player), PlayerStateKind(kind), PlayerStateValue{
+		Number: float64(value.number), Integer: int64(value.integer),
+	}) {
+		return C.DF_STATUS_ERROR
+	}
+	return C.DF_STATUS_OK
+}
+
+//export bg_go_player_state_get
+func bg_go_player_state_get(context C.uint64_t, player C.DfPlayerId, kind C.uint32_t, value *C.DfPlayerStateValue) C.DfStatus {
+	host, ok := resolveHost(uint64(context))
+	if !ok || value == nil {
+		return C.DF_STATUS_ERROR
+	}
+	state, ok := host.PlayerState(playerID(player), PlayerStateKind(kind))
+	if !ok {
+		return C.DF_STATUS_ERROR
+	}
+	value.number = C.double(state.Number)
+	value.integer = C.int64_t(state.Integer)
+	return C.DF_STATUS_OK
+}
+
 func playerID(player C.DfPlayerId) PlayerID {
 	var id PlayerID
 	for index := range id.UUID {

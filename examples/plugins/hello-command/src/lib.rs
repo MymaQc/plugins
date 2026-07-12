@@ -1,6 +1,6 @@
 use dragonfly::{
-    CommandEnum, CommandSource, Context, Dynamic, DynamicCommandEnum, Player, Plugin, Rotation,
-    Varargs, Vec3, plugin,
+    CommandEnum, CommandSource, Context, Dynamic, DynamicCommandEnum, GameMode, Player, Plugin,
+    Rotation, Varargs, Vec3, plugin,
 };
 
 struct GreetingTargets;
@@ -17,6 +17,25 @@ impl DynamicCommandEnum for GreetingTargets {
 enum Style {
     Plain,
     Excited,
+}
+
+#[derive(CommandEnum)]
+enum Mode {
+    Survival,
+    Creative,
+    Adventure,
+    Spectator,
+}
+
+impl From<Mode> for GameMode {
+    fn from(value: Mode) -> Self {
+        match value {
+            Mode::Survival => Self::Survival,
+            Mode::Creative => Self::Creative,
+            Mode::Adventure => Self::Adventure,
+            Mode::Spectator => Self::Spectator,
+        }
+    }
 }
 
 #[derive(Default)]
@@ -106,5 +125,35 @@ impl Plugin for HelloCommand {
     fn face(&self, context: &mut Context<'_, Player>, yaw: f64, pitch: f64) {
         context.source().face(Rotation { yaw, pitch });
         context.reply("Rotation set.");
+    }
+
+    #[subcommand("gamemode")]
+    fn game_mode(&self, context: &mut Context<'_, Player>, mode: Mode) {
+        context.source().set_game_mode(mode.into());
+        context.reply("Game mode set.");
+    }
+
+    #[subcommand("heal")]
+    fn heal(&self, context: &mut Context<'_, Player>, amount: f64) {
+        context.source().heal(amount);
+        context.reply(&format!("Health: {}", context.source().health()));
+    }
+
+    #[subcommand("hurt")]
+    fn hurt(&self, context: &mut Context<'_, Player>, amount: f64) {
+        context.source().hurt(amount);
+        context.reply(&format!("Health: {}", context.source().health()));
+    }
+
+    #[subcommand("food")]
+    fn food(&self, context: &mut Context<'_, Player>, level: i64) {
+        context.source().set_food(level as i32);
+        context.reply(&format!("Food: {}", context.source().food()));
+    }
+
+    #[subcommand("max-health")]
+    fn max_health(&self, context: &mut Context<'_, Player>, health: f64) {
+        context.source().set_max_health(health);
+        context.reply(&format!("Max health: {}", context.source().max_health()));
     }
 }

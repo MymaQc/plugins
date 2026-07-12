@@ -51,3 +51,32 @@ func TestPlayersTracksStableGenerationAndNames(t *testing.T) {
 		}
 	})
 }
+
+func TestPlayersReadsAndChangesState(t *testing.T) {
+	withPlayer(t, func(player *player.Player) {
+		players := NewPlayers()
+		id := players.Register(player, 1)
+		changes := []struct {
+			kind  native.PlayerStateKind
+			value native.PlayerStateValue
+		}{
+			{native.PlayerStateFood, native.PlayerStateValue{Integer: 12}},
+			{native.PlayerStateMaxHealth, native.PlayerStateValue{Number: 40}},
+			{native.PlayerStateHurt, native.PlayerStateValue{Number: 4}},
+			{native.PlayerStateHeal, native.PlayerStateValue{Number: 3}},
+			{native.PlayerStateGameMode, native.PlayerStateValue{Integer: 1}},
+		}
+		for _, change := range changes {
+			if !players.SetPlayerState(id, change.kind, change.value) {
+				t.Fatalf("state change %d failed", change.kind)
+			}
+		}
+		gameMode, _ := players.PlayerState(id, native.PlayerStateGameMode)
+		food, _ := players.PlayerState(id, native.PlayerStateFood)
+		maxHealth, _ := players.PlayerState(id, native.PlayerStateMaxHealth)
+		health, _ := players.PlayerState(id, native.PlayerStateHealth)
+		if gameMode.Integer != 1 || food.Integer != 12 || maxHealth.Number != 40 || health.Number != 19 {
+			t.Fatalf("game mode=%+v food=%+v max=%+v health=%+v", gameMode, food, maxHealth, health)
+		}
+	})
+}

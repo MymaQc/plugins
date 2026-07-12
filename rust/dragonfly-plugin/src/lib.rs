@@ -35,6 +35,16 @@ pub struct Rotation {
     pub pitch: f64,
 }
 
+#[repr(i64)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub enum GameMode {
+    #[default]
+    Survival = 0,
+    Creative = 1,
+    Adventure = 2,
+    Spectator = 3,
+}
+
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub struct BlockPos {
     pub x: i32,
@@ -271,6 +281,61 @@ impl Player {
         );
     }
 
+    pub fn set_game_mode(&self, mode: GameMode) {
+        self.set_state(
+            dragonfly_plugin_sys::DF_PLAYER_STATE_GAME_MODE,
+            0.0,
+            mode as i64,
+        );
+    }
+
+    pub fn game_mode(&self) -> GameMode {
+        match self
+            .state(dragonfly_plugin_sys::DF_PLAYER_STATE_GAME_MODE)
+            .integer
+        {
+            1 => GameMode::Creative,
+            2 => GameMode::Adventure,
+            3 => GameMode::Spectator,
+            _ => GameMode::Survival,
+        }
+    }
+
+    pub fn heal(&self, amount: f64) {
+        self.set_state(dragonfly_plugin_sys::DF_PLAYER_STATE_HEAL, amount, 0);
+    }
+
+    pub fn hurt(&self, amount: f64) {
+        self.set_state(dragonfly_plugin_sys::DF_PLAYER_STATE_HURT, amount, 0);
+    }
+
+    pub fn health(&self) -> f64 {
+        self.state(dragonfly_plugin_sys::DF_PLAYER_STATE_HEALTH)
+            .number
+    }
+
+    pub fn max_health(&self) -> f64 {
+        self.state(dragonfly_plugin_sys::DF_PLAYER_STATE_MAX_HEALTH)
+            .number
+    }
+
+    pub fn set_max_health(&self, health: f64) {
+        self.set_state(dragonfly_plugin_sys::DF_PLAYER_STATE_MAX_HEALTH, health, 0);
+    }
+
+    pub fn food(&self) -> i32 {
+        self.state(dragonfly_plugin_sys::DF_PLAYER_STATE_FOOD)
+            .integer as i32
+    }
+
+    pub fn set_food(&self, food: i32) {
+        self.set_state(
+            dragonfly_plugin_sys::DF_PLAYER_STATE_FOOD,
+            0.0,
+            i64::from(food),
+        );
+    }
+
     fn send_text(&self, kind: u32, message: &str) {
         let host = HOST_API.load(Ordering::Acquire);
         let Some(host) = (unsafe { host.as_ref() }) else {
@@ -303,6 +368,31 @@ impl Player {
             z: vector.z,
         };
         let _ = unsafe { transform(host.context, self.raw_id(), kind, raw, yaw, pitch) };
+    }
+
+    fn set_state(&self, kind: u32, number: f64, integer: i64) {
+        let host = HOST_API.load(Ordering::Acquire);
+        let Some(host) = (unsafe { host.as_ref() }) else {
+            return;
+        };
+        let Some(set) = host.player_state_set else {
+            return;
+        };
+        let value = dragonfly_plugin_sys::DfPlayerStateValue { number, integer };
+        let _ = unsafe { set(host.context, self.raw_id(), kind, value) };
+    }
+
+    fn state(&self, kind: u32) -> dragonfly_plugin_sys::DfPlayerStateValue {
+        let host = HOST_API.load(Ordering::Acquire);
+        let Some(host) = (unsafe { host.as_ref() }) else {
+            return dragonfly_plugin_sys::DfPlayerStateValue::default();
+        };
+        let Some(get) = host.player_state_get else {
+            return dragonfly_plugin_sys::DfPlayerStateValue::default();
+        };
+        let mut value = dragonfly_plugin_sys::DfPlayerStateValue::default();
+        let _ = unsafe { get(host.context, self.raw_id(), kind, &mut value) };
+        value
     }
 
     fn raw_id(&self) -> dragonfly_plugin_sys::DfPlayerId {

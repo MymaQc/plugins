@@ -29,11 +29,20 @@ typedef struct { DfStringView identifier; int32_t metadata; int32_t count; int32
 #define DF_PLAYER_TRANSFORM_TELEPORT 0u
 #define DF_PLAYER_TRANSFORM_MOVE 1u
 #define DF_PLAYER_TRANSFORM_VELOCITY 2u
+#define DF_PLAYER_STATE_GAME_MODE 0u
+#define DF_PLAYER_STATE_HEAL 1u
+#define DF_PLAYER_STATE_HURT 2u
+#define DF_PLAYER_STATE_FOOD 3u
+#define DF_PLAYER_STATE_MAX_HEALTH 4u
+#define DF_PLAYER_STATE_HEALTH 5u
 typedef struct { DfStringView text; DfStringView subtitle; DfStringView action_text; uint64_t fade_in_milliseconds; uint64_t duration_milliseconds; uint64_t fade_out_milliseconds; } DfTitleView;
+typedef struct { double number; int64_t integer; } DfPlayerStateValue;
 typedef DfStatus (*DfHostPlayerTextFn)(uint64_t context, DfPlayerId player, uint32_t kind, DfStringView message);
 typedef DfStatus (*DfHostPlayerTitleFn)(uint64_t context, DfPlayerId player, DfTitleView title);
 typedef DfStatus (*DfHostPlayerTransformFn)(uint64_t context, DfPlayerId player, uint32_t kind, DfVec3 vector, double yaw, double pitch);
 typedef DfStatus (*DfHostPlayerRotationFn)(uint64_t context, DfPlayerId player, DfRotation *rotation);
+typedef DfStatus (*DfHostPlayerStateSetFn)(uint64_t context, DfPlayerId player, uint32_t kind, DfPlayerStateValue value);
+typedef DfStatus (*DfHostPlayerStateGetFn)(uint64_t context, DfPlayerId player, uint32_t kind, DfPlayerStateValue *value);
 typedef struct {
     uint32_t abi_version;
     uint32_t struct_size;
@@ -42,6 +51,8 @@ typedef struct {
     DfHostPlayerTitleFn player_title;
     DfHostPlayerTransformFn player_transform;
     DfHostPlayerRotationFn player_rotation;
+    DfHostPlayerStateSetFn player_state_set;
+    DfHostPlayerStateGetFn player_state_get;
 } DfHostApiV1;
 #define DF_COMMAND_PARAMETER_SUBCOMMAND 1u
 #define DF_COMMAND_PARAMETER_ENUM 2u

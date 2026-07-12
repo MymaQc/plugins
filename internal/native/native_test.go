@@ -54,6 +54,10 @@ type recordingHost struct {
 	vectors    []Vec3
 	yaws       []float64
 	pitches    []float64
+	states     []PlayerStateKind
+	values     []PlayerStateValue
+	state      PlayerStateValue
+	reads      []PlayerStateKind
 }
 
 func (h *recordingHost) SendPlayerText(player PlayerID, kind PlayerTextKind, message string) bool {
@@ -78,6 +82,17 @@ func (h *recordingHost) TransformPlayer(_ PlayerID, kind PlayerTransformKind, ve
 
 func (h *recordingHost) PlayerRotation(PlayerID) (Rotation, bool) {
 	return h.rotation, true
+}
+
+func (h *recordingHost) SetPlayerState(_ PlayerID, kind PlayerStateKind, value PlayerStateValue) bool {
+	h.states = append(h.states, kind)
+	h.values = append(h.values, value)
+	return true
+}
+
+func (h *recordingHost) PlayerState(_ PlayerID, kind PlayerStateKind) (PlayerStateValue, bool) {
+	h.reads = append(h.reads, kind)
+	return h.state, true
 }
 
 func TestPluginCanMessagePlayer(t *testing.T) {
@@ -167,6 +182,44 @@ func TestPlayerTransformHostCalls(t *testing.T) {
 	}
 	if host.vectors[2] != (Vec3{X: 10, Y: 64, Z: 20}) {
 		t.Fatalf("teleport = %+v", host.vectors[2])
+	}
+}
+
+func TestPlayerStateHostCalls(t *testing.T) {
+	library, plugins := nativeArtifacts(t)
+	host := &recordingHost{state: PlayerStateValue{Number: 12, Integer: 15}}
+	runtime, err := OpenWithHost(library, plugins, host)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(runtime.Close)
+	if err := runtime.Enable(); err != nil {
+		t.Fatal(err)
+	}
+	commands, err := runtime.Commands()
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := PlayerID{Generation: 8}
+	for _, arguments := range []string{"gamemode creative", "heal 4", "hurt 3", "food 15", "max-health 40"} {
+		output, err := runtime.HandleCommand(commands[0].Index, CommandInput{
+			Source: "TestPlayer", SourceKind: CommandSourcePlayer, SourcePlayer: &id,
+			OnlinePlayers: []CommandPlayer{{Player: id, Name: "TestPlayer"}}, Arguments: arguments,
+		})
+		if err != nil || output.Failed {
+			t.Fatalf("%s: output=%+v error=%v", arguments, output, err)
+		}
+	}
+	want := []PlayerStateKind{PlayerStateGameMode, PlayerStateHeal, PlayerStateHurt, PlayerStateFood, PlayerStateMaxHealth}
+	if !slices.Equal(host.states, want) {
+		t.Fatalf("states = %v, want %v", host.states, want)
+	}
+	if host.values[0].Integer != 1 || host.values[1].Number != 4 || host.values[3].Integer != 15 || host.values[4].Number != 40 {
+		t.Fatalf("values = %+v", host.values)
+	}
+	wantReads := []PlayerStateKind{PlayerStateHealth, PlayerStateHealth, PlayerStateFood, PlayerStateMaxHealth}
+	if !slices.Equal(host.reads, wantReads) {
+		t.Fatalf("reads = %v, want %v", host.reads, wantReads)
 	}
 }
 

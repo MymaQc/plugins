@@ -8,6 +8,7 @@ import (
 
 type PlayerTextKind uint32
 type PlayerTransformKind uint32
+type PlayerStateKind uint32
 
 const (
 	PlayerTextMessage PlayerTextKind = iota
@@ -15,6 +16,20 @@ const (
 	PlayerTextPopup
 	PlayerTextJukeboxPopup
 )
+
+const (
+	PlayerStateGameMode PlayerStateKind = iota
+	PlayerStateHeal
+	PlayerStateHurt
+	PlayerStateFood
+	PlayerStateMaxHealth
+	PlayerStateHealth
+)
+
+type PlayerStateValue struct {
+	Number  float64
+	Integer int64
+}
 
 const (
 	PlayerTransformTeleport PlayerTransformKind = iota
@@ -37,6 +52,8 @@ type Host interface {
 	SendPlayerTitle(PlayerID, PlayerTitle) bool
 	TransformPlayer(PlayerID, PlayerTransformKind, Vec3, float64, float64) bool
 	PlayerRotation(PlayerID) (Rotation, bool)
+	SetPlayerState(PlayerID, PlayerStateKind, PlayerStateValue) bool
+	PlayerState(PlayerID, PlayerStateKind) (PlayerStateValue, bool)
 }
 
 type noopHost struct{}
@@ -46,7 +63,11 @@ func (noopHost) SendPlayerTitle(PlayerID, PlayerTitle) bool           { return f
 func (noopHost) TransformPlayer(PlayerID, PlayerTransformKind, Vec3, float64, float64) bool {
 	return false
 }
-func (noopHost) PlayerRotation(PlayerID) (Rotation, bool) { return Rotation{}, false }
+func (noopHost) PlayerRotation(PlayerID) (Rotation, bool)                        { return Rotation{}, false }
+func (noopHost) SetPlayerState(PlayerID, PlayerStateKind, PlayerStateValue) bool { return false }
+func (noopHost) PlayerState(PlayerID, PlayerStateKind) (PlayerStateValue, bool) {
+	return PlayerStateValue{}, false
+}
 
 var (
 	hostSequence atomic.Uint64
