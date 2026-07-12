@@ -303,6 +303,30 @@ typedef struct {
     int32_t new_page;
 } DfPlayerLecternPageTurnState;
 
+#define DF_EVENT_PLAYER_SIGN_EDIT 23u
+
+typedef struct {
+    DfPlayerId player;
+    DfBlockPos position;
+    uint8_t front_side;
+    DfStringView old_text;
+    DfStringView new_text;
+} DfPlayerSignEditInput;
+
+typedef struct {
+    uint8_t cancelled;
+} DfPlayerSignEditState;
+
+#define DF_EVENT_PLAYER_ITEM_USE 24u
+
+typedef struct {
+    DfPlayerId player;
+} DfPlayerItemUseInput;
+
+typedef struct {
+    uint8_t cancelled;
+} DfPlayerItemUseState;
+
 typedef DfStatus (*DfHandleEventFn)(void *instance, DfEventId event_id, const void *input, void *state);
 typedef void *(*DfPluginCreateFn)(void);
 typedef DfStatus (*DfPluginLifecycleFn)(void *instance);

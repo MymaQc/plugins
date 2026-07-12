@@ -103,6 +103,12 @@ func (r *runtimeStub) HandlePlayerBlockPick(_ native.PlayerBlockPickInput, cance
 func (r *runtimeStub) HandlePlayerLecternPageTurn(input native.PlayerLecternPageTurnInput, cancelled bool) (native.PlayerLecternPageTurnOutput, error) {
 	return native.PlayerLecternPageTurnOutput{Cancelled: cancelled, NewPage: input.NewPage}, nil
 }
+func (r *runtimeStub) HandlePlayerSignEdit(_ native.PlayerSignEditInput, cancelled bool) (bool, error) {
+	return cancelled, nil
+}
+func (r *runtimeStub) HandlePlayerItemUse(_ native.PlayerID, cancelled bool) (bool, error) {
+	return cancelled, nil
+}
 
 func (r *runtimeStub) Subscriptions() uint64 { return r.subscriptions }
 func (r *runtimeStub) HandlePlayerMove(input native.PlayerMoveInput, _ bool) (bool, error) {

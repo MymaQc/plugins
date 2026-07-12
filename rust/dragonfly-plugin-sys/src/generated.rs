@@ -391,6 +391,36 @@ pub struct DfPlayerLecternPageTurnState {
     pub new_page: i32,
 }
 
+pub const DF_EVENT_PLAYER_SIGN_EDIT: DfEventId = 23;
+pub const DF_SUBSCRIPTION_PLAYER_SIGN_EDIT: u64 = 1u64 << 22;
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfPlayerSignEditInput {
+    pub player: DfPlayerId,
+    pub position: DfBlockPos,
+    pub front_side: u8,
+    pub old_text: DfStringView,
+    pub new_text: DfStringView,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfPlayerSignEditState {
+    pub cancelled: u8,
+}
+
+pub const DF_EVENT_PLAYER_ITEM_USE: DfEventId = 24;
+pub const DF_SUBSCRIPTION_PLAYER_ITEM_USE: u64 = 1u64 << 23;
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfPlayerItemUseInput {
+    pub player: DfPlayerId,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfPlayerItemUseState {
+    pub cancelled: u8,
+}
+
 pub type DfPluginCreateFn = unsafe extern "C" fn() -> *mut c_void;
 pub type DfPluginLifecycleFn = unsafe extern "C" fn(instance: *mut c_void) -> DfStatus;
 pub type DfPluginCommandsFn = unsafe extern "C" fn(instance: *mut c_void, count: *mut u64) -> *const DfCommandDescriptor;

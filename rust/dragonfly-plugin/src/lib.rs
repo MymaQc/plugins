@@ -1306,6 +1306,70 @@ pub struct PlayerLecternPageTurnEvent<'a> {
     state: &'a mut dragonfly_plugin_sys::DfPlayerLecternPageTurnState,
 }
 
+pub struct PlayerSignEditEvent<'a> {
+    input: &'a dragonfly_plugin_sys::DfPlayerSignEditInput,
+    state: &'a mut dragonfly_plugin_sys::DfPlayerSignEditState,
+}
+
+impl<'a> PlayerSignEditEvent<'a> {
+    /// # Safety
+    /// Both references must belong to the same active sign-edit callback.
+    #[doc(hidden)]
+    pub unsafe fn from_raw(
+        input: &'a dragonfly_plugin_sys::DfPlayerSignEditInput,
+        state: &'a mut dragonfly_plugin_sys::DfPlayerSignEditState,
+    ) -> Self {
+        Self { input, state }
+    }
+    pub fn player(&self) -> Player {
+        Player::from_id(self.input.player)
+    }
+    pub fn position(&self) -> BlockPos {
+        self.input.position.into()
+    }
+    pub fn front_side(&self) -> bool {
+        self.input.front_side != 0
+    }
+    pub fn old_text(&self) -> &str {
+        unsafe { string_view(self.input.old_text) }
+    }
+    pub fn new_text(&self) -> &str {
+        unsafe { string_view(self.input.new_text) }
+    }
+    pub fn cancelled(&self) -> bool {
+        self.state.cancelled != 0
+    }
+    pub fn cancel(&mut self) {
+        self.state.cancelled = 1;
+    }
+}
+
+pub struct PlayerItemUseEvent<'a> {
+    input: &'a dragonfly_plugin_sys::DfPlayerItemUseInput,
+    state: &'a mut dragonfly_plugin_sys::DfPlayerItemUseState,
+}
+
+impl<'a> PlayerItemUseEvent<'a> {
+    /// # Safety
+    /// Both references must belong to the same active item-use callback.
+    #[doc(hidden)]
+    pub unsafe fn from_raw(
+        input: &'a dragonfly_plugin_sys::DfPlayerItemUseInput,
+        state: &'a mut dragonfly_plugin_sys::DfPlayerItemUseState,
+    ) -> Self {
+        Self { input, state }
+    }
+    pub fn player(&self) -> Player {
+        Player::from_id(self.input.player)
+    }
+    pub fn cancelled(&self) -> bool {
+        self.state.cancelled != 0
+    }
+    pub fn cancel(&mut self) {
+        self.state.cancelled = 1;
+    }
+}
+
 impl<'a> PlayerLecternPageTurnEvent<'a> {
     /// # Safety
     /// Both references must belong to the same active lectern callback.
@@ -1364,6 +1428,8 @@ pub trait Plugin: Default + Send + Sync + 'static {
     fn on_sleep(&self, _event: &mut PlayerSleepEvent<'_>) {}
     fn on_block_pick(&self, _event: &mut PlayerBlockPickEvent<'_>) {}
     fn on_lectern_page_turn(&self, _event: &mut PlayerLecternPageTurnEvent<'_>) {}
+    fn on_sign_edit(&self, _event: &mut PlayerSignEditEvent<'_>) {}
+    fn on_item_use(&self, _event: &mut PlayerItemUseEvent<'_>) {}
     fn commands(&self) -> &'static [Command] {
         &[]
     }

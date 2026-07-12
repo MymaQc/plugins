@@ -1,10 +1,10 @@
 use dragonfly::{
     PlayerBlockBreakEvent, PlayerBlockPickEvent, PlayerBlockPlaceEvent, PlayerDeathEvent,
     PlayerExperienceGainEvent, PlayerFireExtinguishEvent, PlayerFoodLossEvent, PlayerHealEvent,
-    PlayerHeldSlotChangeEvent, PlayerHurtEvent, PlayerJoinEvent, PlayerJumpEvent,
-    PlayerLecternPageTurnEvent, PlayerPunchAirEvent, PlayerQuitEvent, PlayerSleepEvent,
-    PlayerStartBreakEvent, PlayerTeleportEvent, PlayerToggleSneakEvent, PlayerToggleSprintEvent,
-    Plugin, plugin,
+    PlayerHeldSlotChangeEvent, PlayerHurtEvent, PlayerItemUseEvent, PlayerJoinEvent,
+    PlayerJumpEvent, PlayerLecternPageTurnEvent, PlayerPunchAirEvent, PlayerQuitEvent,
+    PlayerSignEditEvent, PlayerSleepEvent, PlayerStartBreakEvent, PlayerTeleportEvent,
+    PlayerToggleSneakEvent, PlayerToggleSprintEvent, Plugin, plugin,
 };
 
 #[derive(Default)]
@@ -90,5 +90,15 @@ impl Plugin for LifecycleLogger {
     }
     fn on_lectern_page_turn(&self, event: &mut PlayerLecternPageTurnEvent<'_>) {
         eprintln!("lectern page {} -> {}", event.old_page(), event.new_page());
+    }
+    fn on_sign_edit(&self, event: &mut PlayerSignEditEvent<'_>) {
+        eprintln!(
+            "sign changed from {:?} to {:?}",
+            event.old_text(),
+            event.new_text()
+        );
+    }
+    fn on_item_use(&self, _event: &mut PlayerItemUseEvent<'_>) {
+        eprintln!("used an item");
     }
 }

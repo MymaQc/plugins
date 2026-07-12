@@ -38,6 +38,8 @@ type playerRuntime interface {
 	HandlePlayerSleep(native.PlayerID, bool, bool) (native.PlayerSleepOutput, error)
 	HandlePlayerBlockPick(native.PlayerBlockPickInput, bool) (bool, error)
 	HandlePlayerLecternPageTurn(native.PlayerLecternPageTurnInput, bool) (native.PlayerLecternPageTurnOutput, error)
+	HandlePlayerSignEdit(native.PlayerSignEditInput, bool) (bool, error)
+	HandlePlayerItemUse(native.PlayerID, bool) (bool, error)
 }
 
 func (h *PlayerHandler) HandleJump(p *player.Player) {
@@ -296,6 +298,36 @@ func (h *PlayerHandler) HandleLecternPageTurn(ctx *player.Context, position cube
 	}
 	*newPage = output.NewPage
 	if output.Cancelled {
+		ctx.Cancel()
+	}
+}
+
+func (h *PlayerHandler) HandleSignEdit(ctx *player.Context, position cube.Pos, frontSide bool, oldText, newText string) {
+	if h.runtime.Subscriptions()&native.PlayerSignEditSubscription == 0 {
+		return
+	}
+	p := ctx.Val()
+	cancelled, err := h.runtime.HandlePlayerSignEdit(native.PlayerSignEditInput{Player: h.playerID(p), Position: nativeBlockPos(position), FrontSide: frontSide, OldText: oldText, NewText: newText}, ctx.Cancelled())
+	if err != nil {
+		h.log.Error("native plugin sign-edit handler failed", "player", p.Name(), "error", err)
+		return
+	}
+	if cancelled {
+		ctx.Cancel()
+	}
+}
+
+func (h *PlayerHandler) HandleItemUse(ctx *player.Context) {
+	if h.runtime.Subscriptions()&native.PlayerItemUseSubscription == 0 {
+		return
+	}
+	p := ctx.Val()
+	cancelled, err := h.runtime.HandlePlayerItemUse(h.playerID(p), ctx.Cancelled())
+	if err != nil {
+		h.log.Error("native plugin item-use handler failed", "player", p.Name(), "error", err)
+		return
+	}
+	if cancelled {
 		ctx.Cancel()
 	}
 }

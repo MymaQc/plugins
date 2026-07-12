@@ -41,6 +41,8 @@ const (
 	PlayerSleepSubscription           uint64 = 524288
 	PlayerBlockPickSubscription       uint64 = 1048576
 	PlayerLecternPageTurnSubscription uint64 = 2097152
+	PlayerSignEditSubscription        uint64 = 4194304
+	PlayerItemUseSubscription         uint64 = 8388608
 	MaxChatReplacementBytes                  = 4096
 	MaxCommandOutputBytes                    = 4096
 	MaxCommandEnumBytes                      = 4096
@@ -188,6 +190,13 @@ type PlayerLecternPageTurnInput struct {
 type PlayerLecternPageTurnOutput struct {
 	Cancelled bool
 	NewPage   int
+}
+type PlayerSignEditInput struct {
+	Player    PlayerID
+	Position  BlockPos
+	FrontSide bool
+	OldText   string
+	NewText   string
 }
 
 type Command struct {
@@ -912,6 +921,44 @@ func (r *Runtime) HandlePlayerLecternPageTurn(input PlayerLecternPageTurnInput, 
 		return output, fmt.Errorf("native lectern-page-turn handler failed with status %d", int32(status))
 	}
 	return PlayerLecternPageTurnOutput{Cancelled: state.cancelled != 0, NewPage: int(state.new_page)}, nil
+}
+
+func (r *Runtime) HandlePlayerSignEdit(input PlayerSignEditInput, cancelled bool) (bool, error) {
+	if r == nil || r.ptr == nil {
+		return cancelled, errors.New("native runtime is closed")
+	}
+	oldText, newText := unsafe.StringData(input.OldText), unsafe.StringData(input.NewText)
+	nativeInput := C.DfPlayerSignEditInput{
+		position:   nativeBlockPos(input.Position),
+		front_side: C.uint8_t(boolByte(input.FrontSide)),
+		old_text:   C.DfStringView{data: (*C.uint8_t)(unsafe.Pointer(oldText)), len: C.uint64_t(len(input.OldText))},
+		new_text:   C.DfStringView{data: (*C.uint8_t)(unsafe.Pointer(newText)), len: C.uint64_t(len(input.NewText))},
+	}
+	fillPlayerID(&nativeInput.player, input.Player)
+	var state C.DfPlayerSignEditState
+	if cancelled {
+		state.cancelled = 1
+	}
+	if status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_SIGN_EDIT, unsafe.Pointer(&nativeInput), unsafe.Pointer(&state)); status != C.DF_STATUS_OK {
+		return state.cancelled != 0, fmt.Errorf("native sign-edit handler failed with status %d", int32(status))
+	}
+	return state.cancelled != 0, nil
+}
+
+func (r *Runtime) HandlePlayerItemUse(player PlayerID, cancelled bool) (bool, error) {
+	if r == nil || r.ptr == nil {
+		return cancelled, errors.New("native runtime is closed")
+	}
+	var input C.DfPlayerItemUseInput
+	fillPlayerID(&input.player, player)
+	var state C.DfPlayerItemUseState
+	if cancelled {
+		state.cancelled = 1
+	}
+	if status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_ITEM_USE, unsafe.Pointer(&input), unsafe.Pointer(&state)); status != C.DF_STATUS_OK {
+		return state.cancelled != 0, fmt.Errorf("native item-use handler failed with status %d", int32(status))
+	}
+	return state.cancelled != 0, nil
 }
 
 func nativeBlockPos(position BlockPos) C.DfBlockPos {

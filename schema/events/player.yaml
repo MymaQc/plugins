@@ -166,3 +166,19 @@ events:
     state:
       - { name: cancelled, type: bool }
       - { name: new_page, type: i32 }
+  - name: sign_edit
+    id: 23
+    input:
+      - { name: player, type: player_id }
+      - { name: position, type: block_pos }
+      - { name: front_side, type: bool }
+      - { name: old_text, type: string_view }
+      - { name: new_text, type: string_view }
+    state:
+      - { name: cancelled, type: bool }
+  - name: item_use
+    id: 24
+    input:
+      - { name: player, type: player_id }
+    state:
+      - { name: cancelled, type: bool }

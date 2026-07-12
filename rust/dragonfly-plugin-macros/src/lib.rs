@@ -848,6 +848,12 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
     let handles_lectern_page_turn = implementation.items.iter().any(
         |item| matches!(item, syn::ImplItem::Fn(function) if function.sig.ident == "on_lectern_page_turn"),
     );
+    let handles_sign_edit = implementation.items.iter().any(
+        |item| matches!(item, syn::ImplItem::Fn(function) if function.sig.ident == "on_sign_edit"),
+    );
+    let handles_item_use = implementation.items.iter().any(
+        |item| matches!(item, syn::ImplItem::Fn(function) if function.sig.ident == "on_item_use"),
+    );
     let subscriptions = u64::from(handles_move)
         | (u64::from(handles_chat) << 1)
         | (u64::from(handles_join) << 2)
@@ -869,7 +875,9 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
         | (u64::from(handles_held_slot_change) << 18)
         | (u64::from(handles_sleep) << 19)
         | (u64::from(handles_block_pick) << 20)
-        | (u64::from(handles_lectern_page_turn) << 21);
+        | (u64::from(handles_lectern_page_turn) << 21)
+        | (u64::from(handles_sign_edit) << 22)
+        | (u64::from(handles_item_use) << 23);
 
     quote! {
         #[doc(hidden)]
@@ -1197,6 +1205,22 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
                         let state = unsafe { &mut *state.cast::<sys::DfPlayerLecternPageTurnState>() };
                         let mut event = unsafe { ::dragonfly_plugin::PlayerLecternPageTurnEvent::from_raw(input, state) };
                         <PluginType as ::dragonfly_plugin::Plugin>::on_lectern_page_turn(plugin, &mut event);
+                        sys::DF_STATUS_OK
+                    }
+                    sys::DF_EVENT_PLAYER_SIGN_EDIT => {
+                        let plugin = unsafe { &*instance.cast::<PluginType>() };
+                        let input = unsafe { &*input.cast::<sys::DfPlayerSignEditInput>() };
+                        let state = unsafe { &mut *state.cast::<sys::DfPlayerSignEditState>() };
+                        let mut event = unsafe { ::dragonfly_plugin::PlayerSignEditEvent::from_raw(input, state) };
+                        <PluginType as ::dragonfly_plugin::Plugin>::on_sign_edit(plugin, &mut event);
+                        sys::DF_STATUS_OK
+                    }
+                    sys::DF_EVENT_PLAYER_ITEM_USE => {
+                        let plugin = unsafe { &*instance.cast::<PluginType>() };
+                        let input = unsafe { &*input.cast::<sys::DfPlayerItemUseInput>() };
+                        let state = unsafe { &mut *state.cast::<sys::DfPlayerItemUseState>() };
+                        let mut event = unsafe { ::dragonfly_plugin::PlayerItemUseEvent::from_raw(input, state) };
+                        <PluginType as ::dragonfly_plugin::Plugin>::on_item_use(plugin, &mut event);
                         sys::DF_STATUS_OK
                     }
                     _ => sys::DF_STATUS_ERROR,

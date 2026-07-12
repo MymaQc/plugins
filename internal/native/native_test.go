@@ -351,6 +351,27 @@ func TestPlayerBlockPickAndLecternPageTurn(t *testing.T) {
 	}
 }
 
+func TestPlayerSignEditAndItemUse(t *testing.T) {
+	runtime := openTestRuntime(t)
+	if runtime.Subscriptions()&PlayerSignEditSubscription == 0 || runtime.Subscriptions()&PlayerItemUseSubscription == 0 {
+		t.Fatal("sign-edit or item-use subscription missing")
+	}
+	cancelled, err := runtime.HandlePlayerSignEdit(PlayerSignEditInput{OldText: "old", NewText: "new"}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cancelled {
+		t.Fatal("sign edit cancelled")
+	}
+	cancelled, err = runtime.HandlePlayerItemUse(PlayerID{}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cancelled {
+		t.Fatal("item use cancelled")
+	}
+}
+
 func TestCancellationIsMonotonic(t *testing.T) {
 	runtime := openTestRuntime(t)
 	cancelled, err := runtime.HandlePlayerMove(PlayerMoveInput{NewPosition: Vec3{Y: 64}}, true)
