@@ -6,3 +6,4 @@
 /examples/plugins/*.dylib
 /examples/plugins/*.dll
 .data
+.worktrees/
