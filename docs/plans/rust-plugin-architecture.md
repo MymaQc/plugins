@@ -15,6 +15,31 @@ Primary goals:
 - Keep Dragonfly transaction and object lifetime rules intact.
 - Keep the binary contract independent from Go and Rust ABI changes.
 
+## Current parity priority
+
+Parity work follows this order until explicitly changed. Finish public Dragonfly
+surface in one group before starting lower groups. An upstream API gap is recorded
+as blocked and does not stall the next implementable item.
+
+1. Player actions: text/titles, movement/rotation, game mode, health/food/effects,
+   experience, presentation flags, sound, disconnect, entity visibility, skin,
+   scoreboards, and asynchronous forms.
+2. Typed items and item stacks: identity, count/metadata, name/lore, NBT and
+   `WithValue`, enchantments, and potions.
+3. Inventory: main/armour/offhand handles, slot get/set/add/clear, held slot, and
+   held items.
+4. Typed forms and scoreboards, including form response round-trips.
+5. World actions: typed block get/set, sounds/particles, time/spawn, entity and
+   viewer access, and namespaced custom-world lifecycle.
+6. Entities: typed spawning and stable handles, transforms/name tags, despawn,
+   projectiles, and projectile-hit events.
+7. Remaining player/entity events: attack entity, use item on entity, change
+   world, respawn, skin change, death, and hurt-by-entity attribution.
+
+Within this sequence, SDK APIs mirror Dragonfly types instead of exposing raw
+identifiers where Dragonfly already has a concrete type. Host transport failures
+remain private; public return values represent only domain results.
+
 ## Decision
 
 Build an opinionated Dragonfly server runtime around one schema-driven C ABI:
