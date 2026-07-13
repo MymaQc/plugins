@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/bedrock-gophers/plugins/internal/native"
 	"github.com/df-mc/dragonfly/server/world"
@@ -176,6 +177,9 @@ func normalizeProviderPath(root, providerPath string) (string, string, error) {
 	}
 	if len(providerPath) > maxWorldProviderPathBytes {
 		return "", "", fmt.Errorf("world provider path exceeds %d bytes", maxWorldProviderPathBytes)
+	}
+	if !utf8.ValidString(providerPath) {
+		return "", "", errors.New("world provider path is not valid UTF-8")
 	}
 	if strings.IndexByte(providerPath, 0) >= 0 || strings.Contains(providerPath, `\`) {
 		return "", "", errors.New("world provider path contains an invalid character")

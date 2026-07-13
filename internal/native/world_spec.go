@@ -12,6 +12,7 @@ import (
 )
 
 const maxWorldProviderPathBytes = 4096
+const worldOpenSpecV1Size = 80
 
 type worldOpenSpecWire struct {
 	structSize                   uint32
@@ -28,7 +29,7 @@ type worldOpenSpecWire struct {
 }
 
 func copyWorldOpenSpec(view *C.DfWorldOpenSpecV1) (WorldOpenSpec, bool) {
-	if view == nil {
+	if view == nil || uint32(view.struct_size) < worldOpenSpecV1Size {
 		return WorldOpenSpec{}, false
 	}
 	providerPath, ok := copyWorldBytes(view.provider_path, maxWorldProviderPathBytes)
@@ -49,8 +50,7 @@ func copyWorldOpenSpec(view *C.DfWorldOpenSpecV1) (WorldOpenSpec, bool) {
 }
 
 func validateWorldOpenSpecWire(wire worldOpenSpecWire) (WorldOpenSpec, bool) {
-	const knownStructSize = 80
-	if wire.structSize < knownStructSize || len(wire.providerPath) == 0 || len(wire.providerPath) > maxWorldProviderPathBytes || !utf8.Valid(wire.providerPath) ||
+	if wire.structSize < worldOpenSpecV1Size || len(wire.providerPath) == 0 || len(wire.providerPath) > maxWorldProviderPathBytes || !utf8.Valid(wire.providerPath) ||
 		wire.dimension > uint32(WorldDimensionEnd) || wire.openMode > uint32(WorldCreateNew) ||
 		wire.savePolicy > uint32(WorldSaveManual) || wire.randomTickPolicy > uint32(WorldRandomTicksPerSubchunk) ||
 		wire.timePolicy > uint32(WorldTimeFixed) || wire.weatherPolicy > uint32(WorldWeatherClear) ||

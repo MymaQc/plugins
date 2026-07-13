@@ -152,6 +152,9 @@ func TestWorldSpecPathValidation(t *testing.T) {
 			}
 		})
 	}
+	if _, err := normalizeWorldSpec(root, validWorldSpec(string([]byte{0xff, 'x'}))); err == nil {
+		t.Fatal("invalid UTF-8 path accepted")
+	}
 }
 
 func TestWorldSpecPathRejectsExistingSymlinkComponents(t *testing.T) {
