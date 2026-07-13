@@ -1,5 +1,8 @@
 //! Safe Rust SDK for native Dragonfly plugins.
 
+#[cfg(test)]
+mod command_descriptor_test;
+
 extern crate self as dragonfly_plugin;
 
 use core::sync::atomic::{AtomicPtr, Ordering};
@@ -1752,12 +1755,30 @@ impl CommandValue {
             len: value.len() as u64,
         })
     }
+
+    pub fn as_str(&self) -> &str {
+        // SAFETY: CommandValue is constructed from a static UTF-8 string.
+        unsafe { string_view(self.0) }
+    }
 }
 
 #[repr(transparent)]
 pub struct CommandParameter(dragonfly_plugin_sys::DfCommandParameter);
 
 unsafe impl Sync for CommandParameter {}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CommandParameterKind {
+    Subcommand,
+    Enum,
+    String,
+    Integer,
+    Float,
+    Boolean,
+    DynamicEnum,
+    Player,
+    RawText,
+}
 
 impl CommandParameter {
     const fn typed(name: &'static str, kind: u32) -> Self {
@@ -1825,6 +1846,48 @@ impl CommandParameter {
         self.0.optional = 1;
         self
     }
+
+    pub fn name(&self) -> &str {
+        // SAFETY: CommandParameter is constructed with a static UTF-8 name.
+        unsafe { string_view(self.0.name) }
+    }
+
+    pub fn kind(&self) -> CommandParameterKind {
+        match self.0.kind {
+            dragonfly_plugin_sys::DF_COMMAND_PARAMETER_SUBCOMMAND => {
+                CommandParameterKind::Subcommand
+            }
+            dragonfly_plugin_sys::DF_COMMAND_PARAMETER_ENUM => CommandParameterKind::Enum,
+            dragonfly_plugin_sys::DF_COMMAND_PARAMETER_STRING => CommandParameterKind::String,
+            dragonfly_plugin_sys::DF_COMMAND_PARAMETER_INTEGER => CommandParameterKind::Integer,
+            dragonfly_plugin_sys::DF_COMMAND_PARAMETER_FLOAT => CommandParameterKind::Float,
+            dragonfly_plugin_sys::DF_COMMAND_PARAMETER_BOOL => CommandParameterKind::Boolean,
+            dragonfly_plugin_sys::DF_COMMAND_PARAMETER_DYNAMIC_ENUM => {
+                CommandParameterKind::DynamicEnum
+            }
+            dragonfly_plugin_sys::DF_COMMAND_PARAMETER_PLAYER => CommandParameterKind::Player,
+            dragonfly_plugin_sys::DF_COMMAND_PARAMETER_RAW_TEXT => CommandParameterKind::RawText,
+            kind => unreachable!("unknown command parameter kind {kind}"),
+        }
+    }
+
+    pub fn is_optional(&self) -> bool {
+        self.0.optional != 0
+    }
+
+    pub fn values(&self) -> &[CommandValue] {
+        if self.0.value_count == 0 {
+            return &[];
+        }
+        // SAFETY: A non-empty value list is backed by a static CommandValue slice. The wrapper is
+        // repr(transparent), so it has the same layout as the stored ABI string views.
+        unsafe {
+            core::slice::from_raw_parts(
+                self.0.values.cast::<CommandValue>(),
+                self.0.value_count as usize,
+            )
+        }
+    }
 }
 
 #[repr(transparent)]
@@ -1838,6 +1901,20 @@ impl CommandOverload {
             parameters: parameters.as_ptr().cast(),
             parameter_count: parameters.len() as u64,
         })
+    }
+
+    pub fn parameters(&self) -> &[CommandParameter] {
+        if self.0.parameter_count == 0 {
+            return &[];
+        }
+        // SAFETY: A non-empty parameter list is backed by a static CommandParameter slice. The
+        // wrapper is repr(transparent), so it has the same layout as the stored ABI parameters.
+        unsafe {
+            core::slice::from_raw_parts(
+                self.0.parameters.cast::<CommandParameter>(),
+                self.0.parameter_count as usize,
+            )
+        }
     }
 }
 
@@ -1861,6 +1938,30 @@ impl Command {
         self.0.overloads = overloads.as_ptr().cast();
         self.0.overload_count = overloads.len() as u64;
         self
+    }
+
+    pub fn name(&self) -> &str {
+        // SAFETY: Command is constructed with a static UTF-8 name.
+        unsafe { string_view(self.0.name) }
+    }
+
+    pub fn description(&self) -> &str {
+        // SAFETY: Command is constructed with a static UTF-8 description.
+        unsafe { string_view(self.0.description) }
+    }
+
+    pub fn overloads(&self) -> &[CommandOverload] {
+        if self.0.overload_count == 0 {
+            return &[];
+        }
+        // SAFETY: A non-empty overload list is backed by a static CommandOverload slice. The
+        // wrapper is repr(transparent), so it has the same layout as the stored ABI overloads.
+        unsafe {
+            core::slice::from_raw_parts(
+                self.0.overloads.cast::<CommandOverload>(),
+                self.0.overload_count as usize,
+            )
+        }
     }
 }
 
