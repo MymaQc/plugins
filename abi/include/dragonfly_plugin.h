@@ -764,6 +764,18 @@ typedef struct {
     uint8_t critical;
 } DfPlayerAttackEntityState;
 
+#define DF_EVENT_PLAYER_ITEM_USE_ON_ENTITY 31u
+
+typedef struct {
+    DfInvocationId invocation;
+    DfPlayerId player;
+    DfEntityId target;
+} DfPlayerItemUseOnEntityInput;
+
+typedef struct {
+    uint8_t cancelled;
+} DfPlayerItemUseOnEntityState;
+
 typedef DfStatus (*DfHandleEventFn)(void *instance, DfEventId event_id, const void *input, void *state);
 typedef void *(*DfPluginCreateFn)(void);
 typedef DfStatus (*DfPluginLifecycleFn)(void *instance);

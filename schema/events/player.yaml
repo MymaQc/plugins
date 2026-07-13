@@ -231,3 +231,10 @@ events:
       - { name: knockback_force, type: f64 }
       - { name: knockback_height, type: f64 }
       - { name: critical, type: bool }
+  - name: item_use_on_entity
+    id: 31
+    input:
+      - { name: player, type: player_id }
+      - { name: target, type: entity_id }
+    state:
+      - { name: cancelled, type: bool }

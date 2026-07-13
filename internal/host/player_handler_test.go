@@ -39,6 +39,8 @@ type runtimeStub struct {
 	keepInventory       bool
 	attackInput         native.PlayerAttackEntityInput
 	attackOutput        native.PlayerAttackEntityOutput
+	itemUseEntityInput  native.PlayerItemUseOnEntityInput
+	itemUseEntityCancel bool
 }
 
 type testDamageSource struct{}
@@ -147,6 +149,10 @@ func (r *runtimeStub) HandlePlayerAttackEntity(_ native.InvocationID, input nati
 	}
 	return output, nil
 }
+func (r *runtimeStub) HandlePlayerItemUseOnEntity(_ native.InvocationID, input native.PlayerItemUseOnEntityInput, cancelled bool) (bool, error) {
+	r.itemUseEntityInput = input
+	return cancelled || r.itemUseEntityCancel, nil
+}
 
 func (r *runtimeStub) Subscriptions() uint64 { return r.subscriptions }
 func (r *runtimeStub) HandlePlayerMove(_ native.InvocationID, input native.PlayerMoveInput, _ bool) (bool, error) {
@@ -214,6 +220,27 @@ func TestPlayerHandlerAttackEntityUsesStableTargetID(t *testing.T) {
 		targetID, ok := players.EntityRegistry().ID(target)
 		if !ok || runtime.attackInput.Player != playerID || runtime.attackInput.Target != targetID {
 			t.Fatalf("attack input = %#v, player=%#v target=%#v", runtime.attackInput, playerID, targetID)
+		}
+	})
+}
+
+func TestPlayerHandlerItemUseOnEntityUsesStableTargetID(t *testing.T) {
+	runtime := &runtimeStub{
+		subscriptions:       native.PlayerItemUseOnEntitySubscription,
+		itemUseEntityCancel: true,
+	}
+	withPlayerTx(t, func(tx *world.Tx, p *player.Player) {
+		players := NewPlayers()
+		playerID := players.Register(p, 92)
+		handler := NewPlayerHandler(runtime, nil, players)
+		p.Handle(handler)
+		target := tx.AddEntity(entity.NewText("target", p.Position().Add(mgl64.Vec3{1, 0, 0})))
+		if p.UseItemOnEntity(target) {
+			t.Fatal("cancelled item use succeeded")
+		}
+		targetID, ok := players.EntityRegistry().ID(target)
+		if !ok || runtime.itemUseEntityInput.Player != playerID || runtime.itemUseEntityInput.Target != targetID {
+			t.Fatalf("item-use-on-entity input = %#v, player=%#v target=%#v", runtime.itemUseEntityInput, playerID, targetID)
 		}
 	})
 }

@@ -1484,6 +1484,29 @@ func TestPlayerAttackEntityRoundTrip(t *testing.T) {
 	}
 }
 
+func TestPlayerItemUseOnEntityRoundTrip(t *testing.T) {
+	runtime := openTestRuntime(t)
+	if runtime.Subscriptions()&PlayerItemUseOnEntitySubscription == 0 {
+		t.Fatal("item-use-on-entity subscription missing")
+	}
+	player := PlayerID{UUID: [16]byte{1, 2, 3}, Generation: 41}
+	target := EntityID{UUID: [16]byte{9, 8, 7}, Generation: 52}
+	cancelled, err := runtime.HandlePlayerItemUseOnEntity(73, PlayerItemUseOnEntityInput{Player: player, Target: target}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cancelled {
+		t.Fatal("item use was unexpectedly cancelled")
+	}
+	cancelled, err = runtime.HandlePlayerItemUseOnEntity(73, PlayerItemUseOnEntityInput{Player: player, Target: target}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cancelled {
+		t.Fatal("plugin cleared existing cancellation")
+	}
+}
+
 func TestCancellationIsMonotonic(t *testing.T) {
 	runtime := openTestRuntime(t)
 	cancelled, err := runtime.HandlePlayerMove(0, PlayerMoveInput{NewPosition: Vec3{Y: 64}}, true)

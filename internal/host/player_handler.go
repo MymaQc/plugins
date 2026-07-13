@@ -46,6 +46,7 @@ type playerRuntime interface {
 	HandlePlayerItemDamage(native.InvocationID, native.PlayerID, native.ItemStack, int, bool) (native.PlayerItemDamageOutput, error)
 	HandlePlayerItemDrop(native.InvocationID, native.PlayerID, native.ItemStack, bool) (bool, error)
 	HandlePlayerAttackEntity(native.InvocationID, native.PlayerAttackEntityInput, float64, float64, bool, bool) (native.PlayerAttackEntityOutput, error)
+	HandlePlayerItemUseOnEntity(native.InvocationID, native.PlayerItemUseOnEntityInput, bool) (bool, error)
 }
 
 func (h *PlayerHandler) HandleJump(p *player.Player) {
@@ -184,6 +185,29 @@ func (h *PlayerHandler) HandleAttackEntity(ctx *player.Context, target world.Ent
 	}
 	*force, *height, *critical = output.KnockbackForce, output.KnockbackHeight, output.Critical
 	if output.Cancelled {
+		ctx.Cancel()
+	}
+}
+
+func (h *PlayerHandler) HandleItemUseOnEntity(ctx *player.Context, target world.Entity) {
+	if h.runtime.Subscriptions()&native.PlayerItemUseOnEntitySubscription == 0 {
+		return
+	}
+	p := ctx.Player()
+	targetID := h.players.EntityRegistry().Register(target)
+	if targetID.Generation == 0 {
+		return
+	}
+	invocation, leave := h.players.BeginInvocation(p.Tx())
+	defer leave()
+	cancelled, err := h.runtime.HandlePlayerItemUseOnEntity(invocation, native.PlayerItemUseOnEntityInput{
+		Player: h.playerID(p), Target: targetID,
+	}, ctx.Cancelled())
+	if err != nil {
+		h.log.Error("native plugin item-use-on-entity handler failed", "player", p.Name(), "error", err)
+		return
+	}
+	if cancelled {
 		ctx.Cancel()
 	}
 }

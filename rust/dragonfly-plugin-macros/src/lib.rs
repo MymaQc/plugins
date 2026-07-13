@@ -872,6 +872,9 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
     let handles_attack_entity = implementation.items.iter().any(
         |item| matches!(item, syn::ImplItem::Fn(function) if function.sig.ident == "on_attack_entity"),
     );
+    let handles_item_use_on_entity = implementation.items.iter().any(
+        |item| matches!(item, syn::ImplItem::Fn(function) if function.sig.ident == "on_item_use_on_entity"),
+    );
     let subscriptions = u64::from(handles_move)
         | (u64::from(handles_chat) << 1)
         | (u64::from(handles_join) << 2)
@@ -901,7 +904,8 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
         | (u64::from(handles_item_release) << 26)
         | (u64::from(handles_item_damage) << 27)
         | (u64::from(handles_item_drop) << 28)
-        | (u64::from(handles_attack_entity) << 29);
+        | (u64::from(handles_attack_entity) << 29)
+        | (u64::from(handles_item_use_on_entity) << 30);
 
     quote! {
         #[doc(hidden)]
@@ -1313,6 +1317,14 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
                         let state = unsafe { &mut *state.cast::<sys::DfPlayerAttackEntityState>() };
                         let mut event = unsafe { ::dragonfly_plugin::PlayerAttackEntityEventData::from_raw(input, state) };
                         <PluginType as ::dragonfly_plugin::Plugin>::on_attack_entity(plugin, &mut event);
+                        sys::DF_STATUS_OK
+                    }
+                    sys::DF_EVENT_PLAYER_ITEM_USE_ON_ENTITY => {
+                        let plugin = unsafe { &*instance.cast::<PluginType>() };
+                        let input = unsafe { &*input.cast::<sys::DfPlayerItemUseOnEntityInput>() };
+                        let state = unsafe { &mut *state.cast::<sys::DfPlayerItemUseOnEntityState>() };
+                        let mut event = unsafe { ::dragonfly_plugin::PlayerItemUseOnEntityEventData::from_raw(input, state) };
+                        <PluginType as ::dragonfly_plugin::Plugin>::on_item_use_on_entity(plugin, &mut event);
                         sys::DF_STATUS_OK
                     }
                     _ => sys::DF_STATUS_ERROR,

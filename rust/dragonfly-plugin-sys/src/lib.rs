@@ -75,6 +75,10 @@ mod tests {
         assert_eq!(offset_of!(DfPlayerAttackEntityState, knockback_force), 8);
         assert_eq!(offset_of!(DfPlayerAttackEntityState, knockback_height), 16);
         assert_eq!(offset_of!(DfPlayerAttackEntityState, critical), 24);
+        assert_eq!(size_of::<DfPlayerItemUseOnEntityInput>(), 56);
+        assert_eq!(offset_of!(DfPlayerItemUseOnEntityInput, player), 8);
+        assert_eq!(offset_of!(DfPlayerItemUseOnEntityInput, target), 32);
+        assert_eq!(size_of::<DfPlayerItemUseOnEntityState>(), 1);
         assert_eq!(size_of::<DfParticleViewV1>(), 40);
         assert_eq!(offset_of!(DfParticleViewV1, block), 32);
         assert_eq!(size_of::<DfSoundViewV1>(), 40);

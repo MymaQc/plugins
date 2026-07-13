@@ -49,6 +49,7 @@ const (
 	PlayerItemDamageSubscription      uint64 = 134217728
 	PlayerItemDropSubscription        uint64 = 268435456
 	PlayerAttackEntitySubscription    uint64 = 536870912
+	PlayerItemUseOnEntitySubscription uint64 = 1073741824
 	MaxChatReplacementBytes                  = 4096
 	MaxCommandOutputBytes                    = 4096
 	MaxCommandEnumBytes                      = 4096
@@ -242,6 +243,10 @@ type PlayerAttackEntityOutput struct {
 	KnockbackForce  float64
 	KnockbackHeight float64
 	Critical        bool
+}
+type PlayerItemUseOnEntityInput struct {
+	Player PlayerID
+	Target EntityID
 }
 
 type Command struct {
@@ -1176,6 +1181,22 @@ func (r *Runtime) HandlePlayerAttackEntity(invocation InvocationID, input Player
 		Cancelled: state.cancelled != 0, KnockbackForce: float64(state.knockback_force),
 		KnockbackHeight: float64(state.knockback_height), Critical: state.critical != 0,
 	}, nil
+}
+
+func (r *Runtime) HandlePlayerItemUseOnEntity(invocation InvocationID, input PlayerItemUseOnEntityInput, cancelled bool) (bool, error) {
+	if r == nil || r.ptr == nil {
+		return cancelled, errors.New("native runtime is closed")
+	}
+	var nativeInput C.DfPlayerItemUseOnEntityInput
+	nativeInput.invocation = C.DfInvocationId(invocation)
+	fillPlayerID(&nativeInput.player, input.Player)
+	fillEntityID(&nativeInput.target, input.Target)
+	var state C.DfPlayerItemUseOnEntityState
+	state.cancelled = C.uint8_t(boolByte(cancelled))
+	if status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_ITEM_USE_ON_ENTITY, unsafe.Pointer(&nativeInput), unsafe.Pointer(&state)); status != C.DF_STATUS_OK {
+		return cancelled, fmt.Errorf("native item-use-on-entity handler failed with status %d", int32(status))
+	}
+	return state.cancelled != 0, nil
 }
 
 func (r *Runtime) openEventItemSnapshot(item ItemStack) (C.DfItemStackSnapshot, bool) {

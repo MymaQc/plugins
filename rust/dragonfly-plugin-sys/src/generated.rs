@@ -884,6 +884,21 @@ pub struct DfPlayerAttackEntityState {
     pub critical: u8,
 }
 
+pub const DF_EVENT_PLAYER_ITEM_USE_ON_ENTITY: DfEventId = 31;
+pub const DF_SUBSCRIPTION_PLAYER_ITEM_USE_ON_ENTITY: u64 = 1u64 << 30;
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfPlayerItemUseOnEntityInput {
+    pub invocation: DfInvocationId,
+    pub player: DfPlayerId,
+    pub target: DfEntityId,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfPlayerItemUseOnEntityState {
+    pub cancelled: u8,
+}
+
 pub type DfPluginCreateFn = unsafe extern "C" fn() -> *mut c_void;
 pub type DfPluginLifecycleFn = unsafe extern "C" fn(instance: *mut c_void) -> DfStatus;
 pub type DfPluginCommandsFn = unsafe extern "C" fn(instance: *mut c_void, count: *mut u64) -> *const DfCommandDescriptor;

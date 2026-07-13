@@ -44,6 +44,7 @@ pub mod Event {
     pub use super::PlayerItemReleaseEventData as PlayerItemRelease;
     pub use super::PlayerItemUseEventData as PlayerItemUse;
     pub use super::PlayerItemUseOnBlockEventData as PlayerItemUseOnBlock;
+    pub use super::PlayerItemUseOnEntityEventData as PlayerItemUseOnEntity;
     pub use super::PlayerJoinEventData as PlayerJoin;
     pub use super::PlayerJumpEventData as PlayerJump;
     pub use super::PlayerLecternPageTurnEventData as PlayerLecternPageTurn;
@@ -3251,6 +3252,39 @@ impl<'a> PlayerAttackEntityEventData<'a> {
     }
 }
 
+pub struct PlayerItemUseOnEntityEventData<'a> {
+    input: &'a dragonfly_plugin_sys::DfPlayerItemUseOnEntityInput,
+    state: &'a mut dragonfly_plugin_sys::DfPlayerItemUseOnEntityState,
+}
+
+impl<'a> PlayerItemUseOnEntityEventData<'a> {
+    /// # Safety
+    /// Both references must belong to the same active item-use callback.
+    #[doc(hidden)]
+    pub unsafe fn from_raw(
+        input: &'a dragonfly_plugin_sys::DfPlayerItemUseOnEntityInput,
+        state: &'a mut dragonfly_plugin_sys::DfPlayerItemUseOnEntityState,
+    ) -> Self {
+        Self { input, state }
+    }
+
+    pub fn player(&self) -> Player {
+        Player::from_id(self.input.player)
+    }
+
+    pub fn target(&self) -> Entity {
+        self.input.target.into()
+    }
+
+    pub fn cancelled(&self) -> bool {
+        self.state.cancelled != 0
+    }
+
+    pub fn cancel(&mut self) {
+        self.state.cancelled = 1;
+    }
+}
+
 pub trait Plugin: Default + Send + Sync + 'static {
     fn on_enable(&self) {}
     fn on_disable(&self) {}
@@ -3284,6 +3318,7 @@ pub trait Plugin: Default + Send + Sync + 'static {
     fn on_item_damage(&self, _event: &mut Event::PlayerItemDamage<'_>) {}
     fn on_item_drop(&self, _event: &mut Event::PlayerItemDrop<'_>) {}
     fn on_attack_entity(&self, _event: &mut Event::PlayerAttackEntity<'_>) {}
+    fn on_item_use_on_entity(&self, _event: &mut Event::PlayerItemUseOnEntity<'_>) {}
     fn commands(&self) -> &'static [Command] {
         &[]
     }
@@ -3402,6 +3437,31 @@ mod tests {
         let mut state = dragonfly_plugin_sys::DfPlayerMoveState::default();
         let mut event = unsafe { PlayerMoveEventData::from_raw(&input, &mut state) };
         Guard.on_move(&mut event);
+        assert!(event.cancelled());
+    }
+
+    #[test]
+    fn item_use_on_entity_exposes_stable_participants_and_cancellation() {
+        let input = dragonfly_plugin_sys::DfPlayerItemUseOnEntityInput {
+            invocation: 7,
+            player: dragonfly_plugin_sys::DfPlayerId {
+                bytes: [3; 16],
+                generation: 11,
+            },
+            target: dragonfly_plugin_sys::DfEntityId {
+                bytes: [5; 16],
+                generation: 13,
+            },
+        };
+        let mut state = dragonfly_plugin_sys::DfPlayerItemUseOnEntityState::default();
+        let mut event = unsafe { PlayerItemUseOnEntityEventData::from_raw(&input, &mut state) };
+
+        assert_eq!(event.player().id().uuid_bytes(), [3; 16]);
+        assert_eq!(event.player().id().generation(), 11);
+        assert_eq!(event.target().id().uuid_bytes(), [5; 16]);
+        assert_eq!(event.target().id().generation(), 13);
+        assert!(!event.cancelled());
+        event.cancel();
         assert!(event.cancelled());
     }
 

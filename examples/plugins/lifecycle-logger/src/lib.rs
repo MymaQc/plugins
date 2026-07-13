@@ -162,4 +162,7 @@ impl Plugin for LifecycleLogger {
             event.knockback_height()
         );
     }
+    fn on_item_use_on_entity(&self, event: &mut Event::PlayerItemUseOnEntity<'_>) {
+        eprintln!("used item on {:?}", event.target().id());
+    }
 }

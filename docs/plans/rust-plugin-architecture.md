@@ -489,6 +489,8 @@ Projectile factories preserve Dragonfly owner resolution and built-in behavior. 
 
 `Event::PlayerAttackEntity` is bridged at Dragonfly's native pre-damage handler. It exposes attacker, stable target entity, cancellable default-allowed state, knockback force/height, and critical flag. Cancellation remains monotonic across plugins.
 
+`Event::PlayerItemUseOnEntity` is bridged before Dragonfly checks whether the held item implements `item.UsableOnEntity`. It exposes the player and stable target entity and remains cancellable/default-allowed, including when the player holds no item or the item has no entity-use behavior.
+
 ## Particles and sounds
 
 `particle::Particle` is sealed and implemented by typed descriptors for all Dragonfly v0.11 built-ins. The flat `DfParticleViewV1` carries only the union of concrete fields: colour, block, face/area/instrument data, note pitch, and dragon-egg offset. Go reconstructs the exact `world/particle` type and calls `Tx.AddParticle`; same-world callbacks reuse their transaction and cross-world calls enqueue through `World.Do`. Dragonfly has no particle registry or identifier strings, so the SDK does not invent a second naming system.
@@ -564,6 +566,7 @@ Initial ABI foundation includes:
 - Main, armour, and offhand inventory handles with item snapshots and mutation.
 - Stable entity handles, typed built-in/projectile spawning, state capabilities, and despawn.
 - Cancellable attack-entity event with stable target attribution.
+- Cancellable item-use-on-entity event with stable target attribution.
 - Typed built-in world particles with block, colour, face, note, and offset parameters.
 - Typed built-in world and private-player sounds, including block, item, instrument, disc, horn, liquid, stage, and scalar parameters.
 
