@@ -31,6 +31,12 @@ _Static_assert(sizeof(DfFormView) == 40, "DfFormView ABI layout changed");
 _Static_assert(sizeof(DfWorldId) == 8, "DfWorldId ABI layout changed");
 _Static_assert(sizeof(DfBlockData) == 48, "DfBlockData ABI layout changed");
 _Static_assert(sizeof(DfBlockView) == 32, "DfBlockView ABI layout changed");
+_Static_assert(sizeof(DfDamageSourceView) == 88, "DfDamageSourceView ABI layout changed");
+_Static_assert(offsetof(DfDamageSourceView, entity) == 24, "DfDamageSourceView.entity ABI offset changed");
+_Static_assert(offsetof(DfDamageSourceView, block) == 72, "DfDamageSourceView.block ABI offset changed");
+_Static_assert(sizeof(DfHealingSourceView) == 24, "DfHealingSourceView ABI layout changed");
+_Static_assert(sizeof(DfPlayerHealResult) == 8, "DfPlayerHealResult ABI layout changed");
+_Static_assert(sizeof(DfPlayerHurtResult) == 16, "DfPlayerHurtResult ABI layout changed");
 _Static_assert(sizeof(DfEntitySpawnOptions) == 80, "DfEntitySpawnOptions ABI layout changed");
 _Static_assert(sizeof(DfEntitySpawnViewV1) == 176, "DfEntitySpawnViewV1 ABI layout changed");
 _Static_assert(sizeof(DfEntityState) == 128, "DfEntityState ABI layout changed");
@@ -40,12 +46,14 @@ _Static_assert(offsetof(DfParticleViewV1, block) == 32, "DfParticleViewV1.block 
 _Static_assert(sizeof(DfSoundViewV1) == 40, "DfSoundViewV1 ABI layout changed");
 _Static_assert(offsetof(DfSoundViewV1, scalar) == 16, "DfSoundViewV1.scalar ABI offset changed");
 _Static_assert(offsetof(DfSoundViewV1, item) == 32, "DfSoundViewV1.item ABI offset changed");
-_Static_assert(sizeof(DfHostApiV10) == 416, "DfHostApiV10 ABI layout changed");
-_Static_assert(offsetof(DfHostApiV10, player_skin_open) == 80, "DfHostApiV10.player_skin_open ABI offset changed");
-_Static_assert(offsetof(DfHostApiV10, player_skin_set) == 112, "DfHostApiV10.player_skin_set ABI offset changed");
-_Static_assert(offsetof(DfHostApiV10, inventory_size) == 120, "DfHostApiV10.inventory_size ABI offset changed");
-_Static_assert(offsetof(DfHostApiV10, player_held_slot_set) == 200, "DfHostApiV10.player_held_slot_set ABI offset changed");
-_Static_assert(offsetof(DfHostApiV10, player_scoreboard) == 208, "DfHostApiV10.player_scoreboard ABI offset changed");
+_Static_assert(sizeof(DfHostApiV11) == 432, "DfHostApiV11 ABI layout changed");
+_Static_assert(offsetof(DfHostApiV11, player_skin_open) == 80, "DfHostApiV11.player_skin_open ABI offset changed");
+_Static_assert(offsetof(DfHostApiV11, player_skin_set) == 112, "DfHostApiV11.player_skin_set ABI offset changed");
+_Static_assert(offsetof(DfHostApiV11, inventory_size) == 120, "DfHostApiV11.inventory_size ABI offset changed");
+_Static_assert(offsetof(DfHostApiV11, player_held_slot_set) == 200, "DfHostApiV11.player_held_slot_set ABI offset changed");
+_Static_assert(offsetof(DfHostApiV11, player_scoreboard) == 208, "DfHostApiV11.player_scoreboard ABI offset changed");
+_Static_assert(offsetof(DfHostApiV11, player_heal) == 416, "DfHostApiV11.player_heal ABI offset changed");
+_Static_assert(offsetof(DfHostApiV11, player_hurt) == 424, "DfHostApiV11.player_hurt ABI offset changed");
 #endif
 
 extern DfStatus bg_go_player_text(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfStringView message);
@@ -61,6 +69,8 @@ extern DfStatus bg_go_player_transform(uint64_t context, DfInvocationId invocati
 extern DfStatus bg_go_player_rotation(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfRotation *rotation);
 extern DfStatus bg_go_player_state_set(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfPlayerStateValue value);
 extern DfStatus bg_go_player_state_get(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfPlayerStateValue *value);
+extern DfStatus bg_go_player_heal(uint64_t context, DfInvocationId invocation, DfPlayerId player, double health, const DfHealingSourceView *source, DfPlayerHealResult *result);
+extern DfStatus bg_go_player_hurt(uint64_t context, DfInvocationId invocation, DfPlayerId player, double damage, const DfDamageSourceView *source, DfPlayerHurtResult *result);
 extern DfStatus bg_go_player_effect(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t operation, DfEffectView effect);
 extern DfStatus bg_go_player_entity_visibility(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfEntityId entity, uint8_t visible);
 extern DfStatus bg_go_player_skin_open(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint64_t *snapshot, DfSkinInfo *info);
@@ -134,6 +144,14 @@ static DfStatus host_player_state_set(uint64_t context, DfInvocationId invocatio
 
 static DfStatus host_player_state_get(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfPlayerStateValue *value) {
     return bg_go_player_state_get(context, invocation, player, kind, value);
+}
+
+static DfStatus host_player_heal(uint64_t context, DfInvocationId invocation, DfPlayerId player, double health, const DfHealingSourceView *source, DfPlayerHealResult *result) {
+    return bg_go_player_heal(context, invocation, player, health, source, result);
+}
+
+static DfStatus host_player_hurt(uint64_t context, DfInvocationId invocation, DfPlayerId player, double damage, const DfDamageSourceView *source, DfPlayerHurtResult *result) {
+    return bg_go_player_hurt(context, invocation, player, damage, source, result);
 }
 
 static DfStatus host_player_effect(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t operation, DfEffectView effect) {
@@ -211,7 +229,7 @@ typedef DfStatus (*RuntimeEventFn)(DfRuntime *, DfEventId, const void *, void *)
 struct BgRuntimeLibrary {
     void *handle;
     DfRuntime *runtime;
-    DfHostApiV10 host_api;
+    DfHostApiV11 host_api;
     RuntimeDestroyFn destroy;
     RuntimeEnableFn enable;
     RuntimeDisableFn disable;
@@ -284,9 +302,9 @@ DfStatus bg_runtime_open(
         return DF_STATUS_ERROR;
     }
 
-    library->host_api = (DfHostApiV10) {
+    library->host_api = (DfHostApiV11) {
         .abi_version = DF_HOST_ABI_VERSION,
-        .struct_size = sizeof(DfHostApiV10),
+        .struct_size = sizeof(DfHostApiV11),
         .context = host_context,
         .player_text = host_player_text,
         .player_title = host_player_title,
@@ -338,6 +356,8 @@ DfStatus bg_runtime_open(
         .world_particle_add = host_world_particle_add,
         .world_sound_play = host_world_sound_play,
         .player_sound_play = host_player_sound_play,
+        .player_heal = host_player_heal,
+        .player_hurt = host_player_hurt,
     };
     DfRuntimeConfig config = {
         .plugin_directory = {

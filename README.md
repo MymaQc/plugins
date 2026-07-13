@@ -129,7 +129,21 @@ impl Plugin for MovementGuard {
 Events continue by default. Cancellation is monotonic; no `allow()` API exists.
 Plugin identity defaults to Cargo's package name; handler code does not repeat it.
 
-Event types live only under `Event::Player*`. Damage and healing sources are typed values: hurt/death expose `damage_source()`, while heal exposes `healing_source()`. `Event::PlayerChangeWorld` is emitted after transfer on the first destination tick. `Event::PlayerRespawn` runs before transfer and may replace both the spawn position and managed destination world.
+Event types live only under `Event::Player*`. Damage and healing sources are typed values: hurt/death expose matchable `damage::Source` values, while heal exposes `healing::Source`. Attack, projectile, thorns, block, poison, food, and every other Dragonfly source retain their concrete payloads. `Event::PlayerChangeWorld` is emitted after transfer on the first destination tick. `Event::PlayerRespawn` runs before transfer and may replace both the spawn position and managed destination world.
+
+Player healing and damage use the same typed sources and return Dragonfly's domain results:
+
+```rust
+use dragonfly::{Entity, Player, damage, healing};
+
+fn combat(player: Player, attacker: Entity) {
+    let healed = player.heal(4.0, healing::Food::new(false));
+    let (damage, vulnerable) = player.hurt(6.0, damage::Attack::new(attacker));
+    eprintln!("healed={healed} damage={damage} vulnerable={vulnerable}");
+}
+```
+
+Transport failures remain private. `heal` returns actual health gained. `hurt` returns Dragonfly's final reduced damage and vulnerability result.
 
 Items are owned Rust values. Inventory handles stay attached to the generation-tagged player:
 
@@ -193,6 +207,7 @@ See [native plugin architecture](docs/plans/rust-plugin-architecture.md).
 - [Chat filter](examples/plugins/chat-filter): replaces text and cancels a blocked message.
 - [Lifecycle logger](examples/plugins/lifecycle-logger): demonstrates enable/disable hooks and the complete bridged player-event set.
 - [Hello command](examples/plugins/hello-command): demonstrates Dragonfly subcommands and enum parameters.
+- [Player command](examples/plugins/player-command): demonstrates player movement, state, effects, damage/healing, visibility, skin, sound, and disconnect actions.
 - [Items command](examples/plugins/items-command): demonstrates typed items and inventory reads/writes.
 - [Scoreboard](examples/plugins/scoreboard): sends and removes a sidebar scoreboard.
 - [Forms](examples/plugins/forms): demonstrates menu, modal, and typed custom-form responses.

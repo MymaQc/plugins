@@ -1,3 +1,7 @@
+operations:
+  - { name: heal, id: 0, go: Heal, rust: heal, source: healing, result: healed }
+  - { name: hurt, id: 1, go: Hurt, rust: hurt, source: damage, result: damage_vulnerable }
+
 states:
   - name: game_mode
     id: 0
@@ -7,20 +11,6 @@ states:
     rust_set: set_game_mode
     rust_get: game_mode
     adapter: game_mode
-  - name: heal
-    id: 1
-    type: f64
-    set: Heal
-    rust_set: heal
-    adapter: healing_source
-    validate: non_negative
-  - name: hurt
-    id: 2
-    type: f64
-    set: Hurt
-    rust_set: hurt
-    adapter: damage_source
-    validate: non_negative
   - name: food
     id: 3
     type: i32

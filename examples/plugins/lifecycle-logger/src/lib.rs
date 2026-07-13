@@ -1,4 +1,4 @@
-use dragonfly::{Enchantment, Event, Plugin, Title, Value, World, plugin};
+use dragonfly::{Enchantment, Event, Plugin, Title, Value, World, damage, healing, plugin};
 
 #[derive(Default)]
 struct LifecycleLogger;
@@ -28,19 +28,31 @@ impl Plugin for LifecycleLogger {
     }
 
     fn on_hurt(&self, event: &mut Event::PlayerHurt<'_>) {
-        eprintln!(
-            "player hurt for {} by {}",
-            event.damage(),
-            event.damage_source().name()
-        );
+        match event.damage_source() {
+            damage::Source::Attack(source) => eprintln!(
+                "player hurt for {} by attacker {:?}",
+                event.damage(),
+                source.attacker().map(|attacker| attacker.id())
+            ),
+            damage::Source::Projectile(source) => eprintln!(
+                "player hurt for {} by projectile {:?} from {:?}",
+                event.damage(),
+                source.projectile().map(|projectile| projectile.id()),
+                source.owner().map(|owner| owner.id())
+            ),
+            source => eprintln!("player hurt for {} by {}", event.damage(), source.name()),
+        }
     }
 
     fn on_heal(&self, event: &mut Event::PlayerHeal<'_>) {
-        eprintln!(
-            "player healed for {} by {}",
-            event.health(),
-            event.healing_source().name()
-        );
+        match event.healing_source() {
+            healing::Source::Food(source) => eprintln!(
+                "player healed for {} by food (quick={})",
+                event.health(),
+                source.quick_regeneration()
+            ),
+            source => eprintln!("player healed for {} by {}", event.health(), source.name()),
+        }
     }
 
     fn on_block_break(&self, event: &mut Event::PlayerBlockBreak<'_>) {

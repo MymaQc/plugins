@@ -50,7 +50,7 @@ mod tests {
 
     #[test]
     #[cfg(target_pointer_width = "64")]
-    fn host_v10_layout_is_stable() {
+    fn host_v11_layout_is_stable() {
         assert_eq!(size_of::<DfInventoryId>(), 32);
         assert_eq!(size_of::<DfItemStackInfo>(), 80);
         assert_eq!(size_of::<DfItemStackSnapshot>(), 88);
@@ -94,22 +94,30 @@ mod tests {
         assert_eq!(size_of::<DfSoundViewV1>(), 40);
         assert_eq!(offset_of!(DfSoundViewV1, scalar), 16);
         assert_eq!(offset_of!(DfSoundViewV1, item), 32);
-        assert_eq!(size_of::<DfHostApiV10>(), 416);
-        assert_eq!(align_of::<DfHostApiV10>(), 8);
-        assert_eq!(offset_of!(DfHostApiV10, context), 8);
-        assert_eq!(offset_of!(DfHostApiV10, player_text), 16);
-        assert_eq!(offset_of!(DfHostApiV10, player_skin_open), 80);
-        assert_eq!(offset_of!(DfHostApiV10, player_skin_set), 112);
-        assert_eq!(offset_of!(DfHostApiV10, inventory_size), 120);
-        assert_eq!(offset_of!(DfHostApiV10, player_held_slot_set), 200);
-        assert_eq!(offset_of!(DfHostApiV10, player_scoreboard), 208);
-        assert_eq!(offset_of!(DfHostApiV10, player_form_close), 232);
-        assert_eq!(offset_of!(DfHostApiV10, world_lookup), 240);
-        assert_eq!(offset_of!(DfHostApiV10, world_spawn_set), 320);
-        assert_eq!(offset_of!(DfHostApiV10, world_entity_spawn), 328);
-        assert_eq!(offset_of!(DfHostApiV10, entity_despawn), 384);
-        assert_eq!(offset_of!(DfHostApiV10, world_particle_add), 392);
-        assert_eq!(offset_of!(DfHostApiV10, world_sound_play), 400);
-        assert_eq!(offset_of!(DfHostApiV10, player_sound_play), 408);
+        assert_eq!(size_of::<DfDamageSourceView>(), 88);
+        assert_eq!(offset_of!(DfDamageSourceView, entity), 24);
+        assert_eq!(offset_of!(DfDamageSourceView, block), 72);
+        assert_eq!(size_of::<DfHealingSourceView>(), 24);
+        assert_eq!(size_of::<DfPlayerHealResult>(), 8);
+        assert_eq!(size_of::<DfPlayerHurtResult>(), 16);
+        assert_eq!(size_of::<DfHostApiV11>(), 432);
+        assert_eq!(align_of::<DfHostApiV11>(), 8);
+        assert_eq!(offset_of!(DfHostApiV11, context), 8);
+        assert_eq!(offset_of!(DfHostApiV11, player_text), 16);
+        assert_eq!(offset_of!(DfHostApiV11, player_skin_open), 80);
+        assert_eq!(offset_of!(DfHostApiV11, player_skin_set), 112);
+        assert_eq!(offset_of!(DfHostApiV11, inventory_size), 120);
+        assert_eq!(offset_of!(DfHostApiV11, player_held_slot_set), 200);
+        assert_eq!(offset_of!(DfHostApiV11, player_scoreboard), 208);
+        assert_eq!(offset_of!(DfHostApiV11, player_form_close), 232);
+        assert_eq!(offset_of!(DfHostApiV11, world_lookup), 240);
+        assert_eq!(offset_of!(DfHostApiV11, world_spawn_set), 320);
+        assert_eq!(offset_of!(DfHostApiV11, world_entity_spawn), 328);
+        assert_eq!(offset_of!(DfHostApiV11, entity_despawn), 384);
+        assert_eq!(offset_of!(DfHostApiV11, world_particle_add), 392);
+        assert_eq!(offset_of!(DfHostApiV11, world_sound_play), 400);
+        assert_eq!(offset_of!(DfHostApiV11, player_sound_play), 408);
+        assert_eq!(offset_of!(DfHostApiV11, player_heal), 416);
+        assert_eq!(offset_of!(DfHostApiV11, player_hurt), 424);
     }
 }

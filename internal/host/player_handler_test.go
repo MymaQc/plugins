@@ -561,6 +561,28 @@ func TestPlayerHandlerHurtAndHeal(t *testing.T) {
 		if !strings.Contains(runtime.healInput.Source.Name, "testHealingSource") {
 			t.Fatalf("healing source = %+v", runtime.healInput.Source)
 		}
+		attack := handler.nativeDamageSource(entity.AttackDamageSource{Attacker: p})
+		if attack.Kind != native.DamageSourceAttack || attack.Entity.Generation != 13 {
+			t.Fatalf("attack source = %+v", attack)
+		}
+		attack = handler.nativeDamageSource(entity.AttackDamageSource{})
+		if attack.Kind != native.DamageSourceAttack || attack.Entity.Generation != 0 {
+			t.Fatalf("attack source without attacker = %+v", attack)
+		}
+		pointerAttack := entity.AttackDamageSource{Attacker: p}
+		attack = handler.nativeDamageSource(&pointerAttack)
+		if attack.Kind != native.DamageSourceAttack || attack.Entity.Generation != 13 {
+			t.Fatalf("pointer attack source = %+v", attack)
+		}
+		food := handler.nativeHealingSource(entity.FoodHealingSource{QuickRegeneration: true})
+		if food.Kind != native.HealingSourceFood || !food.Data {
+			t.Fatalf("food source = %+v", food)
+		}
+		pointerFood := entity.FoodHealingSource{QuickRegeneration: true}
+		food = handler.nativeHealingSource(&pointerFood)
+		if food.Kind != native.HealingSourceFood || !food.Data {
+			t.Fatalf("pointer food source = %+v", food)
+		}
 	})
 }
 

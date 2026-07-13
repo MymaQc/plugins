@@ -66,14 +66,24 @@ type recordingHost struct {
 	values            []PlayerStateValue
 	state             PlayerStateValue
 	reads             []PlayerStateKind
-	effectOps         []PlayerEffectOperation
-	effects           []PlayerEffect
-	entities          []EntityID
-	visible           []bool
-	skin              PlayerSkin
-	setSkins          []PlayerSkin
-	inventoryItem     ItemStack
-	inventorySets     []struct {
+	heals             []struct {
+		Health float64
+		Source HealingSource
+	}
+	healed float64
+	hurts  []struct {
+		Damage float64
+		Source DamageSource
+	}
+	hurtResult    PlayerHurtResult
+	effectOps     []PlayerEffectOperation
+	effects       []PlayerEffect
+	entities      []EntityID
+	visible       []bool
+	skin          PlayerSkin
+	setSkins      []PlayerSkin
+	inventoryItem ItemStack
+	inventorySets []struct {
 		Inventory InventoryID
 		Slot      uint32
 		Item      ItemStack
@@ -161,6 +171,22 @@ func (h *recordingHost) SetPlayerState(_ InvocationID, _ PlayerID, kind PlayerSt
 func (h *recordingHost) PlayerState(_ InvocationID, _ PlayerID, kind PlayerStateKind) (PlayerStateValue, bool) {
 	h.reads = append(h.reads, kind)
 	return h.state, true
+}
+
+func (h *recordingHost) HealPlayer(_ InvocationID, _ PlayerID, health float64, source HealingSource) (float64, bool) {
+	h.heals = append(h.heals, struct {
+		Health float64
+		Source HealingSource
+	}{health, source})
+	return h.healed, true
+}
+
+func (h *recordingHost) HurtPlayer(_ InvocationID, _ PlayerID, damage float64, source DamageSource) (PlayerHurtResult, bool) {
+	h.hurts = append(h.hurts, struct {
+		Damage float64
+		Source DamageSource
+	}{damage, source})
+	return h.hurtResult, true
 }
 
 func (h *recordingHost) ChangePlayerEffect(_ InvocationID, _ PlayerID, operation PlayerEffectOperation, effect PlayerEffect) bool {
@@ -437,8 +463,8 @@ func TestFormRejectsWrongPlayerAndOversizedResponse(t *testing.T) {
 
 func TestMovementGuard(t *testing.T) {
 	runtime := openTestRuntime(t)
-	if runtime.PluginCount() != 12 {
-		t.Fatalf("plugin count = %d, want 12", runtime.PluginCount())
+	if runtime.PluginCount() != 13 {
+		t.Fatalf("plugin count = %d, want 13", runtime.PluginCount())
 	}
 	if runtime.Subscriptions()&PlayerMoveSubscription == 0 {
 		t.Fatal("movement subscription missing")
@@ -480,7 +506,7 @@ func TestPlayerTransformHostCalls(t *testing.T) {
 	}
 	id := PlayerID{Generation: 7}
 	for _, arguments := range []string{"velocity 1 2 3", "face 90 20", "teleport 10 64 20", "move 1 0 -1"} {
-		output, err := runtime.HandleCommand(commandNamed(t, commands, "hello").Index, CommandInput{
+		output, err := runtime.HandleCommand(commandNamed(t, commands, "player").Index, CommandInput{
 			Source: "TestPlayer", SourceKind: CommandSourcePlayer, SourcePlayer: &id,
 			OnlinePlayers: []CommandPlayer{{Player: id, Name: "TestPlayer"}}, Arguments: arguments,
 		})
@@ -502,7 +528,10 @@ func TestPlayerTransformHostCalls(t *testing.T) {
 
 func TestPlayerStateHostCalls(t *testing.T) {
 	library, plugins := nativeArtifacts(t)
-	host := &recordingHost{state: PlayerStateValue{Number: 12, Integer: 15}}
+	host := &recordingHost{
+		state: PlayerStateValue{Number: 12, Integer: 15}, healed: 4,
+		hurtResult: PlayerHurtResult{Damage: 3, Vulnerable: true},
+	}
 	runtime, err := OpenWithHost(library, plugins, host)
 	if err != nil {
 		t.Fatal(err)
@@ -517,7 +546,7 @@ func TestPlayerStateHostCalls(t *testing.T) {
 	}
 	id := PlayerID{Generation: 8}
 	for _, arguments := range []string{"gamemode creative", "heal 4", "hurt 3", "food 15", "max-health 40", "experience-level 12", "experience-progress 0.5"} {
-		output, err := runtime.HandleCommand(commandNamed(t, commands, "hello").Index, CommandInput{
+		output, err := runtime.HandleCommand(commandNamed(t, commands, "player").Index, CommandInput{
 			Source: "TestPlayer", SourceKind: CommandSourcePlayer, SourcePlayer: &id,
 			OnlinePlayers: []CommandPlayer{{Player: id, Name: "TestPlayer"}}, Arguments: arguments,
 		})
@@ -525,15 +554,55 @@ func TestPlayerStateHostCalls(t *testing.T) {
 			t.Fatalf("%s: output=%+v error=%v", arguments, output, err)
 		}
 	}
-	want := []PlayerStateKind{PlayerStateGameMode, PlayerStateHeal, PlayerStateHurt, PlayerStateFood, PlayerStateMaxHealth, PlayerStateExperienceLevel, PlayerStateExperienceProgress}
+	target := PlayerID{UUID: [16]byte{1, 2, 3}, Generation: 18}
+	encoded := "01020300000000000000000000000000:18:0:Target"
+	for _, arguments := range []string{
+		"heal-food 2 true",
+		"hurt-attack 2 " + encoded,
+		"hurt-projectile 2 " + encoded,
+		"hurt-block 2",
+		"hurt-custom 2",
+	} {
+		output, err := runtime.HandleCommand(commandNamed(t, commands, "player").Index, CommandInput{
+			Source: "TestPlayer", SourceKind: CommandSourcePlayer, SourcePlayer: &id,
+			OnlinePlayers: []CommandPlayer{{Player: id, Name: "TestPlayer"}, {Player: target, Name: "Target"}}, Arguments: arguments,
+		})
+		if err != nil || output.Failed {
+			t.Fatalf("%s: output=%+v error=%v", arguments, output, err)
+		}
+	}
+	want := []PlayerStateKind{PlayerStateGameMode, PlayerStateFood, PlayerStateMaxHealth, PlayerStateExperienceLevel, PlayerStateExperienceProgress}
 	if !slices.Equal(host.states, want) {
 		t.Fatalf("states = %v, want %v", host.states, want)
 	}
-	if host.values[0].Integer != 1 || host.values[1].Number != 4 || host.values[3].Integer != 15 || host.values[4].Number != 40 {
+	if host.values[0].Integer != 1 || host.values[1].Integer != 15 || host.values[2].Number != 40 {
 		t.Fatalf("values = %+v", host.values)
 	}
-	if host.values[5].Integer != 12 || host.values[6].Number != 0.5 {
-		t.Fatalf("experience values = %+v", host.values[5:])
+	if host.values[3].Integer != 12 || host.values[4].Number != 0.5 {
+		t.Fatalf("experience values = %+v", host.values[3:])
+	}
+	if len(host.heals) != 2 || host.heals[0].Health != 4 || host.heals[0].Source.Kind != HealingSourceInstant ||
+		host.heals[1].Health != 2 || host.heals[1].Source.Kind != HealingSourceFood || !host.heals[1].Source.Data {
+		t.Fatalf("heals = %+v", host.heals)
+	}
+	if len(host.hurts) != 5 || host.hurts[0].Damage != 3 || host.hurts[0].Source.Kind != DamageSourceInstant {
+		t.Fatalf("hurts = %+v", host.hurts)
+	}
+	if source := host.hurts[1].Source; source.Kind != DamageSourceAttack || source.Entity != (EntityID{UUID: target.UUID, Generation: target.Generation}) {
+		t.Fatalf("attack source = %+v", source)
+	}
+	if source := host.hurts[2].Source; source.Kind != DamageSourceProjectile || source.Entity != (EntityID{UUID: target.UUID, Generation: target.Generation}) || source.SecondaryEntity.Generation != 0 {
+		t.Fatalf("projectile source = %+v", source)
+	}
+	blockSource := host.hurts[3].Source
+	if blockSource.Block == nil {
+		t.Fatalf("block source = %+v", blockSource)
+	}
+	if blockSource.Kind != DamageSourceBlock || blockSource.Block.Identifier != "minecraft:cactus" || len(blockSource.Block.PropertiesNBT) == 0 {
+		t.Fatalf("block source = %+v", blockSource)
+	}
+	if source := host.hurts[4].Source; source.Kind != DamageSourceCustom || source.Name != "example:magic" || !source.ReducedByArmour || !source.IgnoresTotem || !source.FireProtection || !source.BlastProtection {
+		t.Fatalf("custom source = %+v", source)
 	}
 	wantReads := []PlayerStateKind{PlayerStateHealth, PlayerStateHealth, PlayerStateFood, PlayerStateMaxHealth, PlayerStateExperienceLevel, PlayerStateExperienceProgress}
 	if !slices.Equal(host.reads, wantReads) {
@@ -558,7 +627,7 @@ func TestPlayerEffectHostCalls(t *testing.T) {
 	}
 	id := PlayerID{Generation: 9}
 	for _, arguments := range []string{"speed 2 30", "clear-speed"} {
-		output, err := runtime.HandleCommand(commandNamed(t, commands, "hello").Index, CommandInput{
+		output, err := runtime.HandleCommand(commandNamed(t, commands, "player").Index, CommandInput{
 			Source: "TestPlayer", SourceKind: CommandSourcePlayer, SourcePlayer: &id,
 			OnlinePlayers: []CommandPlayer{{Player: id, Name: "TestPlayer"}}, Arguments: arguments,
 		})
@@ -591,7 +660,7 @@ func TestPlayerIdentityHostCalls(t *testing.T) {
 	}
 	id := PlayerID{Generation: 10}
 	for _, arguments := range []string{"name-tag Rust Player", "scale 1.5", "invisible true", "immobile true"} {
-		output, err := runtime.HandleCommand(commandNamed(t, commands, "hello").Index, CommandInput{
+		output, err := runtime.HandleCommand(commandNamed(t, commands, "player").Index, CommandInput{
 			Source: "TestPlayer", SourceKind: CommandSourcePlayer, SourcePlayer: &id,
 			OnlinePlayers: []CommandPlayer{{Player: id, Name: "TestPlayer"}}, Arguments: arguments,
 		})
@@ -628,7 +697,7 @@ func TestPlayerSoundAndDisconnectHostCalls(t *testing.T) {
 	}
 	id := PlayerID{Generation: 11}
 	for _, arguments := range []string{"sound", "disconnect", "kick"} {
-		output, err := runtime.HandleCommand(commandNamed(t, commands, "hello").Index, CommandInput{
+		output, err := runtime.HandleCommand(commandNamed(t, commands, "player").Index, CommandInput{
 			Source: "TestPlayer", SourceKind: CommandSourcePlayer, SourcePlayer: &id,
 			OnlinePlayers: []CommandPlayer{{Player: id, Name: "TestPlayer"}}, Arguments: arguments,
 		})
@@ -665,7 +734,7 @@ func TestPlayerEntityVisibilityHostCalls(t *testing.T) {
 	target := PlayerID{UUID: [16]byte{1, 2, 3}, Generation: 13}
 	encoded := "01020300000000000000000000000000:13:0:Target"
 	for _, arguments := range []string{"hide " + encoded, "show " + encoded} {
-		output, err := runtime.HandleCommand(commandNamed(t, commands, "hello").Index, CommandInput{
+		output, err := runtime.HandleCommand(commandNamed(t, commands, "player").Index, CommandInput{
 			Source: "Viewer", SourceKind: CommandSourcePlayer, SourcePlayer: &viewer,
 			OnlinePlayers: []CommandPlayer{{Player: viewer, Name: "Viewer"}, {Player: target, Name: "Target"}}, Arguments: arguments,
 		})
@@ -707,7 +776,7 @@ func TestPlayerSkinRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	id := PlayerID{Generation: 14}
-	output, err := runtime.HandleCommand(commandNamed(t, commands, "hello").Index, CommandInput{
+	output, err := runtime.HandleCommand(commandNamed(t, commands, "player").Index, CommandInput{
 		Source: "TestPlayer", SourceKind: CommandSourcePlayer, SourcePlayer: &id,
 		OnlinePlayers: []CommandPlayer{{Player: id, Name: "TestPlayer"}}, Arguments: "skin-copy",
 	})
@@ -776,8 +845,8 @@ func TestCommand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(commands) != 7 {
-		t.Fatalf("commands = %#v, want entity, hello, items, particle, ping, sound, and world", commands)
+	if len(commands) != 8 {
+		t.Fatalf("commands = %#v, want entity, hello, items, particle, ping, player, sound, and world", commands)
 	}
 	hello := commandNamed(t, commands, "hello")
 	_ = commandNamed(t, commands, "items")
@@ -785,6 +854,7 @@ func TestCommand(t *testing.T) {
 	_ = commandNamed(t, commands, "world")
 	_ = commandNamed(t, commands, "entity")
 	_ = commandNamed(t, commands, "particle")
+	_ = commandNamed(t, commands, "player")
 	_ = commandNamed(t, commands, "sound")
 	optionalFound := false
 	for _, overload := range hello.Overloads {

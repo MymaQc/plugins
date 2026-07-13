@@ -14,6 +14,7 @@ const (
 	maxWorldNameBytes       = 256
 	maxBlockIdentifierBytes = 256
 	maxBlockPropertiesBytes = 64 << 10
+	maxSourceNameBytes      = 64 << 10
 )
 
 //export bg_go_world_lookup

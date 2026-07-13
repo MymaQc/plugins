@@ -40,16 +40,6 @@ func setPlayerState(connected *player.Player, kind native.PlayerStateKind, value
 			return false
 		}
 		connected.SetGameMode(mode)
-	case native.PlayerStateHeal:
-		if math.IsNaN(value.Number) || math.IsInf(value.Number, 0) || value.Number < 0 {
-			return false
-		}
-		connected.Heal(value.Number, pluginHealingSource{})
-	case native.PlayerStateHurt:
-		if math.IsNaN(value.Number) || math.IsInf(value.Number, 0) || value.Number < 0 {
-			return false
-		}
-		connected.Hurt(value.Number, pluginDamageSource{})
 	case native.PlayerStateFood:
 		if value.Integer < math.MinInt32 || value.Integer > math.MaxInt32 {
 			return false

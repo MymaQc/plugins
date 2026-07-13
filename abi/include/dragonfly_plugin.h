@@ -9,7 +9,7 @@ extern "C" {
 #endif
 
 #define DF_ABI_VERSION 1u
-#define DF_HOST_ABI_VERSION 10u
+#define DF_HOST_ABI_VERSION 11u
 #define DF_STATUS_OK 0
 #define DF_STATUS_ERROR 1
 
@@ -25,12 +25,14 @@ typedef struct { int32_t x; int32_t y; int32_t z; } DfBlockPos;
 typedef struct { uint64_t value; } DfWorldId;
 typedef struct { const uint8_t *data; uint64_t len; } DfStringView;
 typedef struct { uint8_t *data; uint64_t len; uint64_t capacity; } DfStringBuffer;
-typedef struct { DfStringView name; uint32_t flags; } DfDamageSourceView;
-typedef struct { DfStringView name; } DfHealingSourceView;
 #define DF_DAMAGE_SOURCE_REDUCED_BY_ARMOUR 1u
 #define DF_DAMAGE_SOURCE_REDUCED_BY_RESISTANCE 2u
 #define DF_DAMAGE_SOURCE_FIRE 4u
 #define DF_DAMAGE_SOURCE_IGNORES_TOTEM 8u
+#define DF_DAMAGE_SOURCE_FIRE_PROTECTION 16u
+#define DF_DAMAGE_SOURCE_FEATHER_FALLING 32u
+#define DF_DAMAGE_SOURCE_BLAST_PROTECTION 64u
+#define DF_DAMAGE_SOURCE_PROJECTILE_PROTECTION 128u
 #define DF_INVENTORY_MAIN 0u
 #define DF_INVENTORY_ARMOUR 1u
 #define DF_INVENTORY_OFFHAND 2u
@@ -46,6 +48,31 @@ typedef struct { DfStringView identifier; int32_t metadata; uint32_t count; uint
 #define DF_WORLD_DIMENSION_END 2u
 typedef struct { DfStringBuffer identifier; DfStringBuffer properties_nbt; } DfBlockData;
 typedef struct { DfStringView identifier; DfStringView properties_nbt; } DfBlockView;
+#define DF_DAMAGE_SOURCE_CUSTOM 0u
+#define DF_DAMAGE_SOURCE_ATTACK 1u
+#define DF_DAMAGE_SOURCE_BLOCK 2u
+#define DF_DAMAGE_SOURCE_DROWNING 3u
+#define DF_DAMAGE_SOURCE_EXPLOSION 4u
+#define DF_DAMAGE_SOURCE_FALL 5u
+#define DF_DAMAGE_SOURCE_FIRE_KIND 6u
+#define DF_DAMAGE_SOURCE_GLIDE 7u
+#define DF_DAMAGE_SOURCE_INSTANT 8u
+#define DF_DAMAGE_SOURCE_LAVA 9u
+#define DF_DAMAGE_SOURCE_LIGHTNING 10u
+#define DF_DAMAGE_SOURCE_MAGMA 11u
+#define DF_DAMAGE_SOURCE_POISON 12u
+#define DF_DAMAGE_SOURCE_PROJECTILE 13u
+#define DF_DAMAGE_SOURCE_STARVATION 14u
+#define DF_DAMAGE_SOURCE_SUFFOCATION 15u
+#define DF_DAMAGE_SOURCE_THORNS 16u
+#define DF_DAMAGE_SOURCE_VOID 17u
+#define DF_DAMAGE_SOURCE_WITHER 18u
+#define DF_HEALING_SOURCE_CUSTOM 0u
+#define DF_HEALING_SOURCE_FOOD 1u
+#define DF_HEALING_SOURCE_INSTANT 2u
+#define DF_HEALING_SOURCE_REGENERATION 3u
+typedef struct { DfStringView name; uint32_t kind; uint32_t flags; DfEntityId entity; DfEntityId secondary_entity; const DfBlockView *block; uint8_t data; } DfDamageSourceView;
+typedef struct { DfStringView name; uint32_t kind; uint8_t data; } DfHealingSourceView;
 #define DF_ENTITY_TEXT 0u
 #define DF_ENTITY_LIGHTNING 1u
 #define DF_ENTITY_TNT 2u
@@ -106,8 +133,6 @@ typedef struct { uint32_t kind; uint32_t data; int32_t integer; uint32_t flags; 
 #define DF_PLAYER_TEXT_DISCONNECT 5u
 #define DF_PLAYER_TEXT_KICK 6u
 #define DF_PLAYER_STATE_GAME_MODE 0u
-#define DF_PLAYER_STATE_HEAL 1u
-#define DF_PLAYER_STATE_HURT 2u
 #define DF_PLAYER_STATE_FOOD 3u
 #define DF_PLAYER_STATE_MAX_HEALTH 4u
 #define DF_PLAYER_STATE_HEALTH 5u
@@ -116,6 +141,8 @@ typedef struct { uint32_t kind; uint32_t data; int32_t integer; uint32_t flags; 
 #define DF_PLAYER_STATE_SCALE 8u
 #define DF_PLAYER_STATE_INVISIBLE 9u
 #define DF_PLAYER_STATE_IMMOBILE 10u
+#define DF_PLAYER_OPERATION_HEAL 0u
+#define DF_PLAYER_OPERATION_HURT 1u
 #define DF_EFFECT_SPEED 1u
 #define DF_EFFECT_SLOWNESS 2u
 #define DF_EFFECT_HASTE 3u
@@ -240,6 +267,8 @@ typedef struct { DfStringView request_json; void *callback_context; DfFormRespon
 #define DF_FORM_RESPONSE_SUBMITTED 0u
 #define DF_FORM_RESPONSE_CLOSED 1u
 typedef struct { double number; int64_t integer; } DfPlayerStateValue;
+typedef struct { double healed; } DfPlayerHealResult;
+typedef struct { double damage; uint8_t vulnerable; } DfPlayerHurtResult;
 #define DF_PLAYER_EFFECT_ADD 0u
 #define DF_PLAYER_EFFECT_REMOVE 1u
 typedef struct { uint32_t effect_type; int32_t level; uint64_t duration_milliseconds; uint8_t ambient; uint8_t infinite; uint8_t particles_hidden; } DfEffectView;
@@ -258,6 +287,8 @@ typedef DfStatus (*DfHostPlayerTransformFn)(uint64_t context, DfInvocationId inv
 typedef DfStatus (*DfHostPlayerRotationFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfRotation *rotation);
 typedef DfStatus (*DfHostPlayerStateSetFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfPlayerStateValue value);
 typedef DfStatus (*DfHostPlayerStateGetFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfPlayerStateValue *value);
+typedef DfStatus (*DfHostPlayerHealFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, double health, const DfHealingSourceView *source, DfPlayerHealResult *result);
+typedef DfStatus (*DfHostPlayerHurtFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, double damage, const DfDamageSourceView *source, DfPlayerHurtResult *result);
 typedef DfStatus (*DfHostPlayerEffectFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t operation, DfEffectView effect);
 typedef DfStatus (*DfHostPlayerEntityVisibilityFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfEntityId entity, uint8_t visible);
 /* Skin snapshots freeze one skin across metadata and data reads. Open owns a snapshot until close. */
@@ -354,7 +385,9 @@ typedef struct {
     DfHostWorldParticleAddFn world_particle_add;
     DfHostWorldSoundPlayFn world_sound_play;
     DfHostPlayerSoundPlayFn player_sound_play;
-} DfHostApiV10;
+    DfHostPlayerHealFn player_heal;
+    DfHostPlayerHurtFn player_hurt;
+} DfHostApiV11;
 #define DF_COMMAND_PARAMETER_SUBCOMMAND 1u
 #define DF_COMMAND_PARAMETER_ENUM 2u
 #define DF_COMMAND_PARAMETER_STRING 3u
@@ -807,7 +840,7 @@ typedef DfStatus (*DfPluginLifecycleFn)(void *instance);
 typedef const DfCommandDescriptor *(*DfPluginCommandsFn)(void *instance, uint64_t *count);
 typedef DfStatus (*DfHandleCommandFn)(void *instance, uint64_t command, const DfCommandInput *input, DfCommandState *state);
 typedef DfStatus (*DfCommandEnumOptionsFn)(void *instance, uint64_t command, uint64_t overload, uint64_t parameter, const DfCommandEnumContext *context, DfStringBuffer *output);
-typedef DfStatus (*DfPluginSetHostFn)(void *instance, const DfHostApiV10 *host);
+typedef DfStatus (*DfPluginSetHostFn)(void *instance, const DfHostApiV11 *host);
 typedef void (*DfPluginDestroyFn)(void *instance);
 
 typedef struct {
@@ -827,7 +860,7 @@ typedef struct {
 typedef const DfPluginApiV1 *(*DfPluginEntryV1Fn)(void);
 
 typedef struct DfRuntime DfRuntime;
-typedef struct { DfStringView plugin_directory; const DfHostApiV10 *host; } DfRuntimeConfig;
+typedef struct { DfStringView plugin_directory; const DfHostApiV11 *host; } DfRuntimeConfig;
 
 DfStatus df_runtime_create(const DfRuntimeConfig *config, DfRuntime **out, uint8_t *error, uint64_t error_capacity);
 DfStatus df_runtime_enable(DfRuntime *runtime);

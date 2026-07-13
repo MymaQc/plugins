@@ -7,8 +7,12 @@ import (
 	"time"
 
 	"github.com/bedrock-gophers/plugins/internal/native"
+	"github.com/df-mc/dragonfly/server/block"
 	"github.com/df-mc/dragonfly/server/block/cube"
+	"github.com/df-mc/dragonfly/server/entity"
+	"github.com/df-mc/dragonfly/server/entity/effect"
 	"github.com/df-mc/dragonfly/server/item"
+	"github.com/df-mc/dragonfly/server/item/enchantment"
 	"github.com/df-mc/dragonfly/server/player"
 	"github.com/df-mc/dragonfly/server/world"
 	"github.com/go-gl/mathgl/mgl64"
@@ -335,7 +339,7 @@ func (h *PlayerHandler) HandleHurt(ctx *player.Context, damage *float64, immune 
 		Damage:         *damage,
 		Immune:         immune,
 		AttackImmunity: *attackImmunity,
-		Source:         nativeDamageSource(source),
+		Source:         h.nativeDamageSource(source),
 	}, ctx.Cancelled())
 	if err != nil {
 		h.log.Error("native plugin hurt handler failed", "player", p.Name(), "error", err)
@@ -358,7 +362,7 @@ func (h *PlayerHandler) HandleHeal(ctx *player.Context, health *float64, source 
 	output, err := h.runtime.HandlePlayerHeal(invocation, native.PlayerHealInput{
 		Player: h.playerID(p),
 		Health: *health,
-		Source: native.HealingSource{Name: fmt.Sprintf("%T", source)},
+		Source: h.nativeHealingSource(source),
 	}, ctx.Cancelled())
 	if err != nil {
 		h.log.Error("native plugin heal handler failed", "player", p.Name(), "error", err)
@@ -622,7 +626,7 @@ func (h *PlayerHandler) HandleDeath(p *player.Player, source world.DamageSource,
 	defer leave()
 	keep, err := h.runtime.HandlePlayerDeath(invocation, native.PlayerDeathInput{
 		Player: h.playerID(p),
-		Source: nativeDamageSource(source),
+		Source: h.nativeDamageSource(source),
 	}, *keepInventory)
 	if err != nil {
 		h.log.Error("native plugin death handler failed", "player", p.Name(), "error", err)
@@ -691,15 +695,205 @@ func blockName(block world.Block) string {
 	return name
 }
 
-func nativeDamageSource(source world.DamageSource) native.DamageSource {
+func (h *PlayerHandler) nativeDamageSource(source world.DamageSource) native.DamageSource {
+	source = concreteDamageSource(source)
 	if source == nil {
 		return native.DamageSource{Name: "<nil>"}
 	}
-	return native.DamageSource{
+	value := native.DamageSource{
 		Name: fmt.Sprintf("%T", source), ReducedByArmour: source.ReducedByArmour(),
 		ReducedByResistance: source.ReducedByResistance(), Fire: source.Fire(),
 		IgnoresTotem: source.IgnoreTotem(),
 	}
+	if named, ok := source.(interface{ Name() string }); ok && named.Name() != "" {
+		value.Name = named.Name()
+	}
+	if affected, ok := source.(enchantment.AffectedDamageSource); ok {
+		value.FireProtection = affected.AffectedByEnchantment(enchantment.FireProtection)
+		value.FeatherFalling = affected.AffectedByEnchantment(enchantment.FeatherFalling)
+		value.BlastProtection = affected.AffectedByEnchantment(enchantment.BlastProtection)
+		value.ProjectileProtection = affected.AffectedByEnchantment(enchantment.ProjectileProtection)
+	}
+	switch source := source.(type) {
+	case entity.AttackDamageSource:
+		value.Kind = native.DamageSourceAttack
+		if source.Attacker != nil {
+			value.Entity = h.players.EntityRegistry().Register(source.Attacker)
+		}
+	case block.DamageSource:
+		if source.Block == nil {
+			break
+		}
+		identifier, properties := source.Block.EncodeBlock()
+		encoded, ok := EncodeBlockProperties(properties)
+		if !ok {
+			break
+		}
+		value.Kind, value.Block = native.DamageSourceBlock, &native.WorldBlock{Identifier: identifier, PropertiesNBT: encoded}
+	case entity.DrowningDamageSource:
+		value.Kind = native.DamageSourceDrowning
+	case entity.ExplosionDamageSource:
+		value.Kind, value.BlastProtection = native.DamageSourceExplosion, true
+	case entity.FallDamageSource:
+		value.Kind, value.FeatherFalling = native.DamageSourceFall, true
+	case block.FireDamageSource:
+		value.Kind, value.FireProtection = native.DamageSourceFire, true
+	case entity.GlideDamageSource:
+		value.Kind = native.DamageSourceGlide
+	case effect.InstantDamageSource:
+		value.Kind = native.DamageSourceInstant
+	case block.LavaDamageSource:
+		value.Kind = native.DamageSourceLava
+	case entity.LightningDamageSource:
+		value.Kind = native.DamageSourceLightning
+	case block.MagmaDamageSource:
+		value.Kind, value.FireProtection = native.DamageSourceMagma, true
+	case effect.PoisonDamageSource:
+		value.Kind, value.Data = native.DamageSourcePoison, source.Fatal
+	case entity.ProjectileDamageSource:
+		value.Kind = native.DamageSourceProjectile
+		if source.Projectile != nil {
+			value.Entity = h.players.EntityRegistry().Register(source.Projectile)
+		}
+		if source.Owner != nil {
+			value.SecondaryEntity = h.players.EntityRegistry().Register(source.Owner)
+		}
+		value.ProjectileProtection = true
+	case player.StarvationDamageSource:
+		value.Kind = native.DamageSourceStarvation
+	case entity.SuffocationDamageSource:
+		value.Kind = native.DamageSourceSuffocation
+	case enchantment.ThornsDamageSource:
+		value.Kind = native.DamageSourceThorns
+		if source.Owner != nil {
+			value.Entity = h.players.EntityRegistry().Register(source.Owner)
+		}
+	case entity.VoidDamageSource:
+		value.Kind = native.DamageSourceVoid
+	case effect.WitherDamageSource:
+		value.Kind = native.DamageSourceWither
+	}
+	return value
+}
+
+func (h *PlayerHandler) nativeHealingSource(source world.HealingSource) native.HealingSource {
+	source = concreteHealingSource(source)
+	if source == nil {
+		return native.HealingSource{Name: "<nil>"}
+	}
+	value := native.HealingSource{Name: fmt.Sprintf("%T", source)}
+	if named, ok := source.(interface{ Name() string }); ok && named.Name() != "" {
+		value.Name = named.Name()
+	}
+	switch source := source.(type) {
+	case entity.FoodHealingSource:
+		value.Kind, value.Data = native.HealingSourceFood, source.QuickRegeneration
+	case effect.InstantHealingSource:
+		value.Kind = native.HealingSourceInstant
+	case effect.RegenerationHealingSource:
+		value.Kind = native.HealingSourceRegeneration
+	}
+	return value
+}
+
+func concreteDamageSource(source world.DamageSource) world.DamageSource {
+	switch source := source.(type) {
+	case *entity.AttackDamageSource:
+		if source != nil {
+			return *source
+		}
+	case *block.DamageSource:
+		if source != nil {
+			return *source
+		}
+	case *entity.DrowningDamageSource:
+		if source != nil {
+			return *source
+		}
+	case *entity.ExplosionDamageSource:
+		if source != nil {
+			return *source
+		}
+	case *entity.FallDamageSource:
+		if source != nil {
+			return *source
+		}
+	case *block.FireDamageSource:
+		if source != nil {
+			return *source
+		}
+	case *entity.GlideDamageSource:
+		if source != nil {
+			return *source
+		}
+	case *effect.InstantDamageSource:
+		if source != nil {
+			return *source
+		}
+	case *block.LavaDamageSource:
+		if source != nil {
+			return *source
+		}
+	case *entity.LightningDamageSource:
+		if source != nil {
+			return *source
+		}
+	case *block.MagmaDamageSource:
+		if source != nil {
+			return *source
+		}
+	case *effect.PoisonDamageSource:
+		if source != nil {
+			return *source
+		}
+	case *entity.ProjectileDamageSource:
+		if source != nil {
+			return *source
+		}
+	case *player.StarvationDamageSource:
+		if source != nil {
+			return *source
+		}
+	case *entity.SuffocationDamageSource:
+		if source != nil {
+			return *source
+		}
+	case *enchantment.ThornsDamageSource:
+		if source != nil {
+			return *source
+		}
+	case *entity.VoidDamageSource:
+		if source != nil {
+			return *source
+		}
+	case *effect.WitherDamageSource:
+		if source != nil {
+			return *source
+		}
+	default:
+		return source
+	}
+	return nil
+}
+
+func concreteHealingSource(source world.HealingSource) world.HealingSource {
+	switch source := source.(type) {
+	case *entity.FoodHealingSource:
+		if source != nil {
+			return *source
+		}
+	case *effect.InstantHealingSource:
+		if source != nil {
+			return *source
+		}
+	case *effect.RegenerationHealingSource:
+		if source != nil {
+			return *source
+		}
+	default:
+		return source
+	}
+	return nil
 }
 
 func (h *PlayerHandler) playerID(p *player.Player) native.PlayerID {

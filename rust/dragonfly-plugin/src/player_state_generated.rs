@@ -43,8 +43,6 @@ impl Player {
     pub fn kick(&self, value: &str) { self.send_text(dragonfly_plugin_sys::DF_PLAYER_TEXT_KICK, value); }
     pub fn set_game_mode(&self, value: GameMode) { self.set_state(dragonfly_plugin_sys::DF_PLAYER_STATE_GAME_MODE, 0.0, value as i64); }
     pub fn game_mode(&self) -> GameMode { match self.state(dragonfly_plugin_sys::DF_PLAYER_STATE_GAME_MODE).integer { 1 => GameMode::Creative, 2 => GameMode::Adventure, 3 => GameMode::Spectator, _ => GameMode::Survival } }
-    pub fn heal(&self, value: f64) { self.set_state(dragonfly_plugin_sys::DF_PLAYER_STATE_HEAL, value, 0); }
-    pub fn hurt(&self, value: f64) { self.set_state(dragonfly_plugin_sys::DF_PLAYER_STATE_HURT, value, 0); }
     pub fn set_food(&self, value: i32) { self.set_state(dragonfly_plugin_sys::DF_PLAYER_STATE_FOOD, 0.0, i64::from(value)); }
     pub fn food(&self) -> i32 { self.state(dragonfly_plugin_sys::DF_PLAYER_STATE_FOOD).integer as i32 }
     pub fn set_max_health(&self, value: f64) { self.set_state(dragonfly_plugin_sys::DF_PLAYER_STATE_MAX_HEALTH, value, 0); }

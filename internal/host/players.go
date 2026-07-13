@@ -9,7 +9,11 @@ import (
 	"sync"
 
 	"github.com/bedrock-gophers/plugins/internal/native"
+	"github.com/df-mc/dragonfly/server/block"
+	"github.com/df-mc/dragonfly/server/entity"
 	"github.com/df-mc/dragonfly/server/entity/effect"
+	"github.com/df-mc/dragonfly/server/item"
+	"github.com/df-mc/dragonfly/server/item/enchantment"
 	"github.com/df-mc/dragonfly/server/player"
 	"github.com/df-mc/dragonfly/server/player/scoreboard"
 	"github.com/df-mc/dragonfly/server/player/skin"
@@ -326,19 +330,32 @@ func (p *Players) mutatePlayer(invocation native.InvocationID, id native.PlayerI
 }
 
 func readPlayer[T any](p *Players, invocation native.InvocationID, id native.PlayerID, function func(*player.Player) T) (T, bool) {
-	if connected, ok := p.ResolveID(id, invocation); ok {
-		return function(connected), true
-	}
+	return callPlayer(p, invocation, id, func(_ *world.Tx, connected *player.Player) T { return function(connected) })
+}
+
+func callPlayer[T any](p *Players, invocation native.InvocationID, id native.PlayerID, function func(*world.Tx, *player.Player) T) (T, bool) {
 	var zero T
 	if invocation != 0 {
-		return zero, false
+		tx, ok := p.InvocationTx(invocation)
+		if !ok {
+			return zero, false
+		}
+		entry, ok := p.playerEntry(id)
+		if !ok {
+			return zero, false
+		}
+		connected, ok := playerInTransaction(entry.handle, tx)
+		if !ok {
+			return zero, false
+		}
+		return function(tx, connected), true
 	}
 	entry, ok := p.playerEntry(id)
 	if !ok {
 		return zero, false
 	}
-	value, err := world.CallRef(context.Background(), world.NewEntityRef[*player.Player](entry.handle), func(_ *world.Tx, connected *player.Player) (T, error) {
-		return function(connected), nil
+	value, err := world.CallRef(context.Background(), world.NewEntityRef[*player.Player](entry.handle), func(tx *world.Tx, connected *player.Player) (T, error) {
+		return function(tx, connected), nil
 	})
 	return value, err == nil
 }
@@ -403,7 +420,38 @@ func (p *Players) PlayerRotation(invocation native.InvocationID, id native.Playe
 }
 
 func (p *Players) SetPlayerState(invocation native.InvocationID, id native.PlayerID, kind native.PlayerStateKind, value native.PlayerStateValue) bool {
-	return p.mutatePlayer(invocation, id, func(connected *player.Player) { setPlayerState(connected, kind, value) })
+	changed, ok := readPlayer(p, invocation, id, func(connected *player.Player) bool {
+		return setPlayerState(connected, kind, value)
+	})
+	return ok && changed
+}
+
+func (p *Players) HealPlayer(invocation native.InvocationID, id native.PlayerID, health float64, source native.HealingSource) (float64, bool) {
+	if !finite(health) {
+		return 0, false
+	}
+	return readPlayer(p, invocation, id, func(connected *player.Player) float64 {
+		return connected.Heal(health, healingSource(source))
+	})
+}
+
+func (p *Players) HurtPlayer(invocation native.InvocationID, id native.PlayerID, damage float64, source native.DamageSource) (native.PlayerHurtResult, bool) {
+	if !finite(damage) {
+		return native.PlayerHurtResult{}, false
+	}
+	type result struct {
+		value native.PlayerHurtResult
+		ok    bool
+	}
+	resolved, ok := callPlayer(p, invocation, id, func(tx *world.Tx, connected *player.Player) result {
+		damageSource, ok := p.damageSource(tx, source)
+		if !ok {
+			return result{}
+		}
+		dealt, vulnerable := connected.Hurt(damage, damageSource)
+		return result{value: native.PlayerHurtResult{Damage: dealt, Vulnerable: vulnerable}, ok: true}
+	})
+	return resolved.value, ok && resolved.ok
 }
 
 func (p *Players) PlayerState(invocation native.InvocationID, id native.PlayerID, kind native.PlayerStateKind) (native.PlayerStateValue, bool) {
@@ -646,16 +694,128 @@ func validSkinDimensions(width, height int, pixels []byte, empty bool) bool {
 	return uint64(width)*uint64(height)*4 == uint64(len(pixels))
 }
 
-type pluginHealingSource struct{}
+func healingSource(source native.HealingSource) world.HealingSource {
+	switch source.Kind {
+	case native.HealingSourceFood:
+		return entity.FoodHealingSource{QuickRegeneration: source.Data}
+	case native.HealingSourceInstant:
+		return effect.InstantHealingSource{}
+	case native.HealingSourceRegeneration:
+		return effect.RegenerationHealingSource{}
+	default:
+		return pluginHealingSource{name: source.Name}
+	}
+}
+
+func (p *Players) damageSource(tx *world.Tx, source native.DamageSource) (world.DamageSource, bool) {
+	switch source.Kind {
+	case native.DamageSourceAttack:
+		var attacker world.Entity
+		if source.Entity.Generation != 0 {
+			var ok bool
+			attacker, ok = p.entities.Resolve(source.Entity, tx)
+			if !ok {
+				return nil, false
+			}
+		}
+		return entity.AttackDamageSource{Attacker: attacker}, true
+	case native.DamageSourceBlock:
+		if source.Block == nil {
+			return nil, false
+		}
+		properties, ok := DecodeBlockProperties(source.Block.PropertiesNBT)
+		if !ok {
+			return nil, false
+		}
+		resolved, ok := tx.World().BlockRegistry().BlockByName(source.Block.Identifier, properties)
+		return block.DamageSource{Block: resolved}, ok
+	case native.DamageSourceDrowning:
+		return entity.DrowningDamageSource{}, true
+	case native.DamageSourceExplosion:
+		return entity.ExplosionDamageSource{}, true
+	case native.DamageSourceFall:
+		return entity.FallDamageSource{}, true
+	case native.DamageSourceFire:
+		return block.FireDamageSource{}, true
+	case native.DamageSourceGlide:
+		return entity.GlideDamageSource{}, true
+	case native.DamageSourceInstant:
+		return effect.InstantDamageSource{}, true
+	case native.DamageSourceLava:
+		return block.LavaDamageSource{}, true
+	case native.DamageSourceLightning:
+		return entity.LightningDamageSource{}, true
+	case native.DamageSourceMagma:
+		return block.MagmaDamageSource{}, true
+	case native.DamageSourcePoison:
+		return effect.PoisonDamageSource{Fatal: source.Data}, true
+	case native.DamageSourceProjectile:
+		var projectile world.Entity
+		if source.Entity.Generation != 0 {
+			var ok bool
+			projectile, ok = p.entities.Resolve(source.Entity, tx)
+			if !ok {
+				return nil, false
+			}
+		}
+		var owner world.Entity
+		var ok bool
+		if source.SecondaryEntity.Generation != 0 {
+			owner, ok = p.entities.Resolve(source.SecondaryEntity, tx)
+			if !ok {
+				return nil, false
+			}
+		}
+		return entity.ProjectileDamageSource{Projectile: projectile, Owner: owner}, true
+	case native.DamageSourceStarvation:
+		return player.StarvationDamageSource{}, true
+	case native.DamageSourceSuffocation:
+		return entity.SuffocationDamageSource{}, true
+	case native.DamageSourceThorns:
+		var owner world.Entity
+		if source.Entity.Generation != 0 {
+			var ok bool
+			owner, ok = p.entities.Resolve(source.Entity, tx)
+			if !ok {
+				return nil, false
+			}
+		}
+		return enchantment.ThornsDamageSource{Owner: owner}, true
+	case native.DamageSourceVoid:
+		return entity.VoidDamageSource{}, true
+	case native.DamageSourceWither:
+		return effect.WitherDamageSource{}, true
+	default:
+		return pluginDamageSource{source: source}, true
+	}
+}
+
+type pluginHealingSource struct{ name string }
 
 func (pluginHealingSource) HealingSource() {}
+func (s pluginHealingSource) Name() string { return s.name }
 
-type pluginDamageSource struct{}
+type pluginDamageSource struct{ source native.DamageSource }
 
-func (pluginDamageSource) ReducedByArmour() bool     { return true }
-func (pluginDamageSource) ReducedByResistance() bool { return true }
-func (pluginDamageSource) Fire() bool                { return false }
-func (pluginDamageSource) IgnoreTotem() bool         { return false }
+func (s pluginDamageSource) ReducedByArmour() bool     { return s.source.ReducedByArmour }
+func (s pluginDamageSource) ReducedByResistance() bool { return s.source.ReducedByResistance }
+func (s pluginDamageSource) Fire() bool                { return s.source.Fire }
+func (s pluginDamageSource) IgnoreTotem() bool         { return s.source.IgnoresTotem }
+func (s pluginDamageSource) Name() string              { return s.source.Name }
+func (s pluginDamageSource) AffectedByEnchantment(value item.EnchantmentType) bool {
+	switch value {
+	case enchantment.FireProtection:
+		return s.source.FireProtection
+	case enchantment.FeatherFalling:
+		return s.source.FeatherFalling
+	case enchantment.BlastProtection:
+		return s.source.BlastProtection
+	case enchantment.ProjectileProtection:
+		return s.source.ProjectileProtection
+	default:
+		return false
+	}
+}
 
 func finite(values ...float64) bool {
 	for _, value := range values {

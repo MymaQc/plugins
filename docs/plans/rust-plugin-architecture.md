@@ -87,6 +87,13 @@ schema/
 Example schema:
 
 ```yaml
+operations:
+  - name: heal
+    id: 0
+    go: Heal
+    rust: heal
+    source: healing
+    result: healed
 states:
   - name: experience_level
     id: 6
@@ -98,7 +105,7 @@ states:
     validate: non_negative
 ```
 
-Player entries map the stable ABI ID, Dragonfly method, idiomatic Rust method, wire value type, validation, and optional named adapter. Named adapters cover semantics that method reflection cannot express, such as game-mode conversion and damage/healing sources.
+Player entries map the stable ABI ID, Dragonfly method, idiomatic Rust method, wire value type, validation, and optional named adapter. Named adapters cover state semantics that method reflection cannot express, such as game-mode conversion. The `operations` table maps result-bearing calls such as damage and healing to dedicated ABI functions instead of flattening them into state setters.
 
 A generator produces:
 
@@ -397,7 +404,9 @@ impl Plugin for Example {
 }
 ```
 
-Event structs are namespaced as `Event::PlayerMove`, `Event::PlayerHurt`, and so on; the old root `PlayerMoveEvent` naming is intentionally unsupported during WIP. Hurt/death expose `damage_source()` with Dragonfly's armour, resistance, fire, and totem flags. Heal exposes `healing_source()`. Both preserve the concrete Go source type name for custom implementations.
+Event structs are namespaced as `Event::PlayerMove`, `Event::PlayerHurt`, and so on; the old root `PlayerMoveEvent` naming is intentionally unsupported during WIP. Hurt/death expose a matchable `damage::Source`; heal exposes `healing::Source`. Standard variants preserve concrete Dragonfly payloads: optional attacker, optional projectile/owner, optional thorns owner, block state, poison fatality, and food quick-regeneration state. Unknown Go implementations become explicit `Custom` variants with their type name and damage traits.
+
+Outbound actions use the same types. `Player::heal(amount, source)` returns actual health gained. `Player::hurt(amount, source)` returns Dragonfly's final reduced damage and vulnerability flag. The host reconstructs exact value concrete types because Dragonfly uses value type assertions for attack/projectile thorns retaliation and drowning sound behavior. Dedicated host calls keep transport status private while preserving zero-valued domain results. Custom diagnostic source names may be empty and are bounded to 64 KiB at the ABI boundary. Host ABI v11 introduced these result-bearing calls and removed heal/hurt from the generic player-state table.
 
 All trait handlers have default no-op implementations. The `plugin` attribute sees which methods are implemented and generates the subscription bitmap and entry point, so Go skips unused events.
 

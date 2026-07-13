@@ -30,7 +30,7 @@ use dragonfly_plugin_sys::{
     DF_SUBSCRIPTION_PLAYER_RESPAWN, DF_SUBSCRIPTION_PLAYER_SIGN_EDIT, DF_SUBSCRIPTION_PLAYER_SLEEP,
     DF_SUBSCRIPTION_PLAYER_START_BREAK, DF_SUBSCRIPTION_PLAYER_TELEPORT,
     DF_SUBSCRIPTION_PLAYER_TOGGLE_SNEAK, DF_SUBSCRIPTION_PLAYER_TOGGLE_SPRINT, DfCommandDescriptor,
-    DfCommandInput, DfCommandState, DfHostApiV10, DfItemStackSnapshot, DfPlayerAttackEntityInput,
+    DfCommandInput, DfCommandState, DfHostApiV11, DfItemStackSnapshot, DfPlayerAttackEntityInput,
     DfPlayerAttackEntityState, DfPlayerBlockBreakInput, DfPlayerBlockBreakState,
     DfPlayerBlockPickInput, DfPlayerBlockPickState, DfPlayerBlockPlaceInput,
     DfPlayerBlockPlaceState, DfPlayerChangeWorldInput, DfPlayerChangeWorldState, DfPlayerChatInput,
@@ -63,7 +63,7 @@ use std::slice;
 #[repr(C)]
 pub struct DfRuntimeConfig {
     pub plugin_directory: DfStringView,
-    pub host: *const DfHostApiV10,
+    pub host: *const DfHostApiV11,
 }
 
 pub struct DfRuntime {
@@ -100,7 +100,7 @@ impl Drop for LoadedPlugin {
 }
 
 impl DfRuntime {
-    fn load(plugin_directory: &Path, host: *const DfHostApiV10) -> Result<Self, String> {
+    fn load(plugin_directory: &Path, host: *const DfHostApiV11) -> Result<Self, String> {
         let mut paths = native_libraries(plugin_directory)?;
         paths.sort();
 
@@ -1387,7 +1387,7 @@ impl LoadedPlugin {
         self.enabled = false;
     }
 
-    unsafe fn open(path: &Path, host: *const DfHostApiV10) -> Result<Self, String> {
+    unsafe fn open(path: &Path, host: *const DfHostApiV11) -> Result<Self, String> {
         // SAFETY: loading native plugins is the purpose of this trusted plugin runtime.
         let library = unsafe { Library::new(path) }
             .map_err(|err| format!("load {}: {err}", path.display()))?;
@@ -1478,6 +1478,53 @@ unsafe fn string_view<'a>(view: DfStringView) -> Result<&'a str, String> {
     // SAFETY: caller guarantees view points to readable memory for view.len bytes.
     let bytes = unsafe { slice::from_raw_parts(view.data, view.len as usize) };
     std::str::from_utf8(bytes).map_err(|err| format!("invalid UTF-8: {err}"))
+}
+
+unsafe fn valid_damage_source(source: &dragonfly_plugin_sys::DfDamageSourceView) -> bool {
+    use dragonfly_plugin_sys::*;
+
+    let known_flags = DF_DAMAGE_SOURCE_REDUCED_BY_ARMOUR
+        | DF_DAMAGE_SOURCE_REDUCED_BY_RESISTANCE
+        | DF_DAMAGE_SOURCE_FIRE
+        | DF_DAMAGE_SOURCE_IGNORES_TOTEM
+        | DF_DAMAGE_SOURCE_FIRE_PROTECTION
+        | DF_DAMAGE_SOURCE_FEATHER_FALLING
+        | DF_DAMAGE_SOURCE_BLAST_PROTECTION
+        | DF_DAMAGE_SOURCE_PROJECTILE_PROTECTION;
+    let Ok(name) = (unsafe { string_view(source.name) }) else {
+        return false;
+    };
+    if source.kind > DF_DAMAGE_SOURCE_WITHER
+        || source.flags & !known_flags != 0
+        || source.data > 1
+        || source.data != 0 && source.kind != DF_DAMAGE_SOURCE_POISON
+        || name.len() > 64 << 10
+    {
+        return false;
+    }
+    if source.kind != DF_DAMAGE_SOURCE_BLOCK {
+        return source.block.is_null();
+    }
+    let Some(block) = (unsafe { source.block.as_ref() }) else {
+        return false;
+    };
+    let Ok(identifier) = (unsafe { string_view(block.identifier) }) else {
+        return false;
+    };
+    identifier.len() <= 256
+        && !identifier.is_empty()
+        && block.properties_nbt.len <= 64 << 10
+        && (block.properties_nbt.len == 0 || !block.properties_nbt.data.is_null())
+}
+
+unsafe fn valid_healing_source(source: &dragonfly_plugin_sys::DfHealingSourceView) -> bool {
+    let Ok(name) = (unsafe { string_view(source.name) }) else {
+        return false;
+    };
+    source.kind <= dragonfly_plugin_sys::DF_HEALING_SOURCE_REGENERATION
+        && source.data <= 1
+        && (source.data == 0 || source.kind == dragonfly_plugin_sys::DF_HEALING_SOURCE_FOOD)
+        && name.len() <= 64 << 10
 }
 
 fn valid_item_snapshot(item: &DfItemStackSnapshot) -> bool {
@@ -1596,7 +1643,7 @@ pub unsafe extern "C" fn df_runtime_create(
             return Err("null host API".to_owned());
         };
         if host_api.abi_version != DF_HOST_ABI_VERSION
-            || host_api.struct_size < size_of::<DfHostApiV10>() as u32
+            || host_api.struct_size < size_of::<DfHostApiV11>() as u32
         {
             return Err("incompatible host API".to_owned());
         }
@@ -2225,7 +2272,7 @@ pub unsafe extern "C" fn df_runtime_handle_player_hurt(
     ) else {
         return DF_STATUS_ERROR;
     };
-    if unsafe { string_view(input.source.name) }.is_err() || !state.damage.is_finite() {
+    if !unsafe { valid_damage_source(&input.source) } || !state.damage.is_finite() {
         return DF_STATUS_ERROR;
     }
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -2251,7 +2298,7 @@ pub unsafe extern "C" fn df_runtime_handle_player_heal(
     ) else {
         return DF_STATUS_ERROR;
     };
-    if unsafe { string_view(input.source.name) }.is_err() || !state.health.is_finite() {
+    if !unsafe { valid_healing_source(&input.source) } || !state.health.is_finite() {
         return DF_STATUS_ERROR;
     }
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -2352,7 +2399,7 @@ pub unsafe extern "C" fn df_runtime_handle_player_death(
     ) else {
         return DF_STATUS_ERROR;
     };
-    if unsafe { string_view(input.source.name) }.is_err() {
+    if !unsafe { valid_damage_source(&input.source) } {
         return DF_STATUS_ERROR;
     }
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -2548,6 +2595,7 @@ pub unsafe extern "C" fn df_runtime_handle_player_punch_air(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use dragonfly_plugin_sys::*;
 
     #[test]
     fn empty_directory_loads() {
@@ -2555,9 +2603,9 @@ mod tests {
             std::env::temp_dir().join(format!("dragonfly-runtime-{}", std::process::id()));
         let _ = fs::remove_dir_all(&directory);
         fs::create_dir_all(&directory).unwrap();
-        let host = DfHostApiV10 {
+        let host = DfHostApiV11 {
             abi_version: DF_HOST_ABI_VERSION,
-            struct_size: size_of::<DfHostApiV10>() as u32,
+            struct_size: size_of::<DfHostApiV11>() as u32,
             context: 0,
             player_text: None,
             player_title: None,
@@ -2609,6 +2657,8 @@ mod tests {
             world_particle_add: None,
             world_sound_play: None,
             player_sound_play: None,
+            player_heal: None,
+            player_hurt: None,
         };
         let runtime = DfRuntime::load(&directory, ptr::from_ref(&host)).unwrap();
         assert!(runtime.plugins.is_empty());
@@ -2749,5 +2799,82 @@ mod tests {
 
         state.world.value = 0;
         assert_eq!(dispatch(&input, &mut state), DF_STATUS_ERROR);
+    }
+
+    #[test]
+    fn validates_damage_source_payloads() {
+        let name = b"attack";
+        let mut source = DfDamageSourceView {
+            name: DfStringView {
+                data: name.as_ptr(),
+                len: name.len() as u64,
+            },
+            kind: DF_DAMAGE_SOURCE_ATTACK,
+            flags: DF_DAMAGE_SOURCE_REDUCED_BY_ARMOUR | DF_DAMAGE_SOURCE_REDUCED_BY_RESISTANCE,
+            entity: DfEntityId {
+                generation: 1,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(unsafe { valid_damage_source(&source) });
+
+        source.entity.generation = 0;
+        assert!(unsafe { valid_damage_source(&source) });
+        source.entity.generation = 1;
+
+        source.flags |= 1 << 31;
+        assert!(!unsafe { valid_damage_source(&source) });
+        source.flags &= !(1 << 31);
+
+        source.data = 1;
+        assert!(!unsafe { valid_damage_source(&source) });
+        source.data = 0;
+
+        let block_name = b"minecraft:stone";
+        let block = DfBlockView {
+            identifier: DfStringView {
+                data: block_name.as_ptr(),
+                len: block_name.len() as u64,
+            },
+            properties_nbt: DfStringView::default(),
+        };
+        source.kind = DF_DAMAGE_SOURCE_BLOCK;
+        source.entity = DfEntityId::default();
+        source.block = ptr::from_ref(&block);
+        assert!(unsafe { valid_damage_source(&source) });
+
+        source.kind = DF_DAMAGE_SOURCE_FALL;
+        assert!(!unsafe { valid_damage_source(&source) });
+    }
+
+    #[test]
+    fn validates_healing_source_payloads() {
+        let name = b"food";
+        let mut source = DfHealingSourceView {
+            name: DfStringView {
+                data: name.as_ptr(),
+                len: name.len() as u64,
+            },
+            kind: DF_HEALING_SOURCE_FOOD,
+            data: 1,
+        };
+        assert!(unsafe { valid_healing_source(&source) });
+
+        source.kind = DF_HEALING_SOURCE_INSTANT;
+        assert!(!unsafe { valid_healing_source(&source) });
+        source.data = 0;
+        assert!(unsafe { valid_healing_source(&source) });
+
+        source.kind = DF_HEALING_SOURCE_CUSTOM;
+        source.name = DfStringView::default();
+        assert!(unsafe { valid_healing_source(&source) });
+
+        let oversized = vec![b'x'; (64 << 10) + 1];
+        source.name = DfStringView {
+            data: oversized.as_ptr(),
+            len: oversized.len() as u64,
+        };
+        assert!(!unsafe { valid_healing_source(&source) });
     }
 }

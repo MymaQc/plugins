@@ -8,7 +8,10 @@ import (
 	"time"
 
 	"github.com/bedrock-gophers/plugins/internal/native"
+	"github.com/df-mc/dragonfly/server/block"
+	"github.com/df-mc/dragonfly/server/entity"
 	"github.com/df-mc/dragonfly/server/entity/effect"
+	"github.com/df-mc/dragonfly/server/item/enchantment"
 	"github.com/df-mc/dragonfly/server/player"
 	"github.com/df-mc/dragonfly/server/world"
 	"github.com/go-gl/mathgl/mgl64"
@@ -163,19 +166,27 @@ func TestPlayersReadsAndChangesState(t *testing.T) {
 		}{
 			{native.PlayerStateFood, native.PlayerStateValue{Integer: 12}},
 			{native.PlayerStateMaxHealth, native.PlayerStateValue{Number: 40}},
-			{native.PlayerStateHurt, native.PlayerStateValue{Number: 4}},
-			{native.PlayerStateHeal, native.PlayerStateValue{Number: 3}},
 			{native.PlayerStateExperienceLevel, native.PlayerStateValue{Integer: 12}},
 			{native.PlayerStateExperienceProgress, native.PlayerStateValue{Number: 0.5}},
 			{native.PlayerStateScale, native.PlayerStateValue{Number: 1.5}},
 			{native.PlayerStateInvisible, native.PlayerStateValue{Integer: 1}},
 			{native.PlayerStateImmobile, native.PlayerStateValue{Integer: 1}},
-			{native.PlayerStateGameMode, native.PlayerStateValue{Integer: 1}},
 		}
 		for _, change := range changes {
 			if !players.SetPlayerState(invocation, id, change.kind, change.value) {
 				t.Fatalf("state change %d failed", change.kind)
 			}
+		}
+		hurt, ok := players.HurtPlayer(invocation, id, 4, native.DamageSource{Kind: native.DamageSourceInstant})
+		if !ok || hurt.Damage != 4 || !hurt.Vulnerable {
+			t.Fatalf("hurt = %+v ok=%v", hurt, ok)
+		}
+		healed, ok := players.HealPlayer(invocation, id, 3, native.HealingSource{Kind: native.HealingSourceInstant})
+		if !ok || healed != 3 {
+			t.Fatalf("healed = %v ok=%v", healed, ok)
+		}
+		if !players.SetPlayerState(invocation, id, native.PlayerStateGameMode, native.PlayerStateValue{Integer: 1}) {
+			t.Fatal("game-mode change failed")
 		}
 		gameMode, _ := players.PlayerState(invocation, id, native.PlayerStateGameMode)
 		food, _ := players.PlayerState(invocation, id, native.PlayerStateFood)
@@ -213,6 +224,65 @@ func TestPlayersReadsAndChangesState(t *testing.T) {
 		}
 		if _, ok := player.Effect(effect.Speed); ok {
 			t.Fatal("effect still present")
+		}
+	})
+}
+
+func TestPlayersReconstructsConcreteHealAndHurtSources(t *testing.T) {
+	withPlayerTx(t, func(tx *world.Tx, connected *player.Player) {
+		players := NewPlayers()
+		playerID := players.Register(connected, 17)
+		entityID := native.EntityID{UUID: playerID.UUID, Generation: playerID.Generation}
+
+		attack, ok := players.damageSource(tx, native.DamageSource{Kind: native.DamageSourceAttack, Entity: entityID})
+		attackSource, typed := attack.(entity.AttackDamageSource)
+		if !ok || !typed || attackSource.Attacker.H() != connected.H() {
+			t.Fatalf("attack = %#v ok=%v", attack, ok)
+		}
+		attack, ok = players.damageSource(tx, native.DamageSource{Kind: native.DamageSourceAttack})
+		attackSource, typed = attack.(entity.AttackDamageSource)
+		if !ok || !typed || attackSource.Attacker != nil {
+			t.Fatalf("attack without attacker = %#v ok=%v", attack, ok)
+		}
+
+		projectile, ok := players.damageSource(tx, native.DamageSource{
+			Kind: native.DamageSourceProjectile, Entity: entityID, SecondaryEntity: entityID,
+		})
+		projectileSource, typed := projectile.(entity.ProjectileDamageSource)
+		if !ok || !typed || projectileSource.Projectile.H() != connected.H() || projectileSource.Owner.H() != connected.H() {
+			t.Fatalf("projectile = %#v ok=%v", projectile, ok)
+		}
+		projectile, ok = players.damageSource(tx, native.DamageSource{Kind: native.DamageSourceProjectile})
+		projectileSource, typed = projectile.(entity.ProjectileDamageSource)
+		if !ok || !typed || projectileSource.Projectile != nil || projectileSource.Owner != nil {
+			t.Fatalf("projectile without entities = %#v ok=%v", projectile, ok)
+		}
+
+		properties, valid := EncodeBlockProperties(map[string]any{"age": int32(4)})
+		if !valid {
+			t.Fatal("encode cactus properties")
+		}
+		blockSource, ok := players.damageSource(tx, native.DamageSource{
+			Kind:  native.DamageSourceBlock,
+			Block: &native.WorldBlock{Identifier: "minecraft:cactus", PropertiesNBT: properties},
+		})
+		resolvedBlock, typed := blockSource.(block.DamageSource)
+		cactus, cactusOK := resolvedBlock.Block.(block.Cactus)
+		if !ok || !typed || !cactusOK || cactus.Age != 4 {
+			t.Fatalf("block = %#v ok=%v", blockSource, ok)
+		}
+
+		custom, ok := players.damageSource(tx, native.DamageSource{
+			Name: "example.Custom", ReducedByArmour: true, FireProtection: true,
+		})
+		customSource, typed := custom.(pluginDamageSource)
+		if !ok || !typed || !customSource.ReducedByArmour() || !customSource.AffectedByEnchantment(enchantment.FireProtection) || customSource.Name() != "example.Custom" {
+			t.Fatalf("custom = %#v ok=%v", custom, ok)
+		}
+
+		food, typed := healingSource(native.HealingSource{Kind: native.HealingSourceFood, Data: true}).(entity.FoodHealingSource)
+		if !typed || !food.QuickRegeneration {
+			t.Fatalf("food = %#v", food)
 		}
 	})
 }

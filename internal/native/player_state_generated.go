@@ -8,8 +8,6 @@ type PlayerStateKind uint32
 
 const (
 	PlayerStateGameMode           PlayerStateKind = 0
-	PlayerStateHeal               PlayerStateKind = 1
-	PlayerStateHurt               PlayerStateKind = 2
 	PlayerStateFood               PlayerStateKind = 3
 	PlayerStateMaxHealth          PlayerStateKind = 4
 	PlayerStateHealth             PlayerStateKind = 5

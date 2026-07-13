@@ -8,6 +8,7 @@ import "C"
 import (
 	"encoding/json"
 	"time"
+	"unicode/utf8"
 	"unsafe"
 )
 
@@ -191,6 +192,106 @@ func bg_go_player_state_get(context C.uint64_t, invocation C.DfInvocationId, pla
 	value.number = C.double(state.Number)
 	value.integer = C.int64_t(state.Integer)
 	return C.DF_STATUS_OK
+}
+
+//export bg_go_player_heal
+func bg_go_player_heal(context C.uint64_t, invocation C.DfInvocationId, player C.DfPlayerId, health C.double, view *C.DfHealingSourceView, result *C.DfPlayerHealResult) C.DfStatus {
+	if result == nil {
+		return C.DF_STATUS_ERROR
+	}
+	*result = C.DfPlayerHealResult{}
+	host, ok := resolveHost(uint64(context))
+	source, valid := copyHealingSourceView(view)
+	if !ok || !valid {
+		return C.DF_STATUS_ERROR
+	}
+	healed, ok := host.HealPlayer(InvocationID(invocation), playerID(player), float64(health), source)
+	if !ok {
+		return C.DF_STATUS_ERROR
+	}
+	result.healed = C.double(healed)
+	return C.DF_STATUS_OK
+}
+
+//export bg_go_player_hurt
+func bg_go_player_hurt(context C.uint64_t, invocation C.DfInvocationId, player C.DfPlayerId, damage C.double, view *C.DfDamageSourceView, result *C.DfPlayerHurtResult) C.DfStatus {
+	if result == nil {
+		return C.DF_STATUS_ERROR
+	}
+	*result = C.DfPlayerHurtResult{}
+	host, ok := resolveHost(uint64(context))
+	source, valid := copyDamageSourceView(view)
+	if !ok || !valid {
+		return C.DF_STATUS_ERROR
+	}
+	value, ok := host.HurtPlayer(InvocationID(invocation), playerID(player), float64(damage), source)
+	if !ok {
+		return C.DF_STATUS_ERROR
+	}
+	result.damage = C.double(value.Damage)
+	if value.Vulnerable {
+		result.vulnerable = 1
+	}
+	return C.DF_STATUS_OK
+}
+
+func copyHealingSourceView(view *C.DfHealingSourceView) (HealingSource, bool) {
+	if view == nil || uint32(view.kind) > uint32(HealingSourceRegeneration) || view.data > 1 {
+		return HealingSource{}, false
+	}
+	kind := HealingSourceKind(view.kind)
+	if view.data != 0 && kind != HealingSourceFood {
+		return HealingSource{}, false
+	}
+	name, ok := copyWorldBytes(view.name, maxSourceNameBytes)
+	if !ok || !utf8.Valid(name) {
+		return HealingSource{}, false
+	}
+	return HealingSource{Name: string(name), Kind: kind, Data: view.data != 0}, true
+}
+
+func copyDamageSourceView(view *C.DfDamageSourceView) (DamageSource, bool) {
+	if view == nil || uint32(view.kind) > uint32(DamageSourceWither) || view.data > 1 {
+		return DamageSource{}, false
+	}
+	kind := DamageSourceKind(view.kind)
+	if view.data != 0 && kind != DamageSourcePoison {
+		return DamageSource{}, false
+	}
+	if (view.block != nil) != (kind == DamageSourceBlock) {
+		return DamageSource{}, false
+	}
+	name, ok := copyWorldBytes(view.name, maxSourceNameBytes)
+	if !ok || !utf8.Valid(name) {
+		return DamageSource{}, false
+	}
+	flags := uint32(view.flags)
+	knownFlags := uint32(C.DF_DAMAGE_SOURCE_REDUCED_BY_ARMOUR | C.DF_DAMAGE_SOURCE_REDUCED_BY_RESISTANCE |
+		C.DF_DAMAGE_SOURCE_FIRE | C.DF_DAMAGE_SOURCE_IGNORES_TOTEM | C.DF_DAMAGE_SOURCE_FIRE_PROTECTION |
+		C.DF_DAMAGE_SOURCE_FEATHER_FALLING | C.DF_DAMAGE_SOURCE_BLAST_PROTECTION | C.DF_DAMAGE_SOURCE_PROJECTILE_PROTECTION)
+	if flags & ^knownFlags != 0 {
+		return DamageSource{}, false
+	}
+	source := DamageSource{
+		Name: string(name), Kind: kind, Entity: entityID(view.entity),
+		SecondaryEntity: entityID(view.secondary_entity), Data: view.data != 0,
+		ReducedByArmour:     flags&C.DF_DAMAGE_SOURCE_REDUCED_BY_ARMOUR != 0,
+		ReducedByResistance: flags&C.DF_DAMAGE_SOURCE_REDUCED_BY_RESISTANCE != 0,
+		Fire:                flags&C.DF_DAMAGE_SOURCE_FIRE != 0, IgnoresTotem: flags&C.DF_DAMAGE_SOURCE_IGNORES_TOTEM != 0,
+		FireProtection:       flags&C.DF_DAMAGE_SOURCE_FIRE_PROTECTION != 0,
+		FeatherFalling:       flags&C.DF_DAMAGE_SOURCE_FEATHER_FALLING != 0,
+		BlastProtection:      flags&C.DF_DAMAGE_SOURCE_BLAST_PROTECTION != 0,
+		ProjectileProtection: flags&C.DF_DAMAGE_SOURCE_PROJECTILE_PROTECTION != 0,
+	}
+	if view.block != nil {
+		identifier, validIdentifier := copyWorldBytes(view.block.identifier, maxBlockIdentifierBytes)
+		properties, validProperties := copyWorldBytes(view.block.properties_nbt, maxBlockPropertiesBytes)
+		if !validIdentifier || !validProperties || len(identifier) == 0 || !utf8.Valid(identifier) {
+			return DamageSource{}, false
+		}
+		source.Block = &WorldBlock{Identifier: string(identifier), PropertiesNBT: properties}
+	}
+	return source, true
 }
 
 //export bg_go_player_effect

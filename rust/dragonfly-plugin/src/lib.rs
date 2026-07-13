@@ -6,8 +6,10 @@ use core::sync::atomic::{AtomicPtr, Ordering};
 use std::cell::Cell;
 
 pub mod block;
+pub mod damage;
 pub mod entity;
 pub mod form;
+pub mod healing;
 mod item_nbt;
 pub mod particle;
 pub mod sound;
@@ -61,7 +63,7 @@ pub mod Event {
     pub use super::PlayerToggleSprintEventData as PlayerToggleSprint;
 }
 
-static HOST_API: AtomicPtr<dragonfly_plugin_sys::DfHostApiV10> =
+static HOST_API: AtomicPtr<dragonfly_plugin_sys::DfHostApiV11> =
     AtomicPtr::new(core::ptr::null_mut());
 
 std::thread_local! {
@@ -110,7 +112,7 @@ impl Drop for SkinSnapshot {
 #[doc(hidden)]
 /// # Safety
 /// `host` must remain valid while plugin callbacks may execute.
-pub unsafe fn install_host(host: *const dragonfly_plugin_sys::DfHostApiV10) {
+pub unsafe fn install_host(host: *const dragonfly_plugin_sys::DfHostApiV11) {
     HOST_API.store(host.cast_mut(), Ordering::Release);
 }
 
@@ -153,44 +155,6 @@ pub enum BlockFace {
     South = 3,
     West = 4,
     East = 5,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct DamageSource<'a> {
-    raw: &'a dragonfly_plugin_sys::DfDamageSourceView,
-}
-
-impl DamageSource<'_> {
-    pub fn name(&self) -> &str {
-        unsafe { string_view(self.raw.name) }
-    }
-
-    pub const fn reduced_by_armour(&self) -> bool {
-        self.raw.flags & dragonfly_plugin_sys::DF_DAMAGE_SOURCE_REDUCED_BY_ARMOUR != 0
-    }
-
-    pub const fn reduced_by_resistance(&self) -> bool {
-        self.raw.flags & dragonfly_plugin_sys::DF_DAMAGE_SOURCE_REDUCED_BY_RESISTANCE != 0
-    }
-
-    pub const fn fire(&self) -> bool {
-        self.raw.flags & dragonfly_plugin_sys::DF_DAMAGE_SOURCE_FIRE != 0
-    }
-
-    pub const fn ignores_totem(&self) -> bool {
-        self.raw.flags & dragonfly_plugin_sys::DF_DAMAGE_SOURCE_IGNORES_TOTEM != 0
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct HealingSource<'a> {
-    raw: &'a dragonfly_plugin_sys::DfHealingSourceView,
-}
-
-impl HealingSource<'_> {
-    pub fn name(&self) -> &str {
-        unsafe { string_view(self.raw.name) }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -1017,6 +981,62 @@ impl Player {
             // Names are copied from runtime-validated UTF-8 or parsed Rust strings.
             unsafe { core::str::from_utf8_unchecked(&name.bytes[..name.len as usize]) }
         })
+    }
+
+    pub fn heal<'a>(&self, health: f64, source: impl Into<healing::Source<'a>>) -> f64 {
+        let Some(host) = host_api() else { return 0.0 };
+        let Some(heal) = host.player_heal else {
+            return 0.0;
+        };
+        let source = source.into();
+        source.with_raw(|view| {
+            let mut result = dragonfly_plugin_sys::DfPlayerHealResult::default();
+            let status = unsafe {
+                heal(
+                    host.context,
+                    current_invocation(),
+                    self.raw_id(),
+                    health,
+                    view,
+                    &mut result,
+                )
+            };
+            if status == dragonfly_plugin_sys::DF_STATUS_OK {
+                result.healed
+            } else {
+                0.0
+            }
+        })
+    }
+
+    pub fn hurt<'a>(&self, damage: f64, source: impl Into<damage::Source<'a>>) -> (f64, bool) {
+        let Some(host) = host_api() else {
+            return (0.0, false);
+        };
+        let Some(hurt) = host.player_hurt else {
+            return (0.0, false);
+        };
+        let source = source.into();
+        source
+            .with_raw(|view| {
+                let mut result = dragonfly_plugin_sys::DfPlayerHurtResult::default();
+                let status = unsafe {
+                    hurt(
+                        host.context,
+                        current_invocation(),
+                        self.raw_id(),
+                        damage,
+                        view,
+                        &mut result,
+                    )
+                };
+                if status == dragonfly_plugin_sys::DF_STATUS_OK {
+                    (result.damage, result.vulnerable != 0)
+                } else {
+                    (0.0, false)
+                }
+            })
+            .unwrap_or((0.0, false))
     }
 
     pub fn send_title(&self, title: &Title) {
@@ -2148,13 +2168,13 @@ fn slice_pointer<T>(value: &[T]) -> *const T {
     }
 }
 
-fn host_api() -> Option<&'static dragonfly_plugin_sys::DfHostApiV10> {
+fn host_api() -> Option<&'static dragonfly_plugin_sys::DfHostApiV11> {
     unsafe { HOST_API.load(Ordering::Acquire).as_ref() }
 }
 
 fn read_item_stack(
     open: impl FnOnce(
-        &dragonfly_plugin_sys::DfHostApiV10,
+        &dragonfly_plugin_sys::DfHostApiV11,
         *mut u64,
         *mut dragonfly_plugin_sys::DfItemStackInfo,
     ) -> Option<dragonfly_plugin_sys::DfStatus>,
@@ -2176,7 +2196,7 @@ fn read_item_stack(
 }
 
 fn read_item_stack_snapshot(
-    host: &dragonfly_plugin_sys::DfHostApiV10,
+    host: &dragonfly_plugin_sys::DfHostApiV11,
     invocation: dragonfly_plugin_sys::DfInvocationId,
     snapshot_id: u64,
     info: dragonfly_plugin_sys::DfItemStackInfo,
@@ -2458,10 +2478,15 @@ impl<'a> PlayerHurtEventData<'a> {
         Player::from_id(self.input.player)
     }
 
-    pub fn damage_source(&self) -> DamageSource<'_> {
-        DamageSource {
-            raw: &self.input.source,
-        }
+    pub fn damage_source(&self) -> damage::Source<'_> {
+        unsafe { damage::Source::from_raw(&self.input.source) }.unwrap_or_else(|| {
+            damage::Custom::new(
+                "unknown",
+                damage::Traits::default(),
+                damage::AffectedProtections::NONE,
+            )
+            .into()
+        })
     }
 
     pub fn immune(&self) -> bool {
@@ -2596,10 +2621,9 @@ impl<'a> PlayerHealEventData<'a> {
         Player::from_id(self.input.player)
     }
 
-    pub fn healing_source(&self) -> HealingSource<'_> {
-        HealingSource {
-            raw: &self.input.source,
-        }
+    pub fn healing_source(&self) -> healing::Source<'_> {
+        unsafe { healing::Source::from_raw(&self.input.source) }
+            .unwrap_or_else(|| healing::Custom::new("unknown").into())
     }
 
     pub fn health(&self) -> f64 {
@@ -2680,10 +2704,15 @@ impl<'a> PlayerDeathEventData<'a> {
         Player::from_id(self.input.player)
     }
 
-    pub fn damage_source(&self) -> DamageSource<'_> {
-        DamageSource {
-            raw: &self.input.source,
-        }
+    pub fn damage_source(&self) -> damage::Source<'_> {
+        unsafe { damage::Source::from_raw(&self.input.source) }.unwrap_or_else(|| {
+            damage::Custom::new(
+                "unknown",
+                damage::Traits::default(),
+                damage::AffectedProtections::NONE,
+            )
+            .into()
+        })
     }
 
     pub fn keep_inventory(&self) -> bool {

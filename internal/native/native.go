@@ -111,13 +111,59 @@ type PlayerQuitInput struct {
 }
 
 type DamageSource struct {
-	Name                                       string
-	ReducedByArmour, ReducedByResistance, Fire bool
-	IgnoresTotem                               bool
+	Name                                            string
+	Kind                                            DamageSourceKind
+	ReducedByArmour, ReducedByResistance, Fire      bool
+	IgnoresTotem                                    bool
+	FireProtection, FeatherFalling, BlastProtection bool
+	ProjectileProtection                            bool
+	Entity, SecondaryEntity                         EntityID
+	Block                                           *WorldBlock
+	Data                                            bool
 }
 
 type HealingSource struct {
 	Name string
+	Kind HealingSourceKind
+	Data bool
+}
+
+type DamageSourceKind uint32
+
+const (
+	DamageSourceCustom DamageSourceKind = iota
+	DamageSourceAttack
+	DamageSourceBlock
+	DamageSourceDrowning
+	DamageSourceExplosion
+	DamageSourceFall
+	DamageSourceFire
+	DamageSourceGlide
+	DamageSourceInstant
+	DamageSourceLava
+	DamageSourceLightning
+	DamageSourceMagma
+	DamageSourcePoison
+	DamageSourceProjectile
+	DamageSourceStarvation
+	DamageSourceSuffocation
+	DamageSourceThorns
+	DamageSourceVoid
+	DamageSourceWither
+)
+
+type HealingSourceKind uint32
+
+const (
+	HealingSourceCustom HealingSourceKind = iota
+	HealingSourceFood
+	HealingSourceInstant
+	HealingSourceRegeneration
+)
+
+type PlayerHurtResult struct {
+	Damage     float64
+	Vulnerable bool
 }
 
 type PlayerHurtInput struct {
@@ -678,13 +724,16 @@ func (r *Runtime) HandlePlayerHurt(invocation InvocationID, input PlayerHurtInpu
 	if r == nil || r.ptr == nil {
 		return output, errors.New("native runtime is closed")
 	}
-	source := C.CBytes([]byte(input.Source.Name))
-	defer C.free(source)
+	source, releaseSource, ok := nativeDamageSource(input.Source)
+	if !ok {
+		return output, errors.New("encode hurt damage source")
+	}
+	defer releaseSource()
 	var nativeInput C.DfPlayerHurtInput
 	nativeInput.invocation = C.DfInvocationId(invocation)
 	fillPlayerID(&nativeInput.player, input.Player)
 	nativeInput.immune = C.uint8_t(boolByte(input.Immune))
-	nativeInput.source = nativeDamageSource(input.Source, source)
+	nativeInput.source = source
 	state := C.DfPlayerHurtState{
 		damage:                       C.double(input.Damage),
 		attack_immunity_milliseconds: C.uint64_t(max(input.AttackImmunity.Milliseconds(), 0)),
@@ -711,7 +760,10 @@ func (r *Runtime) HandlePlayerHeal(invocation InvocationID, input PlayerHealInpu
 	var nativeInput C.DfPlayerHealInput
 	nativeInput.invocation = C.DfInvocationId(invocation)
 	fillPlayerID(&nativeInput.player, input.Player)
-	nativeInput.source = C.DfHealingSourceView{name: C.DfStringView{data: (*C.uint8_t)(source), len: C.uint64_t(len(input.Source.Name))}}
+	nativeInput.source = C.DfHealingSourceView{
+		name: C.DfStringView{data: (*C.uint8_t)(source), len: C.uint64_t(len(input.Source.Name))},
+		kind: C.uint32_t(input.Source.Kind), data: C.uint8_t(boolByte(input.Source.Data)),
+	}
 	state := C.DfPlayerHealState{health: C.double(input.Health)}
 	if cancelled {
 		state.cancelled = 1
@@ -794,12 +846,15 @@ func (r *Runtime) HandlePlayerDeath(invocation InvocationID, input PlayerDeathIn
 	if r == nil || r.ptr == nil {
 		return keepInventory, errors.New("native runtime is closed")
 	}
-	source := C.CBytes([]byte(input.Source.Name))
-	defer C.free(source)
+	source, releaseSource, ok := nativeDamageSource(input.Source)
+	if !ok {
+		return keepInventory, errors.New("encode death damage source")
+	}
+	defer releaseSource()
 	var nativeInput C.DfPlayerDeathInput
 	nativeInput.invocation = C.DfInvocationId(invocation)
 	fillPlayerID(&nativeInput.player, input.Player)
-	nativeInput.source = nativeDamageSource(input.Source, source)
+	nativeInput.source = source
 	var state C.DfPlayerDeathState
 	if keepInventory {
 		state.keep_inventory = 1
@@ -1276,7 +1331,18 @@ func boolByte(value bool) uint8 {
 	return 0
 }
 
-func nativeDamageSource(source DamageSource, name unsafe.Pointer) C.DfDamageSourceView {
+func nativeDamageSource(source DamageSource) (C.DfDamageSourceView, func(), bool) {
+	allocations := make([]unsafe.Pointer, 0, 4)
+	release := func() {
+		for _, allocation := range allocations {
+			C.free(allocation)
+		}
+	}
+	name := C.CBytes([]byte(source.Name))
+	if len(source.Name) != 0 && name == nil {
+		return C.DfDamageSourceView{}, func() {}, false
+	}
+	allocations = append(allocations, name)
 	var flags uint32
 	if source.ReducedByArmour {
 		flags |= C.DF_DAMAGE_SOURCE_REDUCED_BY_ARMOUR
@@ -1290,10 +1356,43 @@ func nativeDamageSource(source DamageSource, name unsafe.Pointer) C.DfDamageSour
 	if source.IgnoresTotem {
 		flags |= C.DF_DAMAGE_SOURCE_IGNORES_TOTEM
 	}
-	return C.DfDamageSourceView{
-		name:  C.DfStringView{data: (*C.uint8_t)(name), len: C.uint64_t(len(source.Name))},
-		flags: C.uint32_t(flags),
+	if source.FireProtection {
+		flags |= C.DF_DAMAGE_SOURCE_FIRE_PROTECTION
 	}
+	if source.FeatherFalling {
+		flags |= C.DF_DAMAGE_SOURCE_FEATHER_FALLING
+	}
+	if source.BlastProtection {
+		flags |= C.DF_DAMAGE_SOURCE_BLAST_PROTECTION
+	}
+	if source.ProjectileProtection {
+		flags |= C.DF_DAMAGE_SOURCE_PROJECTILE_PROTECTION
+	}
+	view := C.DfDamageSourceView{
+		name: C.DfStringView{data: (*C.uint8_t)(name), len: C.uint64_t(len(source.Name))},
+		kind: C.uint32_t(source.Kind), flags: C.uint32_t(flags), data: C.uint8_t(boolByte(source.Data)),
+	}
+	fillEntityID(&view.entity, source.Entity)
+	fillEntityID(&view.secondary_entity, source.SecondaryEntity)
+	if source.Block != nil {
+		block := (*C.DfBlockView)(C.malloc(C.size_t(C.sizeof_DfBlockView)))
+		identifier := C.CBytes([]byte(source.Block.Identifier))
+		properties := C.CBytes(source.Block.PropertiesNBT)
+		if block == nil || len(source.Block.Identifier) != 0 && identifier == nil || len(source.Block.PropertiesNBT) != 0 && properties == nil {
+			C.free(unsafe.Pointer(block))
+			C.free(identifier)
+			C.free(properties)
+			release()
+			return C.DfDamageSourceView{}, func() {}, false
+		}
+		allocations = append(allocations, unsafe.Pointer(block), identifier, properties)
+		*block = C.DfBlockView{
+			identifier:     C.DfStringView{data: (*C.uint8_t)(identifier), len: C.uint64_t(len(source.Block.Identifier))},
+			properties_nbt: C.DfStringView{data: (*C.uint8_t)(properties), len: C.uint64_t(len(source.Block.PropertiesNBT))},
+		}
+		view.block = block
+	}
+	return view, release, true
 }
 
 func fillPlayerID(destination *C.DfPlayerId, source PlayerID) {
