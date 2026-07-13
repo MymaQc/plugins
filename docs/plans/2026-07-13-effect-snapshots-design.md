@@ -30,8 +30,9 @@ valid because an effect may have reached zero after the current tick and be
 removed on the next expiry pass.
 
 Clear-all snapshots `Player.Effects()` and calls `RemoveEffect` for every type
-inside one player-owner mutation. It therefore clears registered and
-unregistered custom effects without one FFI round trip per effect.
+inside one player-owner mutation. It therefore clears built-in and registered
+custom effects without one FFI round trip per effect. This is one owner pass,
+not a rollback transaction: an effect `End` hook may add another effect.
 
 ## Host ABI v18
 
@@ -73,7 +74,9 @@ touching caller memory. It sets the required length and returns an error on
 insufficient capacity without partial writes. A non-empty buffer requires a
 non-null data pointer. Snapshot output accepts only positive levels, potency
 exactly `1.0`, finite timed/ambient modes, or infinite mode with zero duration,
-and a particle-hidden byte of zero or one.
+and a particle-hidden byte of zero or one. Durations use millisecond transport
+granularity. Sub-millisecond positive values floor to zero; negative remaining
+durations between Dragonfly expiry passes clamp to zero.
 
 Each successful host call is one coherent transaction snapshot. No retained
 snapshot registry is needed because entries contain no nested variable-length
@@ -86,9 +89,12 @@ buffer before returning it. Malformed length, excessive count, invalid mode,
 invalid potency, invalid level, invalid particle byte, or host rejection makes
 the public result empty. No raw `DfStatus` or host error type is exposed.
 
-`effect::Effect` adds read-only accessors: `type_id`, `level`, `duration`,
+Initial instant effects are filtered because Dragonfly has not applied them
+yet and does not retain instant effects as active status. `effect::Effect` adds
+read-only accessors: `type_id`, `level`, `duration`,
 `ambient`, `infinite`, and `particles_hidden`. A custom returned ID can be
-used with `effect::RegisteredLasting::new(id)`.
+used with `effect::RegisteredLasting::new(id)`. Tick age is not transported;
+the snapshot is status inspection, not a byte-for-byte reapplication state.
 
 ## Verification
 

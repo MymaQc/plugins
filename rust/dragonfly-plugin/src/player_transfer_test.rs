@@ -38,7 +38,7 @@ unsafe extern "C" fn record_transfer(
 fn player_transfer_sends_typed_handles_and_hides_host_status() {
     let _host_guard = TEST_HOST_LOCK.lock().unwrap();
     *RECORDED_TRANSFER.lock().unwrap() = None;
-    let mut host: dragonfly_plugin_sys::DfHostApiV17 = unsafe { core::mem::zeroed() };
+    let mut host: dragonfly_plugin_sys::DfHostApiV18 = unsafe { core::mem::zeroed() };
     host.context = 27;
     host.player_transfer = Some(record_transfer);
     unsafe { install_host(&host) };

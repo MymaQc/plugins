@@ -43,6 +43,10 @@ _Static_assert(sizeof(DfPlayerHurtResult) == 16, "DfPlayerHurtResult ABI layout 
 _Static_assert(sizeof(DfEffectView) == 32, "DfEffectView ABI layout changed");
 _Static_assert(offsetof(DfEffectView, potency) == 16, "DfEffectView.potency ABI offset changed");
 _Static_assert(offsetof(DfEffectView, mode) == 24, "DfEffectView.mode ABI offset changed");
+_Static_assert(sizeof(DfEffectBuffer) == 24, "DfEffectBuffer ABI layout changed");
+_Static_assert(offsetof(DfEffectBuffer, data) == 0, "DfEffectBuffer.data ABI offset changed");
+_Static_assert(offsetof(DfEffectBuffer, len) == 8, "DfEffectBuffer.len ABI offset changed");
+_Static_assert(offsetof(DfEffectBuffer, capacity) == 16, "DfEffectBuffer.capacity ABI offset changed");
 _Static_assert(sizeof(DfEntitySpawnOptions) == 80, "DfEntitySpawnOptions ABI layout changed");
 _Static_assert(sizeof(DfEntityTypeDescriptorV2) == 144, "DfEntityTypeDescriptorV2 ABI layout changed");
 _Static_assert(offsetof(DfEntityTypeDescriptorV2, type_key) == 80, "DfEntityTypeDescriptorV2.type_key ABI offset changed");
@@ -63,18 +67,20 @@ _Static_assert(offsetof(DfWorldOpenSpecV1, provider_path) == 8, "DfWorldOpenSpec
 _Static_assert(offsetof(DfWorldOpenSpecV1, fixed_time) == 40, "DfWorldOpenSpecV1.fixed_time ABI offset changed");
 _Static_assert(offsetof(DfWorldOpenSpecV1, open_mode) == 48, "DfWorldOpenSpecV1.open_mode ABI offset changed");
 _Static_assert(offsetof(DfWorldOpenSpecV1, read_only) == 76, "DfWorldOpenSpecV1.read_only ABI offset changed");
-_Static_assert(sizeof(DfHostApiV17) == 464, "DfHostApiV17 ABI layout changed");
-_Static_assert(offsetof(DfHostApiV17, player_skin_open) == 80, "DfHostApiV17.player_skin_open ABI offset changed");
-_Static_assert(offsetof(DfHostApiV17, player_skin_set) == 112, "DfHostApiV17.player_skin_set ABI offset changed");
-_Static_assert(offsetof(DfHostApiV17, inventory_size) == 120, "DfHostApiV17.inventory_size ABI offset changed");
-_Static_assert(offsetof(DfHostApiV17, player_held_slot_set) == 200, "DfHostApiV17.player_held_slot_set ABI offset changed");
-_Static_assert(offsetof(DfHostApiV17, player_scoreboard) == 208, "DfHostApiV17.player_scoreboard ABI offset changed");
-_Static_assert(offsetof(DfHostApiV17, player_heal) == 416, "DfHostApiV17.player_heal ABI offset changed");
-_Static_assert(offsetof(DfHostApiV17, player_hurt) == 424, "DfHostApiV17.player_hurt ABI offset changed");
-_Static_assert(offsetof(DfHostApiV17, skin_snapshot_info) == 432, "DfHostApiV17.skin_snapshot_info ABI offset changed");
-_Static_assert(offsetof(DfHostApiV17, skin_snapshot_set) == 440, "DfHostApiV17.skin_snapshot_set ABI offset changed");
-_Static_assert(offsetof(DfHostApiV17, world_open_spec) == 448, "DfHostApiV17.world_open_spec ABI offset changed");
-_Static_assert(offsetof(DfHostApiV17, player_transfer) == 456, "DfHostApiV17.player_transfer ABI offset changed");
+_Static_assert(sizeof(DfHostApiV18) == 480, "DfHostApiV18 ABI layout changed");
+_Static_assert(offsetof(DfHostApiV18, player_skin_open) == 80, "DfHostApiV18.player_skin_open ABI offset changed");
+_Static_assert(offsetof(DfHostApiV18, player_skin_set) == 112, "DfHostApiV18.player_skin_set ABI offset changed");
+_Static_assert(offsetof(DfHostApiV18, inventory_size) == 120, "DfHostApiV18.inventory_size ABI offset changed");
+_Static_assert(offsetof(DfHostApiV18, player_held_slot_set) == 200, "DfHostApiV18.player_held_slot_set ABI offset changed");
+_Static_assert(offsetof(DfHostApiV18, player_scoreboard) == 208, "DfHostApiV18.player_scoreboard ABI offset changed");
+_Static_assert(offsetof(DfHostApiV18, player_heal) == 416, "DfHostApiV18.player_heal ABI offset changed");
+_Static_assert(offsetof(DfHostApiV18, player_hurt) == 424, "DfHostApiV18.player_hurt ABI offset changed");
+_Static_assert(offsetof(DfHostApiV18, skin_snapshot_info) == 432, "DfHostApiV18.skin_snapshot_info ABI offset changed");
+_Static_assert(offsetof(DfHostApiV18, skin_snapshot_set) == 440, "DfHostApiV18.skin_snapshot_set ABI offset changed");
+_Static_assert(offsetof(DfHostApiV18, world_open_spec) == 448, "DfHostApiV18.world_open_spec ABI offset changed");
+_Static_assert(offsetof(DfHostApiV18, player_transfer) == 456, "DfHostApiV18.player_transfer ABI offset changed");
+_Static_assert(offsetof(DfHostApiV18, player_effects) == 464, "DfHostApiV18.player_effects ABI offset changed");
+_Static_assert(offsetof(DfHostApiV18, player_effects_clear) == 472, "DfHostApiV18.player_effects_clear ABI offset changed");
 #endif
 
 extern DfStatus bg_go_player_text(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfStringView message);
@@ -94,6 +100,8 @@ extern DfStatus bg_go_player_state_get(uint64_t context, DfInvocationId invocati
 extern DfStatus bg_go_player_heal(uint64_t context, DfInvocationId invocation, DfPlayerId player, double health, const DfHealingSourceView *source, DfPlayerHealResult *result);
 extern DfStatus bg_go_player_hurt(uint64_t context, DfInvocationId invocation, DfPlayerId player, double damage, const DfDamageSourceView *source, DfPlayerHurtResult *result);
 extern DfStatus bg_go_player_effect(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t operation, DfEffectView effect);
+extern DfStatus bg_go_player_effects(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfEffectBuffer *output);
+extern DfStatus bg_go_player_effects_clear(uint64_t context, DfInvocationId invocation, DfPlayerId player);
 extern DfStatus bg_go_player_entity_visibility(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfEntityId entity, uint8_t visible);
 extern DfStatus bg_go_player_skin_open(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint64_t *snapshot, DfSkinInfo *info);
 extern DfStatus bg_go_player_skin_animation_info(uint64_t context, DfInvocationId invocation, uint64_t snapshot, uint64_t index, DfSkinAnimationInfo *info);
@@ -181,6 +189,14 @@ static DfStatus host_player_hurt(uint64_t context, DfInvocationId invocation, Df
 
 static DfStatus host_player_effect(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t operation, DfEffectView effect) {
     return bg_go_player_effect(context, invocation, player, operation, effect);
+}
+
+static DfStatus host_player_effects(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfEffectBuffer *output) {
+    return bg_go_player_effects(context, invocation, player, output);
+}
+
+static DfStatus host_player_effects_clear(uint64_t context, DfInvocationId invocation, DfPlayerId player) {
+    return bg_go_player_effects_clear(context, invocation, player);
 }
 
 static DfStatus host_player_entity_visibility(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfEntityId entity, uint8_t visible) {
@@ -276,7 +292,7 @@ typedef DfStatus (*RuntimeEventFn)(DfRuntime *, DfEventId, const void *, void *)
 struct BgRuntimeLibrary {
     void *handle;
     DfRuntime *runtime;
-    DfHostApiV17 host_api;
+    DfHostApiV18 host_api;
     RuntimeDestroyFn destroy;
     RuntimeEnableFn enable;
     RuntimeDisableFn disable;
@@ -369,9 +385,9 @@ DfStatus bg_runtime_open(
         return DF_STATUS_ERROR;
     }
 
-    library->host_api = (DfHostApiV17) {
+    library->host_api = (DfHostApiV18) {
         .abi_version = DF_HOST_ABI_VERSION,
-        .struct_size = sizeof(DfHostApiV17),
+        .struct_size = sizeof(DfHostApiV18),
         .context = host_context,
         .player_text = host_player_text,
         .player_title = host_player_title,
@@ -429,6 +445,8 @@ DfStatus bg_runtime_open(
         .skin_snapshot_set = host_skin_snapshot_set,
         .world_open_spec = host_world_open_spec,
         .player_transfer = host_player_transfer,
+        .player_effects = host_player_effects,
+        .player_effects_clear = host_player_effects_clear,
     };
     DfRuntimeConfig config = {
         .plugin_directory = {

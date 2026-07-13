@@ -541,6 +541,75 @@ func (p *Players) ChangePlayerEffect(invocation native.InvocationID, id native.P
 	return p.mutatePlayer(invocation, id, func(connected *player.Player) { connected.AddEffect(applied) })
 }
 
+func (p *Players) PlayerEffects(invocation native.InvocationID, id native.PlayerID) ([]native.PlayerEffect, bool) {
+	type result struct {
+		values []native.PlayerEffect
+		ok     bool
+	}
+	resolved, ok := readPlayer(p, invocation, id, func(connected *player.Player) result {
+		active := connected.Effects()
+		values := make([]native.PlayerEffect, 0, len(active))
+		for _, current := range active {
+			if _, lasting := current.Type().(effect.LastingType); !lasting {
+				continue
+			}
+			value, valid := snapshotPlayerEffect(current)
+			if !valid {
+				return result{}
+			}
+			values = append(values, value)
+		}
+		return result{values: values, ok: true}
+	})
+	return resolved.values, ok && resolved.ok
+}
+
+func snapshotPlayerEffect(current effect.Effect) (native.PlayerEffect, bool) {
+	lasting, ok := current.Type().(effect.LastingType)
+	level := current.Level()
+	if !ok || level <= 0 || int64(level) > math.MaxInt32 {
+		return native.PlayerEffect{}, false
+	}
+	id, ok := effect.ID(lasting)
+	if !ok || int64(id) < math.MinInt32 || int64(id) > math.MaxInt32 {
+		return native.PlayerEffect{}, false
+	}
+	mode := native.PlayerEffectTimed
+	duration := max(current.Duration(), 0)
+	if current.Infinite() {
+		if current.Duration() != 0 {
+			return native.PlayerEffect{}, false
+		}
+		mode = native.PlayerEffectInfinite
+	} else if current.Ambient() {
+		mode = native.PlayerEffectAmbient
+	}
+	return native.PlayerEffect{
+		Type: native.EffectType(id), Level: int32(level), Duration: duration,
+		Potency: 1, Mode: mode, ParticlesHidden: current.ParticlesHidden(),
+	}, true
+}
+
+func (p *Players) ClearPlayerEffects(invocation native.InvocationID, id native.PlayerID) bool {
+	cleared, ok := readPlayer(p, invocation, id, func(connected *player.Player) bool {
+		types := make([]effect.Type, 0, len(connected.Effects()))
+		for _, current := range connected.Effects() {
+			if _, lasting := current.Type().(effect.LastingType); !lasting {
+				continue
+			}
+			if _, valid := snapshotPlayerEffect(current); !valid {
+				return false
+			}
+			types = append(types, current.Type())
+		}
+		for _, effectType := range types {
+			connected.RemoveEffect(effectType)
+		}
+		return true
+	})
+	return ok && cleared
+}
+
 func (p *Players) SetPlayerEntityVisible(invocation native.InvocationID, viewerID native.PlayerID, entityID native.EntityID, visible bool) bool {
 	viewer, ok := p.ResolveID(viewerID, invocation)
 	if ok {

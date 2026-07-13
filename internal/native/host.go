@@ -375,6 +375,8 @@ type Host interface {
 	HealPlayer(InvocationID, PlayerID, float64, HealingSource) (float64, bool)
 	HurtPlayer(InvocationID, PlayerID, float64, DamageSource) (PlayerHurtResult, bool)
 	ChangePlayerEffect(InvocationID, PlayerID, PlayerEffectOperation, PlayerEffect) bool
+	PlayerEffects(InvocationID, PlayerID) ([]PlayerEffect, bool)
+	ClearPlayerEffects(InvocationID, PlayerID) bool
 	SetPlayerEntityVisible(InvocationID, PlayerID, EntityID, bool) bool
 	PlayerSkin(InvocationID, PlayerID) (PlayerSkin, bool)
 	SetPlayerSkin(InvocationID, PlayerID, PlayerSkin) bool
@@ -439,6 +441,8 @@ func (noopHost) HurtPlayer(InvocationID, PlayerID, float64, DamageSource) (Playe
 func (noopHost) ChangePlayerEffect(InvocationID, PlayerID, PlayerEffectOperation, PlayerEffect) bool {
 	return false
 }
+func (noopHost) PlayerEffects(InvocationID, PlayerID) ([]PlayerEffect, bool)        { return nil, false }
+func (noopHost) ClearPlayerEffects(InvocationID, PlayerID) bool                     { return false }
 func (noopHost) SetPlayerEntityVisible(InvocationID, PlayerID, EntityID, bool) bool { return false }
 func (noopHost) PlayerSkin(InvocationID, PlayerID) (PlayerSkin, bool)               { return PlayerSkin{}, false }
 func (noopHost) SetPlayerSkin(InvocationID, PlayerID, PlayerSkin) bool              { return false }
