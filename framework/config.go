@@ -17,8 +17,13 @@ type PluginConfig struct {
 	Directory      string `toml:"directory"`
 }
 
+type WorldConfig struct {
+	Directory string `toml:"directory"`
+}
+
 type Config struct {
 	Plugins   PluginConfig      `toml:"plugins"`
+	Worlds    WorldConfig       `toml:"worlds"`
 	Dragonfly server.UserConfig `toml:"dragonfly"`
 }
 
@@ -27,6 +32,7 @@ func DefaultConfig() Config {
 		Plugins: PluginConfig{
 			Directory: "plugins",
 		},
+		Worlds:    WorldConfig{Directory: ".data/worlds"},
 		Dragonfly: server.DefaultConfig(),
 	}
 }
@@ -56,6 +62,9 @@ func LoadConfig(path string) (Config, error) {
 	}
 	if config.Plugins.Directory == "" {
 		return Config{}, fmt.Errorf("plugins.directory is required")
+	}
+	if config.Worlds.Directory == "" {
+		return Config{}, fmt.Errorf("worlds.directory is required")
 	}
 	return config, nil
 }

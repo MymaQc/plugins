@@ -12,8 +12,9 @@ mod tests {
         assert_eq!(size_of::<DfPlayerId>(), 24);
         assert_eq!(align_of::<DfPlayerId>(), 8);
         assert_eq!(size_of::<DfRotation>(), 16);
-        assert_eq!(size_of::<DfPlayerMoveInput>(), 88);
+        assert_eq!(size_of::<DfPlayerMoveInput>(), 96);
         assert_eq!(align_of::<DfPlayerMoveInput>(), 8);
+        assert_eq!(offset_of!(DfPlayerMoveInput, invocation), 0);
         assert_eq!(size_of::<DfPlayerMoveState>(), 1);
     }
 
@@ -49,24 +50,27 @@ mod tests {
 
     #[test]
     #[cfg(target_pointer_width = "64")]
-    fn host_v5_layout_is_stable() {
+    fn host_v7_layout_is_stable() {
         assert_eq!(size_of::<DfInventoryId>(), 32);
         assert_eq!(size_of::<DfItemStackInfo>(), 80);
         assert_eq!(size_of::<DfItemStackSnapshot>(), 88);
         assert_eq!(size_of::<DfItemStackSnapshot>(), 88);
         assert_eq!(size_of::<DfItemStackData>(), 152);
         assert_eq!(size_of::<DfItemStackViewV3>(), 120);
-        assert_eq!(size_of::<DfHostApiV5>(), 240);
-        assert_eq!(align_of::<DfHostApiV5>(), 8);
-        assert_eq!(offset_of!(DfHostApiV5, context), 8);
-        assert_eq!(offset_of!(DfHostApiV5, player_text), 16);
-        assert_eq!(offset_of!(DfHostApiV5, player_skin_open), 80);
-        assert_eq!(offset_of!(DfHostApiV5, player_skin_set), 112);
-        assert_eq!(offset_of!(DfHostApiV5, inventory_size), 120);
-        assert_eq!(offset_of!(DfHostApiV5, player_held_slot_set), 200);
-        assert_eq!(offset_of!(DfHostApiV5, player_scoreboard), 208);
-        assert_eq!(offset_of!(DfHostApiV5, player_scoreboard_remove), 216);
-        assert_eq!(offset_of!(DfHostApiV5, player_form_send), 224);
-        assert_eq!(offset_of!(DfHostApiV5, player_form_close), 232);
+        assert_eq!(size_of::<DfWorldId>(), 8);
+        assert_eq!(size_of::<DfBlockData>(), 48);
+        assert_eq!(size_of::<DfBlockView>(), 32);
+        assert_eq!(size_of::<DfHostApiV7>(), 328);
+        assert_eq!(align_of::<DfHostApiV7>(), 8);
+        assert_eq!(offset_of!(DfHostApiV7, context), 8);
+        assert_eq!(offset_of!(DfHostApiV7, player_text), 16);
+        assert_eq!(offset_of!(DfHostApiV7, player_skin_open), 80);
+        assert_eq!(offset_of!(DfHostApiV7, player_skin_set), 112);
+        assert_eq!(offset_of!(DfHostApiV7, inventory_size), 120);
+        assert_eq!(offset_of!(DfHostApiV7, player_held_slot_set), 200);
+        assert_eq!(offset_of!(DfHostApiV7, player_scoreboard), 208);
+        assert_eq!(offset_of!(DfHostApiV7, player_form_close), 232);
+        assert_eq!(offset_of!(DfHostApiV7, world_lookup), 240);
+        assert_eq!(offset_of!(DfHostApiV7, world_spawn_set), 320);
     }
 }

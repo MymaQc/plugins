@@ -23,6 +23,9 @@ func TestLoadConfigCreatesDefaults(t *testing.T) {
 	if loaded.Dragonfly.Network.Address != ":19132" {
 		t.Fatalf("address = %q", loaded.Dragonfly.Network.Address)
 	}
+	if loaded.Worlds.Directory != ".data/worlds" {
+		t.Fatalf("world directory = %q", loaded.Worlds.Directory)
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)

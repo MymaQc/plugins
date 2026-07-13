@@ -943,14 +943,14 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
 
             unsafe extern "C" fn set_host(
                 instance: *mut ::dragonfly_plugin::__private::c_void,
-                host: *const ::dragonfly_plugin::__private::sys::DfHostApiV5,
+                host: *const ::dragonfly_plugin::__private::sys::DfHostApiV7,
             ) -> ::dragonfly_plugin::__private::sys::DfStatus {
                 if instance.is_null() || host.is_null() {
                     return ::dragonfly_plugin::__private::sys::DF_STATUS_ERROR;
                 }
                 let host_header = unsafe { &*host };
                 if host_header.abi_version != ::dragonfly_plugin::__private::sys::DF_HOST_ABI_VERSION
-                    || host_header.struct_size < ::core::mem::size_of::<::dragonfly_plugin::__private::sys::DfHostApiV5>() as u32
+                    || host_header.struct_size < ::core::mem::size_of::<::dragonfly_plugin::__private::sys::DfHostApiV7>() as u32
                 {
                     return ::dragonfly_plugin::__private::sys::DF_STATUS_ERROR;
                 }
@@ -1004,7 +1004,9 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
                 }
                 let result = ::std::panic::catch_unwind(::std::panic::AssertUnwindSafe(|| {
                     let mut context = unsafe { ::dragonfly_plugin::Context::from_raw(&*input, &mut *state) };
-                    <PluginType as ::dragonfly_plugin::Plugin>::on_command(plugin, command as usize, &mut context);
+                    ::dragonfly_plugin::with_invocation(unsafe { (*input).invocation }, || {
+                        <PluginType as ::dragonfly_plugin::Plugin>::on_command(plugin, command as usize, &mut context);
+                    });
                 }));
                 if result.is_ok() { sys::DF_STATUS_OK } else { sys::DF_STATUS_ERROR }
             }
@@ -1069,7 +1071,8 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
                 if instance.is_null() || input.is_null() || state.is_null() {
                     return sys::DF_STATUS_ERROR;
                 }
-                let result = ::std::panic::catch_unwind(::std::panic::AssertUnwindSafe(|| match event_id {
+                let invocation = unsafe { *input.cast::<::dragonfly_plugin::__private::sys::DfInvocationId>() };
+                let result = ::std::panic::catch_unwind(::std::panic::AssertUnwindSafe(|| ::dragonfly_plugin::with_invocation(invocation, || match event_id {
                     sys::DF_EVENT_PLAYER_MOVE => {
                         let plugin = unsafe { &*instance.cast::<PluginType>() };
                         let input = unsafe { &*input.cast::<sys::DfPlayerMoveInput>() };
@@ -1301,7 +1304,7 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
                         sys::DF_STATUS_OK
                     }
                     _ => sys::DF_STATUS_ERROR,
-                }));
+                })));
                 result.unwrap_or(sys::DF_STATUS_ERROR)
             }
 

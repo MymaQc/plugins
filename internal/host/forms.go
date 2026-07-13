@@ -36,7 +36,9 @@ func (f *nativePlayerForm) SubmitJSON(response []byte, submitter form.Submitter,
 		return errors.New("native form submitter is not registered")
 	}
 	var accepted bool
-	f.players.WithTx(tx, func() { accepted = native.CompletePlayerForm(f.id, id, response == nil, response) })
+	f.players.WithInvocation(tx, func(invocation native.InvocationID) {
+		accepted = native.CompletePlayerForm(f.id, invocation, id, response == nil, response)
+	})
 	runtime.SetFinalizer(f, nil)
 	if !accepted {
 		return errors.New("native form response was rejected")

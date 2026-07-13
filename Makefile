@@ -9,6 +9,7 @@ ITEMS_MANIFEST := examples/plugins/items-command/Cargo.toml
 PING_MANIFEST := examples/plugins/ping-command/Cargo.toml
 SCOREBOARD_MANIFEST := examples/plugins/scoreboard/Cargo.toml
 FORMS_MANIFEST := examples/plugins/forms/Cargo.toml
+WORLD_MANIFEST := examples/plugins/world-command/Cargo.toml
 ifeq ($(UNAME_S),Darwin)
 RUNTIME_LIBRARY := libdragonfly_plugin_runtime.dylib
 PLUGIN_LIBRARY := libmovement_guard_plugin.dylib
@@ -19,6 +20,7 @@ ITEMS_PLUGIN_LIBRARY := libitems_command_plugin.dylib
 PING_PLUGIN_LIBRARY := libping_command_plugin.dylib
 SCOREBOARD_PLUGIN_LIBRARY := libscoreboard_plugin.dylib
 FORMS_PLUGIN_LIBRARY := libforms_plugin.dylib
+WORLD_PLUGIN_LIBRARY := libworld_command_plugin.dylib
 else
 RUNTIME_LIBRARY := libdragonfly_plugin_runtime.so
 PLUGIN_LIBRARY := libmovement_guard_plugin.so
@@ -29,6 +31,7 @@ ITEMS_PLUGIN_LIBRARY := libitems_command_plugin.so
 PING_PLUGIN_LIBRARY := libping_command_plugin.so
 SCOREBOARD_PLUGIN_LIBRARY := libscoreboard_plugin.so
 FORMS_PLUGIN_LIBRARY := libforms_plugin.so
+WORLD_PLUGIN_LIBRARY := libworld_command_plugin.so
 endif
 
 generate:
@@ -42,6 +45,7 @@ generate:
 	cargo fmt --manifest-path $(PING_MANIFEST)
 	cargo fmt --manifest-path $(SCOREBOARD_MANIFEST)
 	cargo fmt --manifest-path $(FORMS_MANIFEST)
+	cargo fmt --manifest-path $(WORLD_MANIFEST)
 
 check-generated:
 	go run ./cmd/abi-gen -root . -check
@@ -54,6 +58,7 @@ check-generated:
 	cargo fmt --manifest-path $(PING_MANIFEST) -- --check
 	cargo fmt --manifest-path $(SCOREBOARD_MANIFEST) -- --check
 	cargo fmt --manifest-path $(FORMS_MANIFEST) -- --check
+	cargo fmt --manifest-path $(WORLD_MANIFEST) -- --check
 
 build-native: generate
 	cargo build --release -p dragonfly-plugin-runtime
@@ -65,6 +70,7 @@ build-native: generate
 	cargo build --release --manifest-path $(PING_MANIFEST)
 	cargo build --release --manifest-path $(SCOREBOARD_MANIFEST)
 	cargo build --release --manifest-path $(FORMS_MANIFEST)
+	cargo build --release --manifest-path $(WORLD_MANIFEST)
 	mkdir -p build/lib build/plugins
 	cp target/release/$(RUNTIME_LIBRARY) build/lib/
 	cp examples/plugins/movement-guard/target/release/$(PLUGIN_LIBRARY) build/plugins/
@@ -75,6 +81,7 @@ build-native: generate
 	cp examples/plugins/ping-command/target/release/$(PING_PLUGIN_LIBRARY) build/plugins/
 	cp examples/plugins/scoreboard/target/release/$(SCOREBOARD_PLUGIN_LIBRARY) build/plugins/
 	cp examples/plugins/forms/target/release/$(FORMS_PLUGIN_LIBRARY) build/plugins/
+	cp examples/plugins/world-command/target/release/$(WORLD_PLUGIN_LIBRARY) build/plugins/
 
 build-server:
 	mkdir -p build
@@ -94,6 +101,7 @@ stage-examples: build-native
 	cp build/plugins/$(PING_PLUGIN_LIBRARY) examples/plugins/
 	cp build/plugins/$(SCOREBOARD_PLUGIN_LIBRARY) examples/plugins/
 	cp build/plugins/$(FORMS_PLUGIN_LIBRARY) examples/plugins/
+	cp build/plugins/$(WORLD_PLUGIN_LIBRARY) examples/plugins/
 
 run: stage-examples
 	go run ./cmd/bedrock-gophers -config examples/server.toml
@@ -108,6 +116,7 @@ test: build-native check-generated
 	cargo test --manifest-path $(PING_MANIFEST)
 	cargo test --manifest-path $(SCOREBOARD_MANIFEST)
 	cargo test --manifest-path $(FORMS_MANIFEST)
+	cargo test --manifest-path $(WORLD_MANIFEST)
 	go test ./...
 
 benchmark: build-native
@@ -123,6 +132,7 @@ clean:
 	cargo clean --manifest-path $(PING_MANIFEST)
 	cargo clean --manifest-path $(SCOREBOARD_MANIFEST)
 	cargo clean --manifest-path $(FORMS_MANIFEST)
+	cargo clean --manifest-path $(WORLD_MANIFEST)
 	rm -rf build
 	rm -rf examples/lib
-	rm -f examples/plugins/$(PLUGIN_LIBRARY) examples/plugins/$(CHAT_PLUGIN_LIBRARY) examples/plugins/$(LIFECYCLE_PLUGIN_LIBRARY) examples/plugins/$(COMMAND_PLUGIN_LIBRARY) examples/plugins/$(ITEMS_PLUGIN_LIBRARY) examples/plugins/$(PING_PLUGIN_LIBRARY) examples/plugins/$(SCOREBOARD_PLUGIN_LIBRARY) examples/plugins/$(FORMS_PLUGIN_LIBRARY)
+	rm -f examples/plugins/$(PLUGIN_LIBRARY) examples/plugins/$(CHAT_PLUGIN_LIBRARY) examples/plugins/$(LIFECYCLE_PLUGIN_LIBRARY) examples/plugins/$(COMMAND_PLUGIN_LIBRARY) examples/plugins/$(ITEMS_PLUGIN_LIBRARY) examples/plugins/$(PING_PLUGIN_LIBRARY) examples/plugins/$(SCOREBOARD_PLUGIN_LIBRARY) examples/plugins/$(FORMS_PLUGIN_LIBRARY) examples/plugins/$(WORLD_PLUGIN_LIBRARY)

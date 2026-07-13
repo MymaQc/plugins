@@ -9,7 +9,7 @@ extern "C" {
 #endif
 
 #define DF_ABI_VERSION 1u
-#define DF_HOST_ABI_VERSION 5u
+#define DF_HOST_ABI_VERSION 7u
 #define DF_STATUS_OK 0
 #define DF_STATUS_ERROR 1
 
@@ -18,9 +18,11 @@ typedef uint32_t DfEventId;
 
 typedef struct { uint8_t bytes[16]; uint64_t generation; } DfPlayerId;
 typedef struct { uint8_t bytes[16]; uint64_t generation; } DfEntityId;
+typedef uint64_t DfInvocationId;
 typedef struct { double x; double y; double z; } DfVec3;
 typedef struct { double yaw; double pitch; } DfRotation;
 typedef struct { int32_t x; int32_t y; int32_t z; } DfBlockPos;
+typedef struct { uint64_t value; } DfWorldId;
 typedef struct { const uint8_t *data; uint64_t len; } DfStringView;
 typedef struct { uint8_t *data; uint64_t len; uint64_t capacity; } DfStringBuffer;
 typedef struct { DfStringView name; uint32_t flags; } DfDamageSourceView;
@@ -39,6 +41,11 @@ typedef struct { int32_t metadata; uint32_t count; uint32_t damage; uint8_t unbr
 typedef struct { uint64_t snapshot; DfItemStackInfo info; } DfItemStackSnapshot;
 typedef struct { DfStringBuffer identifier; DfStringBuffer custom_name; DfStringBuffer lore_bytes; DfStringBuffer nbt; DfStringBuffer values_nbt; DfByteSpan *lore; uint64_t lore_capacity; DfItemEnchantment *enchantments; uint64_t enchantment_capacity; } DfItemStackData;
 typedef struct { DfStringView identifier; int32_t metadata; uint32_t count; uint32_t damage; uint8_t unbreakable; int32_t anvil_cost; DfStringView custom_name; const DfStringView *lore; uint64_t lore_count; DfStringView nbt; DfStringView values_nbt; const DfItemEnchantment *enchantments; uint64_t enchantment_count; } DfItemStackViewV3;
+#define DF_WORLD_DIMENSION_OVERWORLD 0u
+#define DF_WORLD_DIMENSION_NETHER 1u
+#define DF_WORLD_DIMENSION_END 2u
+typedef struct { DfStringBuffer identifier; DfStringBuffer properties_nbt; } DfBlockData;
+typedef struct { DfStringView identifier; DfStringView properties_nbt; } DfBlockView;
 #define DF_PLAYER_TRANSFORM_TELEPORT 0u
 #define DF_PLAYER_TRANSFORM_MOVE 1u
 #define DF_PLAYER_TRANSFORM_VELOCITY 2u
@@ -156,7 +163,7 @@ typedef struct { DfStringView identifier; int32_t metadata; uint32_t count; uint
 
 typedef struct { DfStringView text; DfStringView subtitle; DfStringView action_text; uint64_t fade_in_milliseconds; uint64_t duration_milliseconds; uint64_t fade_out_milliseconds; } DfTitleView;
 typedef struct { DfStringView name; const DfStringView *lines; uint64_t line_count; uint8_t padding; uint8_t descending; } DfScoreboardView;
-typedef DfStatus (*DfFormResponseFn)(void *callback_context, DfPlayerId submitter, uint32_t outcome, DfStringView response_json);
+typedef DfStatus (*DfFormResponseFn)(void *callback_context, DfInvocationId invocation, DfPlayerId submitter, uint32_t outcome, DfStringView response_json);
 typedef void (*DfFormDropFn)(void *callback_context);
 typedef struct { DfStringView request_json; void *callback_context; DfFormResponseFn response; DfFormDropFn drop; } DfFormView;
 #define DF_FORM_RESPONSE_SUBMITTED 0u
@@ -170,36 +177,47 @@ typedef struct { uint32_t width; uint32_t height; uint8_t persona; uint64_t play
 typedef struct { DfStringBuffer play_fab_id; DfStringBuffer full_id; DfStringBuffer pixels; DfStringBuffer model_default; DfStringBuffer model_animated_face; DfStringBuffer model; DfStringBuffer cape_pixels; DfStringBuffer *animation_pixels; uint64_t animation_capacity; } DfSkinData;
 typedef struct { uint32_t width; uint32_t height; uint32_t animation_type; int64_t frame_count; int64_t expression; DfStringView pixels; } DfSkinAnimationView;
 typedef struct { uint32_t width; uint32_t height; uint8_t persona; DfStringView play_fab_id; DfStringView full_id; DfStringView pixels; DfStringView model_default; DfStringView model_animated_face; DfStringView model; uint32_t cape_width; uint32_t cape_height; DfStringView cape_pixels; const DfSkinAnimationView *animations; uint64_t animation_count; } DfSkinView;
-typedef DfStatus (*DfHostPlayerTextFn)(uint64_t context, DfPlayerId player, uint32_t kind, DfStringView message);
-typedef DfStatus (*DfHostPlayerTitleFn)(uint64_t context, DfPlayerId player, DfTitleView title);
-typedef DfStatus (*DfHostPlayerScoreboardFn)(uint64_t context, DfPlayerId player, DfScoreboardView scoreboard);
-typedef DfStatus (*DfHostPlayerScoreboardRemoveFn)(uint64_t context, DfPlayerId player);
-typedef DfStatus (*DfHostPlayerFormSendFn)(uint64_t context, DfPlayerId player, const DfFormView *form);
-typedef DfStatus (*DfHostPlayerFormCloseFn)(uint64_t context, DfPlayerId player);
-typedef DfStatus (*DfHostPlayerTransformFn)(uint64_t context, DfPlayerId player, uint32_t kind, DfVec3 vector, double yaw, double pitch);
-typedef DfStatus (*DfHostPlayerRotationFn)(uint64_t context, DfPlayerId player, DfRotation *rotation);
-typedef DfStatus (*DfHostPlayerStateSetFn)(uint64_t context, DfPlayerId player, uint32_t kind, DfPlayerStateValue value);
-typedef DfStatus (*DfHostPlayerStateGetFn)(uint64_t context, DfPlayerId player, uint32_t kind, DfPlayerStateValue *value);
-typedef DfStatus (*DfHostPlayerEffectFn)(uint64_t context, DfPlayerId player, uint32_t operation, DfEffectView effect);
-typedef DfStatus (*DfHostPlayerEntityVisibilityFn)(uint64_t context, DfPlayerId player, DfEntityId entity, uint8_t visible);
+typedef DfStatus (*DfHostPlayerTextFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfStringView message);
+typedef DfStatus (*DfHostPlayerTitleFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfTitleView title);
+typedef DfStatus (*DfHostPlayerScoreboardFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfScoreboardView scoreboard);
+typedef DfStatus (*DfHostPlayerScoreboardRemoveFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player);
+typedef DfStatus (*DfHostPlayerFormSendFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, const DfFormView *form);
+typedef DfStatus (*DfHostPlayerFormCloseFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player);
+typedef DfStatus (*DfHostPlayerTransformFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfVec3 vector, double yaw, double pitch);
+typedef DfStatus (*DfHostPlayerRotationFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfRotation *rotation);
+typedef DfStatus (*DfHostPlayerStateSetFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfPlayerStateValue value);
+typedef DfStatus (*DfHostPlayerStateGetFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfPlayerStateValue *value);
+typedef DfStatus (*DfHostPlayerEffectFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t operation, DfEffectView effect);
+typedef DfStatus (*DfHostPlayerEntityVisibilityFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfEntityId entity, uint8_t visible);
 /* Skin snapshots freeze one skin across metadata and data reads. Open owns a snapshot until close. */
 /* A zero-length buffer may have a null data pointer. Read performs no partial writes on insufficient capacity. */
-typedef DfStatus (*DfHostPlayerSkinOpenFn)(uint64_t context, DfPlayerId player, uint64_t *snapshot, DfSkinInfo *info);
-typedef DfStatus (*DfHostPlayerSkinAnimationInfoFn)(uint64_t context, uint64_t snapshot, uint64_t index, DfSkinAnimationInfo *info);
-typedef DfStatus (*DfHostPlayerSkinReadFn)(uint64_t context, uint64_t snapshot, DfSkinData *data);
-typedef void (*DfHostPlayerSkinCloseFn)(uint64_t context, uint64_t snapshot);
-typedef DfStatus (*DfHostPlayerSkinSetFn)(uint64_t context, DfPlayerId player, const DfSkinView *skin);
-typedef DfStatus (*DfHostInventorySizeFn)(uint64_t context, DfInventoryId inventory, uint32_t *size);
-typedef DfStatus (*DfHostInventoryItemOpenFn)(uint64_t context, DfInventoryId inventory, uint32_t slot, uint64_t *snapshot, DfItemStackInfo *info);
-typedef DfStatus (*DfHostPlayerHeldItemOpenFn)(uint64_t context, DfPlayerId player, uint32_t hand, uint64_t *snapshot, DfItemStackInfo *info);
-typedef DfStatus (*DfHostItemStackReadFn)(uint64_t context, uint64_t snapshot, DfItemStackData *data);
-typedef void (*DfHostItemStackCloseFn)(uint64_t context, uint64_t snapshot);
-typedef DfStatus (*DfHostInventoryItemSetFn)(uint64_t context, DfInventoryId inventory, uint32_t slot, const DfItemStackViewV3 *item);
-typedef DfStatus (*DfHostInventoryItemAddFn)(uint64_t context, DfInventoryId inventory, const DfItemStackViewV3 *item, uint32_t *added);
-typedef DfStatus (*DfHostInventoryClearSlotFn)(uint64_t context, DfInventoryId inventory, uint32_t slot);
-typedef DfStatus (*DfHostInventoryClearFn)(uint64_t context, DfInventoryId inventory);
-typedef DfStatus (*DfHostPlayerHeldItemsSetFn)(uint64_t context, DfPlayerId player, const DfItemStackViewV3 *main_hand, const DfItemStackViewV3 *off_hand);
-typedef DfStatus (*DfHostPlayerHeldSlotSetFn)(uint64_t context, DfPlayerId player, uint32_t slot);
+typedef DfStatus (*DfHostPlayerSkinOpenFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint64_t *snapshot, DfSkinInfo *info);
+typedef DfStatus (*DfHostPlayerSkinAnimationInfoFn)(uint64_t context, DfInvocationId invocation, uint64_t snapshot, uint64_t index, DfSkinAnimationInfo *info);
+typedef DfStatus (*DfHostPlayerSkinReadFn)(uint64_t context, DfInvocationId invocation, uint64_t snapshot, DfSkinData *data);
+typedef void (*DfHostPlayerSkinCloseFn)(uint64_t context, DfInvocationId invocation, uint64_t snapshot);
+typedef DfStatus (*DfHostPlayerSkinSetFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, const DfSkinView *skin);
+typedef DfStatus (*DfHostInventorySizeFn)(uint64_t context, DfInvocationId invocation, DfInventoryId inventory, uint32_t *size);
+typedef DfStatus (*DfHostInventoryItemOpenFn)(uint64_t context, DfInvocationId invocation, DfInventoryId inventory, uint32_t slot, uint64_t *snapshot, DfItemStackInfo *info);
+typedef DfStatus (*DfHostPlayerHeldItemOpenFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t hand, uint64_t *snapshot, DfItemStackInfo *info);
+typedef DfStatus (*DfHostItemStackReadFn)(uint64_t context, DfInvocationId invocation, uint64_t snapshot, DfItemStackData *data);
+typedef void (*DfHostItemStackCloseFn)(uint64_t context, DfInvocationId invocation, uint64_t snapshot);
+typedef DfStatus (*DfHostInventoryItemSetFn)(uint64_t context, DfInvocationId invocation, DfInventoryId inventory, uint32_t slot, const DfItemStackViewV3 *item);
+typedef DfStatus (*DfHostInventoryItemAddFn)(uint64_t context, DfInvocationId invocation, DfInventoryId inventory, const DfItemStackViewV3 *item, uint32_t *added);
+typedef DfStatus (*DfHostInventoryClearSlotFn)(uint64_t context, DfInvocationId invocation, DfInventoryId inventory, uint32_t slot);
+typedef DfStatus (*DfHostInventoryClearFn)(uint64_t context, DfInvocationId invocation, DfInventoryId inventory);
+typedef DfStatus (*DfHostPlayerHeldItemsSetFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, const DfItemStackViewV3 *main_hand, const DfItemStackViewV3 *off_hand);
+typedef DfStatus (*DfHostPlayerHeldSlotSetFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t slot);
+typedef DfStatus (*DfHostWorldLookupFn)(uint64_t context, DfInvocationId invocation, DfStringView name, DfWorldId *world);
+typedef DfStatus (*DfHostWorldOpenFn)(uint64_t context, DfInvocationId invocation, DfStringView name, uint32_t dimension, DfWorldId *world);
+typedef DfStatus (*DfHostWorldNameFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, DfStringBuffer *name);
+typedef DfStatus (*DfHostWorldUnloadFn)(uint64_t context, DfInvocationId invocation, DfWorldId world);
+typedef DfStatus (*DfHostWorldSaveFn)(uint64_t context, DfInvocationId invocation, DfWorldId world);
+typedef DfStatus (*DfHostWorldBlockGetFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, DfBlockPos position, DfBlockData *block);
+typedef DfStatus (*DfHostWorldBlockSetFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, DfBlockPos position, const DfBlockView *block);
+typedef DfStatus (*DfHostWorldTimeGetFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, int64_t *time);
+typedef DfStatus (*DfHostWorldTimeSetFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, int64_t time);
+typedef DfStatus (*DfHostWorldSpawnGetFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, DfBlockPos *position);
+typedef DfStatus (*DfHostWorldSpawnSetFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, DfBlockPos position);
 typedef struct {
     uint32_t abi_version;
     uint32_t struct_size;
@@ -232,7 +250,18 @@ typedef struct {
     DfHostPlayerScoreboardRemoveFn player_scoreboard_remove;
     DfHostPlayerFormSendFn player_form_send;
     DfHostPlayerFormCloseFn player_form_close;
-} DfHostApiV5;
+    DfHostWorldLookupFn world_lookup;
+    DfHostWorldOpenFn world_open;
+    DfHostWorldNameFn world_name;
+    DfHostWorldUnloadFn world_unload;
+    DfHostWorldSaveFn world_save;
+    DfHostWorldBlockGetFn world_block_get;
+    DfHostWorldBlockSetFn world_block_set;
+    DfHostWorldTimeGetFn world_time_get;
+    DfHostWorldTimeSetFn world_time_set;
+    DfHostWorldSpawnGetFn world_spawn_get;
+    DfHostWorldSpawnSetFn world_spawn_set;
+} DfHostApiV7;
 #define DF_COMMAND_PARAMETER_SUBCOMMAND 1u
 #define DF_COMMAND_PARAMETER_ENUM 2u
 #define DF_COMMAND_PARAMETER_STRING 3u
@@ -250,7 +279,7 @@ typedef struct { DfPlayerId player; DfStringView name; uint64_t latency_millisec
 #define DF_COMMAND_SOURCE_UNKNOWN 0u
 #define DF_COMMAND_SOURCE_PLAYER 1u
 #define DF_COMMAND_SOURCE_CONSOLE 2u
-typedef struct { DfStringView source; DfStringView arguments; uint32_t source_kind; DfPlayerId source_player; const DfCommandPlayer *online_players; uint64_t online_player_count; } DfCommandInput;
+typedef struct { DfInvocationId invocation; DfStringView source; DfStringView arguments; uint32_t source_kind; DfPlayerId source_player; const DfCommandPlayer *online_players; uint64_t online_player_count; } DfCommandInput;
 typedef struct { uint8_t failed; DfStringBuffer output; } DfCommandState;
 
 typedef struct {
@@ -262,6 +291,7 @@ typedef struct {
 #define DF_EVENT_PLAYER_MOVE 1u
 
 typedef struct {
+    DfInvocationId invocation;
     DfPlayerId player;
     DfVec3 old_position;
     DfVec3 new_position;
@@ -275,6 +305,7 @@ typedef struct {
 #define DF_EVENT_PLAYER_CHAT 2u
 
 typedef struct {
+    DfInvocationId invocation;
     DfPlayerId player;
     DfStringView message;
 } DfPlayerChatInput;
@@ -288,6 +319,7 @@ typedef struct {
 #define DF_EVENT_PLAYER_JOIN 3u
 
 typedef struct {
+    DfInvocationId invocation;
     DfPlayerId player;
     DfStringView name;
 } DfPlayerJoinInput;
@@ -299,6 +331,7 @@ typedef struct {
 #define DF_EVENT_PLAYER_QUIT 4u
 
 typedef struct {
+    DfInvocationId invocation;
     DfPlayerId player;
     DfStringView name;
 } DfPlayerQuitInput;
@@ -310,6 +343,7 @@ typedef struct {
 #define DF_EVENT_PLAYER_HURT 5u
 
 typedef struct {
+    DfInvocationId invocation;
     DfPlayerId player;
     uint8_t immune;
     DfDamageSourceView source;
@@ -324,6 +358,7 @@ typedef struct {
 #define DF_EVENT_PLAYER_HEAL 6u
 
 typedef struct {
+    DfInvocationId invocation;
     DfPlayerId player;
     DfHealingSourceView source;
 } DfPlayerHealInput;
@@ -336,6 +371,7 @@ typedef struct {
 #define DF_EVENT_PLAYER_BLOCK_BREAK 7u
 
 typedef struct {
+    DfInvocationId invocation;
     DfPlayerId player;
     DfBlockPos position;
     DfStringView block;
@@ -349,6 +385,7 @@ typedef struct {
 #define DF_EVENT_PLAYER_BLOCK_PLACE 8u
 
 typedef struct {
+    DfInvocationId invocation;
     DfPlayerId player;
     DfBlockPos position;
     DfStringView block;
@@ -361,6 +398,7 @@ typedef struct {
 #define DF_EVENT_PLAYER_FOOD_LOSS 9u
 
 typedef struct {
+    DfInvocationId invocation;
     DfPlayerId player;
     int32_t from;
 } DfPlayerFoodLossInput;
@@ -373,6 +411,7 @@ typedef struct {
 #define DF_EVENT_PLAYER_DEATH 10u
 
 typedef struct {
+    DfInvocationId invocation;
     DfPlayerId player;
     DfDamageSourceView source;
 } DfPlayerDeathInput;
@@ -384,6 +423,7 @@ typedef struct {
 #define DF_EVENT_PLAYER_START_BREAK 11u
 
 typedef struct {
+    DfInvocationId invocation;
     DfPlayerId player;
     DfBlockPos position;
 } DfPlayerStartBreakInput;
@@ -395,6 +435,7 @@ typedef struct {
 #define DF_EVENT_PLAYER_FIRE_EXTINGUISH 12u
 
 typedef struct {
+    DfInvocationId invocation;
     DfPlayerId player;
     DfBlockPos position;
 } DfPlayerFireExtinguishInput;
@@ -406,6 +447,7 @@ typedef struct {
 #define DF_EVENT_PLAYER_TOGGLE_SPRINT 13u
 
 typedef struct {
+    DfInvocationId invocation;
     DfPlayerId player;
     uint8_t after;
 } DfPlayerToggleSprintInput;
@@ -417,6 +459,7 @@ typedef struct {
 #define DF_EVENT_PLAYER_TOGGLE_SNEAK 14u
 
 typedef struct {
+    DfInvocationId invocation;
     DfPlayerId player;
     uint8_t after;
 } DfPlayerToggleSneakInput;
@@ -428,6 +471,7 @@ typedef struct {
 #define DF_EVENT_PLAYER_JUMP 15u
 
 typedef struct {
+    DfInvocationId invocation;
     DfPlayerId player;
 } DfPlayerJumpInput;
 
@@ -438,6 +482,7 @@ typedef struct {
 #define DF_EVENT_PLAYER_TELEPORT 16u
 
 typedef struct {
+    DfInvocationId invocation;
     DfPlayerId player;
     DfVec3 position;
 } DfPlayerTeleportInput;
@@ -449,6 +494,7 @@ typedef struct {
 #define DF_EVENT_PLAYER_EXPERIENCE_GAIN 17u
 
 typedef struct {
+    DfInvocationId invocation;
     DfPlayerId player;
 } DfPlayerExperienceGainInput;
 
@@ -460,6 +506,7 @@ typedef struct {
 #define DF_EVENT_PLAYER_PUNCH_AIR 18u
 
 typedef struct {
+    DfInvocationId invocation;
     DfPlayerId player;
 } DfPlayerPunchAirInput;
 
@@ -470,6 +517,7 @@ typedef struct {
 #define DF_EVENT_PLAYER_HELD_SLOT_CHANGE 19u
 
 typedef struct {
+    DfInvocationId invocation;
     DfPlayerId player;
     int32_t from;
     int32_t to;
@@ -482,6 +530,7 @@ typedef struct {
 #define DF_EVENT_PLAYER_SLEEP 20u
 
 typedef struct {
+    DfInvocationId invocation;
     DfPlayerId player;
 } DfPlayerSleepInput;
 
@@ -493,6 +542,7 @@ typedef struct {
 #define DF_EVENT_PLAYER_BLOCK_PICK 21u
 
 typedef struct {
+    DfInvocationId invocation;
     DfPlayerId player;
     DfBlockPos position;
     DfStringView block;
@@ -505,6 +555,7 @@ typedef struct {
 #define DF_EVENT_PLAYER_LECTERN_PAGE_TURN 22u
 
 typedef struct {
+    DfInvocationId invocation;
     DfPlayerId player;
     DfBlockPos position;
     int32_t old_page;
@@ -518,6 +569,7 @@ typedef struct {
 #define DF_EVENT_PLAYER_SIGN_EDIT 23u
 
 typedef struct {
+    DfInvocationId invocation;
     DfPlayerId player;
     DfBlockPos position;
     uint8_t front_side;
@@ -532,6 +584,7 @@ typedef struct {
 #define DF_EVENT_PLAYER_ITEM_USE 24u
 
 typedef struct {
+    DfInvocationId invocation;
     DfPlayerId player;
 } DfPlayerItemUseInput;
 
@@ -542,6 +595,7 @@ typedef struct {
 #define DF_EVENT_PLAYER_ITEM_USE_ON_BLOCK 25u
 
 typedef struct {
+    DfInvocationId invocation;
     DfPlayerId player;
     DfBlockPos position;
     int32_t face;
@@ -555,6 +609,7 @@ typedef struct {
 #define DF_EVENT_PLAYER_ITEM_CONSUME 26u
 
 typedef struct {
+    DfInvocationId invocation;
     DfPlayerId player;
     DfItemStackSnapshot item;
 } DfPlayerItemConsumeInput;
@@ -566,6 +621,7 @@ typedef struct {
 #define DF_EVENT_PLAYER_ITEM_RELEASE 27u
 
 typedef struct {
+    DfInvocationId invocation;
     DfPlayerId player;
     DfItemStackSnapshot item;
     uint64_t duration_milliseconds;
@@ -578,6 +634,7 @@ typedef struct {
 #define DF_EVENT_PLAYER_ITEM_DAMAGE 28u
 
 typedef struct {
+    DfInvocationId invocation;
     DfPlayerId player;
     DfItemStackSnapshot item;
 } DfPlayerItemDamageInput;
@@ -590,6 +647,7 @@ typedef struct {
 #define DF_EVENT_PLAYER_ITEM_DROP 29u
 
 typedef struct {
+    DfInvocationId invocation;
     DfPlayerId player;
     DfItemStackSnapshot item;
 } DfPlayerItemDropInput;
@@ -604,7 +662,7 @@ typedef DfStatus (*DfPluginLifecycleFn)(void *instance);
 typedef const DfCommandDescriptor *(*DfPluginCommandsFn)(void *instance, uint64_t *count);
 typedef DfStatus (*DfHandleCommandFn)(void *instance, uint64_t command, const DfCommandInput *input, DfCommandState *state);
 typedef DfStatus (*DfCommandEnumOptionsFn)(void *instance, uint64_t command, uint64_t overload, uint64_t parameter, const DfCommandEnumContext *context, DfStringBuffer *output);
-typedef DfStatus (*DfPluginSetHostFn)(void *instance, const DfHostApiV5 *host);
+typedef DfStatus (*DfPluginSetHostFn)(void *instance, const DfHostApiV7 *host);
 typedef void (*DfPluginDestroyFn)(void *instance);
 
 typedef struct {
@@ -624,7 +682,7 @@ typedef struct {
 typedef const DfPluginApiV1 *(*DfPluginEntryV1Fn)(void);
 
 typedef struct DfRuntime DfRuntime;
-typedef struct { DfStringView plugin_directory; const DfHostApiV5 *host; } DfRuntimeConfig;
+typedef struct { DfStringView plugin_directory; const DfHostApiV7 *host; } DfRuntimeConfig;
 
 DfStatus df_runtime_create(const DfRuntimeConfig *config, DfRuntime **out, uint8_t *error, uint64_t error_capacity);
 DfStatus df_runtime_enable(DfRuntime *runtime);

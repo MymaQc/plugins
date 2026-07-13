@@ -19,12 +19,12 @@ const (
 )
 
 //export bg_go_inventory_size
-func bg_go_inventory_size(context C.uint64_t, inventory C.DfInventoryId, size *C.uint32_t) C.DfStatus {
+func bg_go_inventory_size(context C.uint64_t, invocation C.DfInvocationId, inventory C.DfInventoryId, size *C.uint32_t) C.DfStatus {
 	host, ok := resolveHost(uint64(context))
 	if !ok || size == nil {
 		return C.DF_STATUS_ERROR
 	}
-	value, ok := host.InventorySize(inventoryID(inventory))
+	value, ok := host.InventorySize(InvocationID(invocation), inventoryID(inventory))
 	if !ok {
 		return C.DF_STATUS_ERROR
 	}
@@ -33,27 +33,27 @@ func bg_go_inventory_size(context C.uint64_t, inventory C.DfInventoryId, size *C
 }
 
 //export bg_go_inventory_item_open
-func bg_go_inventory_item_open(context C.uint64_t, inventory C.DfInventoryId, slot C.uint32_t, snapshot *C.uint64_t, info *C.DfItemStackInfo) C.DfStatus {
+func bg_go_inventory_item_open(context C.uint64_t, invocation C.DfInvocationId, inventory C.DfInventoryId, slot C.uint32_t, snapshot *C.uint64_t, info *C.DfItemStackInfo) C.DfStatus {
 	host, ok := resolveHost(uint64(context))
 	if !ok {
 		return C.DF_STATUS_ERROR
 	}
-	value, ok := host.InventoryItem(inventoryID(inventory), uint32(slot))
+	value, ok := host.InventoryItem(InvocationID(invocation), inventoryID(inventory), uint32(slot))
 	return openItemSnapshot(uint64(context), value, ok, snapshot, info)
 }
 
 //export bg_go_player_held_item_open
-func bg_go_player_held_item_open(context C.uint64_t, player C.DfPlayerId, hand C.uint32_t, snapshot *C.uint64_t, info *C.DfItemStackInfo) C.DfStatus {
+func bg_go_player_held_item_open(context C.uint64_t, invocation C.DfInvocationId, player C.DfPlayerId, hand C.uint32_t, snapshot *C.uint64_t, info *C.DfItemStackInfo) C.DfStatus {
 	host, ok := resolveHost(uint64(context))
 	if !ok {
 		return C.DF_STATUS_ERROR
 	}
-	value, ok := host.HeldItem(playerID(player), uint32(hand))
+	value, ok := host.HeldItem(InvocationID(invocation), playerID(player), uint32(hand))
 	return openItemSnapshot(uint64(context), value, ok, snapshot, info)
 }
 
 //export bg_go_item_stack_read
-func bg_go_item_stack_read(context C.uint64_t, snapshot C.uint64_t, data *C.DfItemStackData) C.DfStatus {
+func bg_go_item_stack_read(context C.uint64_t, invocation C.DfInvocationId, snapshot C.uint64_t, data *C.DfItemStackData) C.DfStatus {
 	value, ok := resolveItemSnapshot(uint64(context), uint64(snapshot))
 	if !ok || data == nil || !validNativeItem(value) ||
 		uint64(data.lore_capacity) < uint64(len(value.Lore)) ||
@@ -95,28 +95,28 @@ func bg_go_item_stack_read(context C.uint64_t, snapshot C.uint64_t, data *C.DfIt
 }
 
 //export bg_go_item_stack_close
-func bg_go_item_stack_close(context C.uint64_t, snapshot C.uint64_t) {
+func bg_go_item_stack_close(context C.uint64_t, invocation C.DfInvocationId, snapshot C.uint64_t) {
 	unregisterItemSnapshot(uint64(context), uint64(snapshot))
 }
 
 //export bg_go_inventory_item_set
-func bg_go_inventory_item_set(context C.uint64_t, inventory C.DfInventoryId, slot C.uint32_t, view *C.DfItemStackViewV3) C.DfStatus {
+func bg_go_inventory_item_set(context C.uint64_t, invocation C.DfInvocationId, inventory C.DfInventoryId, slot C.uint32_t, view *C.DfItemStackViewV3) C.DfStatus {
 	host, ok := resolveHost(uint64(context))
 	value, valid := copyItemStackView(view)
-	if !ok || !valid || !host.SetInventoryItem(inventoryID(inventory), uint32(slot), value) {
+	if !ok || !valid || !host.SetInventoryItem(InvocationID(invocation), inventoryID(inventory), uint32(slot), value) {
 		return C.DF_STATUS_ERROR
 	}
 	return C.DF_STATUS_OK
 }
 
 //export bg_go_inventory_item_add
-func bg_go_inventory_item_add(context C.uint64_t, inventory C.DfInventoryId, view *C.DfItemStackViewV3, added *C.uint32_t) C.DfStatus {
+func bg_go_inventory_item_add(context C.uint64_t, invocation C.DfInvocationId, inventory C.DfInventoryId, view *C.DfItemStackViewV3, added *C.uint32_t) C.DfStatus {
 	host, ok := resolveHost(uint64(context))
 	value, valid := copyItemStackView(view)
 	if !ok || added == nil || !valid {
 		return C.DF_STATUS_ERROR
 	}
-	count, ok := host.AddInventoryItem(inventoryID(inventory), value)
+	count, ok := host.AddInventoryItem(InvocationID(invocation), inventoryID(inventory), value)
 	if !ok {
 		return C.DF_STATUS_ERROR
 	}
@@ -125,38 +125,38 @@ func bg_go_inventory_item_add(context C.uint64_t, inventory C.DfInventoryId, vie
 }
 
 //export bg_go_inventory_clear_slot
-func bg_go_inventory_clear_slot(context C.uint64_t, inventory C.DfInventoryId, slot C.uint32_t) C.DfStatus {
+func bg_go_inventory_clear_slot(context C.uint64_t, invocation C.DfInvocationId, inventory C.DfInventoryId, slot C.uint32_t) C.DfStatus {
 	host, ok := resolveHost(uint64(context))
-	if !ok || !host.SetInventoryItem(inventoryID(inventory), uint32(slot), ItemStack{}) {
+	if !ok || !host.SetInventoryItem(InvocationID(invocation), inventoryID(inventory), uint32(slot), ItemStack{}) {
 		return C.DF_STATUS_ERROR
 	}
 	return C.DF_STATUS_OK
 }
 
 //export bg_go_inventory_clear
-func bg_go_inventory_clear(context C.uint64_t, inventory C.DfInventoryId) C.DfStatus {
+func bg_go_inventory_clear(context C.uint64_t, invocation C.DfInvocationId, inventory C.DfInventoryId) C.DfStatus {
 	host, ok := resolveHost(uint64(context))
-	if !ok || !host.ClearInventory(inventoryID(inventory)) {
+	if !ok || !host.ClearInventory(InvocationID(invocation), inventoryID(inventory)) {
 		return C.DF_STATUS_ERROR
 	}
 	return C.DF_STATUS_OK
 }
 
 //export bg_go_player_held_items_set
-func bg_go_player_held_items_set(context C.uint64_t, player C.DfPlayerId, mainView, offhandView *C.DfItemStackViewV3) C.DfStatus {
+func bg_go_player_held_items_set(context C.uint64_t, invocation C.DfInvocationId, player C.DfPlayerId, mainView, offhandView *C.DfItemStackViewV3) C.DfStatus {
 	host, ok := resolveHost(uint64(context))
 	main, mainOK := copyItemStackView(mainView)
 	offhand, offhandOK := copyItemStackView(offhandView)
-	if !ok || !mainOK || !offhandOK || !host.SetHeldItems(playerID(player), main, offhand) {
+	if !ok || !mainOK || !offhandOK || !host.SetHeldItems(InvocationID(invocation), playerID(player), main, offhand) {
 		return C.DF_STATUS_ERROR
 	}
 	return C.DF_STATUS_OK
 }
 
 //export bg_go_player_held_slot_set
-func bg_go_player_held_slot_set(context C.uint64_t, player C.DfPlayerId, slot C.uint32_t) C.DfStatus {
+func bg_go_player_held_slot_set(context C.uint64_t, invocation C.DfInvocationId, player C.DfPlayerId, slot C.uint32_t) C.DfStatus {
 	host, ok := resolveHost(uint64(context))
-	if !ok || !host.SetHeldSlot(playerID(player), uint32(slot)) {
+	if !ok || !host.SetHeldSlot(InvocationID(invocation), playerID(player), uint32(slot)) {
 		return C.DF_STATUS_ERROR
 	}
 	return C.DF_STATUS_OK

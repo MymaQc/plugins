@@ -22,6 +22,9 @@ func RunFile(ctx context.Context, configPath string, log *slog.Logger) error {
 	if !filepath.IsAbs(config.Plugins.Directory) {
 		config.Plugins.Directory = filepath.Join(base, config.Plugins.Directory)
 	}
+	if !filepath.IsAbs(config.Worlds.Directory) {
+		config.Worlds.Directory = filepath.Join(base, config.Worlds.Directory)
+	}
 	resolveDataPath(base, &config.Dragonfly.World.Folder)
 	resolveDataPath(base, &config.Dragonfly.Players.Folder)
 	resolveDataPath(base, &config.Dragonfly.Resources.Folder)
@@ -40,18 +43,32 @@ func Run(ctx context.Context, config Config, log *slog.Logger) error {
 		log = slog.Default()
 	}
 	players := host.NewPlayers()
-	pluginRuntime, err := native.OpenWithHost(config.Plugins.RuntimeLibrary, config.Plugins.Directory, players)
-	if err != nil {
-		return err
-	}
-	defer pluginRuntime.Close()
-
 	dragonflyConfig, err := config.Dragonfly.Config(log)
 	if err != nil {
 		return fmt.Errorf("configure Dragonfly: %w", err)
 	}
 	srv := dragonflyConfig.New()
-	worlds := NewWorldManager()
+	worlds, err := NewPersistentWorldManager(config.Worlds.Directory, log, players)
+	if err != nil {
+		_ = srv.Close()
+		return err
+	}
+	var pluginRuntime *native.Runtime
+	enabled := false
+	defer func() {
+		if enabled {
+			pluginRuntime.Disable()
+		}
+		if err := worlds.CloseCustom(); err != nil {
+			log.Error("close custom worlds", "error", err)
+		}
+		if err := srv.Close(); err != nil {
+			log.Error("close Dragonfly server", "error", err)
+		}
+		if pluginRuntime != nil {
+			pluginRuntime.Close()
+		}
+	}()
 	if err := worlds.RegisterCore(OverworldID, srv.World()); err != nil {
 		return err
 	}
@@ -61,25 +78,21 @@ func Run(ctx context.Context, config Config, log *slog.Logger) error {
 	if err := worlds.RegisterCore(EndID, srv.End()); err != nil {
 		return err
 	}
+	pluginRuntime, err = native.OpenWithHost(config.Plugins.RuntimeLibrary, config.Plugins.Directory, struct {
+		*host.Players
+		*WorldManager
+	}{players, worlds})
+	if err != nil {
+		return err
+	}
 	if err := pluginRuntime.Enable(); err != nil {
 		return err
 	}
+	enabled = true
 	if err := host.RegisterCommands(pluginRuntime, players); err != nil {
-		pluginRuntime.Disable()
 		return err
 	}
 	srv.Listen()
-	defer func() {
-		if err := srv.Close(); err != nil {
-			log.Error("close Dragonfly server", "error", err)
-		}
-	}()
-	defer func() {
-		if err := worlds.CloseCustom(); err != nil {
-			log.Error("close custom worlds", "error", err)
-		}
-	}()
-	defer pluginRuntime.Disable()
 
 	stopped := make(chan struct{})
 	defer close(stopped)

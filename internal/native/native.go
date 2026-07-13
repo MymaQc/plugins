@@ -53,6 +53,10 @@ const (
 	MaxCommandEnumBytes                      = 4096
 )
 
+// InvocationID identifies one synchronous command, event, or form callback.
+// Zero means that no Dragonfly owner transaction is attached.
+type InvocationID uint64
+
 type PlayerID struct {
 	UUID       [16]byte
 	Generation uint64
@@ -262,6 +266,7 @@ const (
 )
 
 type CommandInput struct {
+	Invocation    InvocationID
 	Source        string
 	Arguments     string
 	SourceKind    CommandSourceKind
@@ -439,6 +444,7 @@ func (r *Runtime) HandleCommand(index uint64, input CommandInput) (CommandOutput
 	defer C.free(message)
 
 	nativeInput := C.DfCommandInput{
+		invocation:  C.DfInvocationId(input.Invocation),
 		source:      C.DfStringView{data: (*C.uint8_t)(source), len: C.uint64_t(len(input.Source))},
 		arguments:   C.DfStringView{data: (*C.uint8_t)(arguments), len: C.uint64_t(len(input.Arguments))},
 		source_kind: C.uint32_t(input.SourceKind),
@@ -536,11 +542,12 @@ func (r *Runtime) CommandEnumOptions(index, overload, parameter uint64, sourceNa
 	return strings.Split(string(C.GoBytes(buffer, C.int(output.len))), "\n"), nil
 }
 
-func (r *Runtime) HandlePlayerMove(input PlayerMoveInput, cancelled bool) (bool, error) {
+func (r *Runtime) HandlePlayerMove(invocation InvocationID, input PlayerMoveInput, cancelled bool) (bool, error) {
 	if r == nil || r.ptr == nil {
 		return cancelled, errors.New("native runtime is closed")
 	}
 	var nativeInput C.DfPlayerMoveInput
+	nativeInput.invocation = C.DfInvocationId(invocation)
 	fillPlayerID(&nativeInput.player, input.Player)
 	nativeInput.old_position = C.DfVec3{x: C.double(input.OldPosition.X), y: C.double(input.OldPosition.Y), z: C.double(input.OldPosition.Z)}
 	nativeInput.new_position = C.DfVec3{x: C.double(input.NewPosition.X), y: C.double(input.NewPosition.Y), z: C.double(input.NewPosition.Z)}
@@ -558,7 +565,7 @@ func (r *Runtime) HandlePlayerMove(input PlayerMoveInput, cancelled bool) (bool,
 	return finalCancelled, nil
 }
 
-func (r *Runtime) HandlePlayerChat(input PlayerChatInput, cancelled bool) (PlayerChatOutput, error) {
+func (r *Runtime) HandlePlayerChat(invocation InvocationID, input PlayerChatInput, cancelled bool) (PlayerChatOutput, error) {
 	output := PlayerChatOutput{Cancelled: cancelled}
 	if r == nil || r.ptr == nil {
 		return output, errors.New("native runtime is closed")
@@ -572,6 +579,7 @@ func (r *Runtime) HandlePlayerChat(input PlayerChatInput, cancelled bool) (Playe
 	defer C.free(replacement)
 
 	var nativeInput C.DfPlayerChatInput
+	nativeInput.invocation = C.DfInvocationId(invocation)
 	fillPlayerID(&nativeInput.player, input.Player)
 	nativeInput.message = C.DfStringView{
 		data: (*C.uint8_t)(message),
@@ -598,13 +606,14 @@ func (r *Runtime) HandlePlayerChat(input PlayerChatInput, cancelled bool) (Playe
 	return output, nil
 }
 
-func (r *Runtime) HandlePlayerJoin(input PlayerJoinInput, cancelled bool) (bool, error) {
+func (r *Runtime) HandlePlayerJoin(invocation InvocationID, input PlayerJoinInput, cancelled bool) (bool, error) {
 	if r == nil || r.ptr == nil {
 		return cancelled, errors.New("native runtime is closed")
 	}
 	name := C.CBytes([]byte(input.Name))
 	defer C.free(name)
 	var nativeInput C.DfPlayerJoinInput
+	nativeInput.invocation = C.DfInvocationId(invocation)
 	fillPlayerID(&nativeInput.player, input.Player)
 	nativeInput.name = C.DfStringView{data: (*C.uint8_t)(name), len: C.uint64_t(len(input.Name))}
 	var state C.DfPlayerJoinState
@@ -617,13 +626,14 @@ func (r *Runtime) HandlePlayerJoin(input PlayerJoinInput, cancelled bool) (bool,
 	return state.cancelled != 0, nil
 }
 
-func (r *Runtime) HandlePlayerQuit(input PlayerQuitInput) error {
+func (r *Runtime) HandlePlayerQuit(invocation InvocationID, input PlayerQuitInput) error {
 	if r == nil || r.ptr == nil {
 		return errors.New("native runtime is closed")
 	}
 	name := C.CBytes([]byte(input.Name))
 	defer C.free(name)
 	var nativeInput C.DfPlayerQuitInput
+	nativeInput.invocation = C.DfInvocationId(invocation)
 	fillPlayerID(&nativeInput.player, input.Player)
 	nativeInput.name = C.DfStringView{data: (*C.uint8_t)(name), len: C.uint64_t(len(input.Name))}
 	var state C.DfPlayerQuitState
@@ -633,7 +643,7 @@ func (r *Runtime) HandlePlayerQuit(input PlayerQuitInput) error {
 	return nil
 }
 
-func (r *Runtime) HandlePlayerHurt(input PlayerHurtInput, cancelled bool) (PlayerHurtOutput, error) {
+func (r *Runtime) HandlePlayerHurt(invocation InvocationID, input PlayerHurtInput, cancelled bool) (PlayerHurtOutput, error) {
 	output := PlayerHurtOutput{Cancelled: cancelled, Damage: input.Damage, AttackImmunity: input.AttackImmunity}
 	if r == nil || r.ptr == nil {
 		return output, errors.New("native runtime is closed")
@@ -641,6 +651,7 @@ func (r *Runtime) HandlePlayerHurt(input PlayerHurtInput, cancelled bool) (Playe
 	source := C.CBytes([]byte(input.Source.Name))
 	defer C.free(source)
 	var nativeInput C.DfPlayerHurtInput
+	nativeInput.invocation = C.DfInvocationId(invocation)
 	fillPlayerID(&nativeInput.player, input.Player)
 	nativeInput.immune = C.uint8_t(boolByte(input.Immune))
 	nativeInput.source = nativeDamageSource(input.Source, source)
@@ -660,7 +671,7 @@ func (r *Runtime) HandlePlayerHurt(input PlayerHurtInput, cancelled bool) (Playe
 	return output, nil
 }
 
-func (r *Runtime) HandlePlayerHeal(input PlayerHealInput, cancelled bool) (PlayerHealOutput, error) {
+func (r *Runtime) HandlePlayerHeal(invocation InvocationID, input PlayerHealInput, cancelled bool) (PlayerHealOutput, error) {
 	output := PlayerHealOutput{Cancelled: cancelled, Health: input.Health}
 	if r == nil || r.ptr == nil {
 		return output, errors.New("native runtime is closed")
@@ -668,6 +679,7 @@ func (r *Runtime) HandlePlayerHeal(input PlayerHealInput, cancelled bool) (Playe
 	source := C.CBytes([]byte(input.Source.Name))
 	defer C.free(source)
 	var nativeInput C.DfPlayerHealInput
+	nativeInput.invocation = C.DfInvocationId(invocation)
 	fillPlayerID(&nativeInput.player, input.Player)
 	nativeInput.source = C.DfHealingSourceView{name: C.DfStringView{data: (*C.uint8_t)(source), len: C.uint64_t(len(input.Source.Name))}}
 	state := C.DfPlayerHealState{health: C.double(input.Health)}
@@ -682,7 +694,7 @@ func (r *Runtime) HandlePlayerHeal(input PlayerHealInput, cancelled bool) (Playe
 	return output, nil
 }
 
-func (r *Runtime) HandlePlayerBlockBreak(input PlayerBlockBreakInput, cancelled bool) (PlayerBlockBreakOutput, error) {
+func (r *Runtime) HandlePlayerBlockBreak(invocation InvocationID, input PlayerBlockBreakInput, cancelled bool) (PlayerBlockBreakOutput, error) {
 	output := PlayerBlockBreakOutput{Cancelled: cancelled, Experience: input.Experience}
 	if r == nil || r.ptr == nil {
 		return output, errors.New("native runtime is closed")
@@ -690,6 +702,7 @@ func (r *Runtime) HandlePlayerBlockBreak(input PlayerBlockBreakInput, cancelled 
 	block := C.CBytes([]byte(input.Block))
 	defer C.free(block)
 	var nativeInput C.DfPlayerBlockBreakInput
+	nativeInput.invocation = C.DfInvocationId(invocation)
 	fillPlayerID(&nativeInput.player, input.Player)
 	nativeInput.position = nativeBlockPos(input.Position)
 	nativeInput.block = C.DfStringView{data: (*C.uint8_t)(block), len: C.uint64_t(len(input.Block))}
@@ -705,13 +718,14 @@ func (r *Runtime) HandlePlayerBlockBreak(input PlayerBlockBreakInput, cancelled 
 	return output, nil
 }
 
-func (r *Runtime) HandlePlayerBlockPlace(input PlayerBlockPlaceInput, cancelled bool) (bool, error) {
+func (r *Runtime) HandlePlayerBlockPlace(invocation InvocationID, input PlayerBlockPlaceInput, cancelled bool) (bool, error) {
 	if r == nil || r.ptr == nil {
 		return cancelled, errors.New("native runtime is closed")
 	}
 	block := C.CBytes([]byte(input.Block))
 	defer C.free(block)
 	var nativeInput C.DfPlayerBlockPlaceInput
+	nativeInput.invocation = C.DfInvocationId(invocation)
 	fillPlayerID(&nativeInput.player, input.Player)
 	nativeInput.position = nativeBlockPos(input.Position)
 	nativeInput.block = C.DfStringView{data: (*C.uint8_t)(block), len: C.uint64_t(len(input.Block))}
@@ -725,12 +739,13 @@ func (r *Runtime) HandlePlayerBlockPlace(input PlayerBlockPlaceInput, cancelled 
 	return state.cancelled != 0, nil
 }
 
-func (r *Runtime) HandlePlayerFoodLoss(input PlayerFoodLossInput, cancelled bool) (PlayerFoodLossOutput, error) {
+func (r *Runtime) HandlePlayerFoodLoss(invocation InvocationID, input PlayerFoodLossInput, cancelled bool) (PlayerFoodLossOutput, error) {
 	output := PlayerFoodLossOutput{Cancelled: cancelled, To: input.To}
 	if r == nil || r.ptr == nil {
 		return output, errors.New("native runtime is closed")
 	}
 	var nativeInput C.DfPlayerFoodLossInput
+	nativeInput.invocation = C.DfInvocationId(invocation)
 	fillPlayerID(&nativeInput.player, input.Player)
 	nativeInput.from = C.int32_t(input.From)
 	state := C.DfPlayerFoodLossState{to: C.int32_t(input.To)}
@@ -745,13 +760,14 @@ func (r *Runtime) HandlePlayerFoodLoss(input PlayerFoodLossInput, cancelled bool
 	return output, nil
 }
 
-func (r *Runtime) HandlePlayerDeath(input PlayerDeathInput, keepInventory bool) (bool, error) {
+func (r *Runtime) HandlePlayerDeath(invocation InvocationID, input PlayerDeathInput, keepInventory bool) (bool, error) {
 	if r == nil || r.ptr == nil {
 		return keepInventory, errors.New("native runtime is closed")
 	}
 	source := C.CBytes([]byte(input.Source.Name))
 	defer C.free(source)
 	var nativeInput C.DfPlayerDeathInput
+	nativeInput.invocation = C.DfInvocationId(invocation)
 	fillPlayerID(&nativeInput.player, input.Player)
 	nativeInput.source = nativeDamageSource(input.Source, source)
 	var state C.DfPlayerDeathState
@@ -764,11 +780,12 @@ func (r *Runtime) HandlePlayerDeath(input PlayerDeathInput, keepInventory bool) 
 	return state.keep_inventory != 0, nil
 }
 
-func (r *Runtime) HandlePlayerStartBreak(input PlayerPositionInput, cancelled bool) (bool, error) {
+func (r *Runtime) HandlePlayerStartBreak(invocation InvocationID, input PlayerPositionInput, cancelled bool) (bool, error) {
 	if r == nil || r.ptr == nil {
 		return cancelled, errors.New("native runtime is closed")
 	}
 	var nativeInput C.DfPlayerStartBreakInput
+	nativeInput.invocation = C.DfInvocationId(invocation)
 	fillPlayerID(&nativeInput.player, input.Player)
 	nativeInput.position = nativeBlockPos(input.Position)
 	var state C.DfPlayerStartBreakState
@@ -781,11 +798,12 @@ func (r *Runtime) HandlePlayerStartBreak(input PlayerPositionInput, cancelled bo
 	return state.cancelled != 0, nil
 }
 
-func (r *Runtime) HandlePlayerFireExtinguish(input PlayerPositionInput, cancelled bool) (bool, error) {
+func (r *Runtime) HandlePlayerFireExtinguish(invocation InvocationID, input PlayerPositionInput, cancelled bool) (bool, error) {
 	if r == nil || r.ptr == nil {
 		return cancelled, errors.New("native runtime is closed")
 	}
 	var nativeInput C.DfPlayerFireExtinguishInput
+	nativeInput.invocation = C.DfInvocationId(invocation)
 	fillPlayerID(&nativeInput.player, input.Player)
 	nativeInput.position = nativeBlockPos(input.Position)
 	var state C.DfPlayerFireExtinguishState
@@ -798,11 +816,12 @@ func (r *Runtime) HandlePlayerFireExtinguish(input PlayerPositionInput, cancelle
 	return state.cancelled != 0, nil
 }
 
-func (r *Runtime) HandlePlayerToggleSprint(input PlayerToggleInput, cancelled bool) (bool, error) {
+func (r *Runtime) HandlePlayerToggleSprint(invocation InvocationID, input PlayerToggleInput, cancelled bool) (bool, error) {
 	if r == nil || r.ptr == nil {
 		return cancelled, errors.New("native runtime is closed")
 	}
 	var nativeInput C.DfPlayerToggleSprintInput
+	nativeInput.invocation = C.DfInvocationId(invocation)
 	fillPlayerID(&nativeInput.player, input.Player)
 	nativeInput.after = C.uint8_t(boolByte(input.After))
 	var state C.DfPlayerToggleSprintState
@@ -814,11 +833,12 @@ func (r *Runtime) HandlePlayerToggleSprint(input PlayerToggleInput, cancelled bo
 	}
 	return state.cancelled != 0, nil
 }
-func (r *Runtime) HandlePlayerToggleSneak(input PlayerToggleInput, cancelled bool) (bool, error) {
+func (r *Runtime) HandlePlayerToggleSneak(invocation InvocationID, input PlayerToggleInput, cancelled bool) (bool, error) {
 	if r == nil || r.ptr == nil {
 		return cancelled, errors.New("native runtime is closed")
 	}
 	var nativeInput C.DfPlayerToggleSneakInput
+	nativeInput.invocation = C.DfInvocationId(invocation)
 	fillPlayerID(&nativeInput.player, input.Player)
 	nativeInput.after = C.uint8_t(boolByte(input.After))
 	var state C.DfPlayerToggleSneakState
@@ -831,11 +851,12 @@ func (r *Runtime) HandlePlayerToggleSneak(input PlayerToggleInput, cancelled boo
 	return state.cancelled != 0, nil
 }
 
-func (r *Runtime) HandlePlayerJump(player PlayerID) error {
+func (r *Runtime) HandlePlayerJump(invocation InvocationID, player PlayerID) error {
 	if r == nil || r.ptr == nil {
 		return errors.New("native runtime is closed")
 	}
 	var input C.DfPlayerJumpInput
+	input.invocation = C.DfInvocationId(invocation)
 	fillPlayerID(&input.player, player)
 	var state C.DfPlayerJumpState
 	if status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_JUMP, unsafe.Pointer(&input), unsafe.Pointer(&state)); status != C.DF_STATUS_OK {
@@ -844,11 +865,12 @@ func (r *Runtime) HandlePlayerJump(player PlayerID) error {
 	return nil
 }
 
-func (r *Runtime) HandlePlayerTeleport(input PlayerTeleportInput, cancelled bool) (bool, error) {
+func (r *Runtime) HandlePlayerTeleport(invocation InvocationID, input PlayerTeleportInput, cancelled bool) (bool, error) {
 	if r == nil || r.ptr == nil {
 		return cancelled, errors.New("native runtime is closed")
 	}
 	var nativeInput C.DfPlayerTeleportInput
+	nativeInput.invocation = C.DfInvocationId(invocation)
 	fillPlayerID(&nativeInput.player, input.Player)
 	nativeInput.position = C.DfVec3{x: C.double(input.Position.X), y: C.double(input.Position.Y), z: C.double(input.Position.Z)}
 	var state C.DfPlayerTeleportState
@@ -861,12 +883,13 @@ func (r *Runtime) HandlePlayerTeleport(input PlayerTeleportInput, cancelled bool
 	return state.cancelled != 0, nil
 }
 
-func (r *Runtime) HandlePlayerExperienceGain(player PlayerID, amount int, cancelled bool) (PlayerExperienceGainOutput, error) {
+func (r *Runtime) HandlePlayerExperienceGain(invocation InvocationID, player PlayerID, amount int, cancelled bool) (PlayerExperienceGainOutput, error) {
 	output := PlayerExperienceGainOutput{Cancelled: cancelled, Amount: amount}
 	if r == nil || r.ptr == nil {
 		return output, errors.New("native runtime is closed")
 	}
 	var input C.DfPlayerExperienceGainInput
+	input.invocation = C.DfInvocationId(invocation)
 	fillPlayerID(&input.player, player)
 	state := C.DfPlayerExperienceGainState{amount: C.int32_t(amount)}
 	if cancelled {
@@ -878,11 +901,12 @@ func (r *Runtime) HandlePlayerExperienceGain(player PlayerID, amount int, cancel
 	return PlayerExperienceGainOutput{Cancelled: state.cancelled != 0, Amount: int(state.amount)}, nil
 }
 
-func (r *Runtime) HandlePlayerPunchAir(player PlayerID, cancelled bool) (bool, error) {
+func (r *Runtime) HandlePlayerPunchAir(invocation InvocationID, player PlayerID, cancelled bool) (bool, error) {
 	if r == nil || r.ptr == nil {
 		return cancelled, errors.New("native runtime is closed")
 	}
 	var input C.DfPlayerPunchAirInput
+	input.invocation = C.DfInvocationId(invocation)
 	fillPlayerID(&input.player, player)
 	var state C.DfPlayerPunchAirState
 	if cancelled {
@@ -894,11 +918,12 @@ func (r *Runtime) HandlePlayerPunchAir(player PlayerID, cancelled bool) (bool, e
 	return state.cancelled != 0, nil
 }
 
-func (r *Runtime) HandlePlayerHeldSlotChange(input PlayerHeldSlotChangeInput, cancelled bool) (bool, error) {
+func (r *Runtime) HandlePlayerHeldSlotChange(invocation InvocationID, input PlayerHeldSlotChangeInput, cancelled bool) (bool, error) {
 	if r == nil || r.ptr == nil {
 		return cancelled, errors.New("native runtime is closed")
 	}
 	var nativeInput C.DfPlayerHeldSlotChangeInput
+	nativeInput.invocation = C.DfInvocationId(invocation)
 	fillPlayerID(&nativeInput.player, input.Player)
 	nativeInput.from = C.int32_t(input.From)
 	nativeInput.to = C.int32_t(input.To)
@@ -912,12 +937,13 @@ func (r *Runtime) HandlePlayerHeldSlotChange(input PlayerHeldSlotChangeInput, ca
 	return state.cancelled != 0, nil
 }
 
-func (r *Runtime) HandlePlayerSleep(player PlayerID, sendReminder, cancelled bool) (PlayerSleepOutput, error) {
+func (r *Runtime) HandlePlayerSleep(invocation InvocationID, player PlayerID, sendReminder, cancelled bool) (PlayerSleepOutput, error) {
 	output := PlayerSleepOutput{Cancelled: cancelled, SendReminder: sendReminder}
 	if r == nil || r.ptr == nil {
 		return output, errors.New("native runtime is closed")
 	}
 	var input C.DfPlayerSleepInput
+	input.invocation = C.DfInvocationId(invocation)
 	fillPlayerID(&input.player, player)
 	state := C.DfPlayerSleepState{send_reminder: C.uint8_t(boolByte(sendReminder))}
 	if cancelled {
@@ -929,12 +955,12 @@ func (r *Runtime) HandlePlayerSleep(player PlayerID, sendReminder, cancelled boo
 	return PlayerSleepOutput{Cancelled: state.cancelled != 0, SendReminder: state.send_reminder != 0}, nil
 }
 
-func (r *Runtime) HandlePlayerBlockPick(input PlayerBlockPickInput, cancelled bool) (bool, error) {
+func (r *Runtime) HandlePlayerBlockPick(invocation InvocationID, input PlayerBlockPickInput, cancelled bool) (bool, error) {
 	if r == nil || r.ptr == nil {
 		return cancelled, errors.New("native runtime is closed")
 	}
 	block := unsafe.StringData(input.Block)
-	nativeInput := C.DfPlayerBlockPickInput{position: nativeBlockPos(input.Position), block: C.DfStringView{data: (*C.uint8_t)(unsafe.Pointer(block)), len: C.uint64_t(len(input.Block))}}
+	nativeInput := C.DfPlayerBlockPickInput{invocation: C.DfInvocationId(invocation), position: nativeBlockPos(input.Position), block: C.DfStringView{data: (*C.uint8_t)(unsafe.Pointer(block)), len: C.uint64_t(len(input.Block))}}
 	fillPlayerID(&nativeInput.player, input.Player)
 	var state C.DfPlayerBlockPickState
 	if cancelled {
@@ -946,12 +972,13 @@ func (r *Runtime) HandlePlayerBlockPick(input PlayerBlockPickInput, cancelled bo
 	return state.cancelled != 0, nil
 }
 
-func (r *Runtime) HandlePlayerLecternPageTurn(input PlayerLecternPageTurnInput, cancelled bool) (PlayerLecternPageTurnOutput, error) {
+func (r *Runtime) HandlePlayerLecternPageTurn(invocation InvocationID, input PlayerLecternPageTurnInput, cancelled bool) (PlayerLecternPageTurnOutput, error) {
 	output := PlayerLecternPageTurnOutput{Cancelled: cancelled, NewPage: input.NewPage}
 	if r == nil || r.ptr == nil {
 		return output, errors.New("native runtime is closed")
 	}
 	var nativeInput C.DfPlayerLecternPageTurnInput
+	nativeInput.invocation = C.DfInvocationId(invocation)
 	fillPlayerID(&nativeInput.player, input.Player)
 	nativeInput.position = nativeBlockPos(input.Position)
 	nativeInput.old_page = C.int32_t(input.OldPage)
@@ -965,12 +992,13 @@ func (r *Runtime) HandlePlayerLecternPageTurn(input PlayerLecternPageTurnInput, 
 	return PlayerLecternPageTurnOutput{Cancelled: state.cancelled != 0, NewPage: int(state.new_page)}, nil
 }
 
-func (r *Runtime) HandlePlayerSignEdit(input PlayerSignEditInput, cancelled bool) (bool, error) {
+func (r *Runtime) HandlePlayerSignEdit(invocation InvocationID, input PlayerSignEditInput, cancelled bool) (bool, error) {
 	if r == nil || r.ptr == nil {
 		return cancelled, errors.New("native runtime is closed")
 	}
 	oldText, newText := unsafe.StringData(input.OldText), unsafe.StringData(input.NewText)
 	nativeInput := C.DfPlayerSignEditInput{
+		invocation: C.DfInvocationId(invocation),
 		position:   nativeBlockPos(input.Position),
 		front_side: C.uint8_t(boolByte(input.FrontSide)),
 		old_text:   C.DfStringView{data: (*C.uint8_t)(unsafe.Pointer(oldText)), len: C.uint64_t(len(input.OldText))},
@@ -987,11 +1015,12 @@ func (r *Runtime) HandlePlayerSignEdit(input PlayerSignEditInput, cancelled bool
 	return state.cancelled != 0, nil
 }
 
-func (r *Runtime) HandlePlayerItemUse(player PlayerID, cancelled bool) (bool, error) {
+func (r *Runtime) HandlePlayerItemUse(invocation InvocationID, player PlayerID, cancelled bool) (bool, error) {
 	if r == nil || r.ptr == nil {
 		return cancelled, errors.New("native runtime is closed")
 	}
 	var input C.DfPlayerItemUseInput
+	input.invocation = C.DfInvocationId(invocation)
 	fillPlayerID(&input.player, player)
 	var state C.DfPlayerItemUseState
 	if cancelled {
@@ -1003,11 +1032,12 @@ func (r *Runtime) HandlePlayerItemUse(player PlayerID, cancelled bool) (bool, er
 	return state.cancelled != 0, nil
 }
 
-func (r *Runtime) HandlePlayerItemUseOnBlock(input PlayerItemUseOnBlockInput, cancelled bool) (bool, error) {
+func (r *Runtime) HandlePlayerItemUseOnBlock(invocation InvocationID, input PlayerItemUseOnBlockInput, cancelled bool) (bool, error) {
 	if r == nil || r.ptr == nil {
 		return cancelled, errors.New("native runtime is closed")
 	}
 	var nativeInput C.DfPlayerItemUseOnBlockInput
+	nativeInput.invocation = C.DfInvocationId(invocation)
 	fillPlayerID(&nativeInput.player, input.Player)
 	nativeInput.position = nativeBlockPos(input.Position)
 	nativeInput.face = C.int32_t(input.Face)
@@ -1022,19 +1052,19 @@ func (r *Runtime) HandlePlayerItemUseOnBlock(input PlayerItemUseOnBlockInput, ca
 	return state.cancelled != 0, nil
 }
 
-func (r *Runtime) HandlePlayerItemConsume(player PlayerID, item ItemStack, cancelled bool) (bool, error) {
-	return r.handlePlayerItemStackEvent(C.DF_EVENT_PLAYER_ITEM_CONSUME, player, item, 0, cancelled)
+func (r *Runtime) HandlePlayerItemConsume(invocation InvocationID, player PlayerID, item ItemStack, cancelled bool) (bool, error) {
+	return r.handlePlayerItemStackEvent(invocation, C.DF_EVENT_PLAYER_ITEM_CONSUME, player, item, 0, cancelled)
 }
 
-func (r *Runtime) HandlePlayerItemRelease(player PlayerID, item ItemStack, duration time.Duration, cancelled bool) (bool, error) {
+func (r *Runtime) HandlePlayerItemRelease(invocation InvocationID, player PlayerID, item ItemStack, duration time.Duration, cancelled bool) (bool, error) {
 	milliseconds := duration.Milliseconds()
 	if milliseconds < 0 {
 		milliseconds = 0
 	}
-	return r.handlePlayerItemStackEvent(C.DF_EVENT_PLAYER_ITEM_RELEASE, player, item, uint64(milliseconds), cancelled)
+	return r.handlePlayerItemStackEvent(invocation, C.DF_EVENT_PLAYER_ITEM_RELEASE, player, item, uint64(milliseconds), cancelled)
 }
 
-func (r *Runtime) handlePlayerItemStackEvent(event C.DfEventId, player PlayerID, item ItemStack, duration uint64, cancelled bool) (bool, error) {
+func (r *Runtime) handlePlayerItemStackEvent(invocation InvocationID, event C.DfEventId, player PlayerID, item ItemStack, duration uint64, cancelled bool) (bool, error) {
 	if r == nil || r.ptr == nil {
 		return cancelled, errors.New("native runtime is closed")
 	}
@@ -1049,6 +1079,7 @@ func (r *Runtime) handlePlayerItemStackEvent(event C.DfEventId, player PlayerID,
 	}
 	if event == C.DF_EVENT_PLAYER_ITEM_CONSUME {
 		var input C.DfPlayerItemConsumeInput
+		input.invocation = C.DfInvocationId(invocation)
 		fillPlayerID(&input.player, player)
 		input.item = stack
 		if status := C.bg_runtime_handle_event(r.ptr, event, unsafe.Pointer(&input), unsafe.Pointer(&state)); status != C.DF_STATUS_OK {
@@ -1057,6 +1088,7 @@ func (r *Runtime) handlePlayerItemStackEvent(event C.DfEventId, player PlayerID,
 		return state.cancelled != 0, nil
 	}
 	var input C.DfPlayerItemReleaseInput
+	input.invocation = C.DfInvocationId(invocation)
 	fillPlayerID(&input.player, player)
 	input.item = stack
 	input.duration_milliseconds = C.uint64_t(duration)
@@ -1066,12 +1098,13 @@ func (r *Runtime) handlePlayerItemStackEvent(event C.DfEventId, player PlayerID,
 	return state.cancelled != 0, nil
 }
 
-func (r *Runtime) HandlePlayerItemDamage(player PlayerID, item ItemStack, damage int, cancelled bool) (PlayerItemDamageOutput, error) {
+func (r *Runtime) HandlePlayerItemDamage(invocation InvocationID, player PlayerID, item ItemStack, damage int, cancelled bool) (PlayerItemDamageOutput, error) {
 	output := PlayerItemDamageOutput{Cancelled: cancelled, Damage: damage}
 	if r == nil || r.ptr == nil {
 		return output, errors.New("native runtime is closed")
 	}
 	var input C.DfPlayerItemDamageInput
+	input.invocation = C.DfInvocationId(invocation)
 	fillPlayerID(&input.player, player)
 	stack, ok := r.openEventItemSnapshot(item)
 	if !ok {
@@ -1089,11 +1122,12 @@ func (r *Runtime) HandlePlayerItemDamage(player PlayerID, item ItemStack, damage
 	return PlayerItemDamageOutput{Cancelled: state.cancelled != 0, Damage: int(state.damage)}, nil
 }
 
-func (r *Runtime) HandlePlayerItemDrop(player PlayerID, item ItemStack, cancelled bool) (bool, error) {
+func (r *Runtime) HandlePlayerItemDrop(invocation InvocationID, player PlayerID, item ItemStack, cancelled bool) (bool, error) {
 	if r == nil || r.ptr == nil {
 		return cancelled, errors.New("native runtime is closed")
 	}
 	var input C.DfPlayerItemDropInput
+	input.invocation = C.DfInvocationId(invocation)
 	fillPlayerID(&input.player, player)
 	stack, ok := r.openEventItemSnapshot(item)
 	if !ok {

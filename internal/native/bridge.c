@@ -28,119 +28,144 @@ _Static_assert(sizeof(DfItemStackSnapshot) == 88, "DfItemStackSnapshot ABI layou
 _Static_assert(sizeof(DfScoreboardView) == 40, "DfScoreboardView ABI layout changed");
 _Static_assert(offsetof(DfScoreboardView, lines) == 16, "DfScoreboardView.lines ABI offset changed");
 _Static_assert(sizeof(DfFormView) == 40, "DfFormView ABI layout changed");
-_Static_assert(sizeof(DfHostApiV5) == 240, "DfHostApiV5 ABI layout changed");
-_Static_assert(offsetof(DfHostApiV5, player_skin_open) == 80, "DfHostApiV5.player_skin_open ABI offset changed");
-_Static_assert(offsetof(DfHostApiV5, player_skin_set) == 112, "DfHostApiV5.player_skin_set ABI offset changed");
-_Static_assert(offsetof(DfHostApiV5, inventory_size) == 120, "DfHostApiV5.inventory_size ABI offset changed");
-_Static_assert(offsetof(DfHostApiV5, player_held_slot_set) == 200, "DfHostApiV5.player_held_slot_set ABI offset changed");
-_Static_assert(offsetof(DfHostApiV5, player_scoreboard) == 208, "DfHostApiV5.player_scoreboard ABI offset changed");
+_Static_assert(sizeof(DfWorldId) == 8, "DfWorldId ABI layout changed");
+_Static_assert(sizeof(DfBlockData) == 48, "DfBlockData ABI layout changed");
+_Static_assert(sizeof(DfBlockView) == 32, "DfBlockView ABI layout changed");
+_Static_assert(sizeof(DfHostApiV7) == 328, "DfHostApiV7 ABI layout changed");
+_Static_assert(offsetof(DfHostApiV7, player_skin_open) == 80, "DfHostApiV7.player_skin_open ABI offset changed");
+_Static_assert(offsetof(DfHostApiV7, player_skin_set) == 112, "DfHostApiV7.player_skin_set ABI offset changed");
+_Static_assert(offsetof(DfHostApiV7, inventory_size) == 120, "DfHostApiV7.inventory_size ABI offset changed");
+_Static_assert(offsetof(DfHostApiV7, player_held_slot_set) == 200, "DfHostApiV7.player_held_slot_set ABI offset changed");
+_Static_assert(offsetof(DfHostApiV7, player_scoreboard) == 208, "DfHostApiV7.player_scoreboard ABI offset changed");
 #endif
 
-extern DfStatus bg_go_player_text(uint64_t context, DfPlayerId player, uint32_t kind, DfStringView message);
-extern DfStatus bg_go_player_title(uint64_t context, DfPlayerId player, DfTitleView title);
-extern DfStatus bg_go_player_scoreboard(uint64_t context, DfPlayerId player, DfScoreboardView scoreboard);
-extern DfStatus bg_go_player_scoreboard_remove(uint64_t context, DfPlayerId player);
-extern DfStatus bg_go_player_form_send(uint64_t context, DfPlayerId player, const DfFormView *form);
-extern DfStatus bg_go_player_form_close(uint64_t context, DfPlayerId player);
+extern DfStatus bg_go_player_text(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfStringView message);
+extern DfStatus bg_go_player_title(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfTitleView title);
+extern DfStatus bg_go_player_scoreboard(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfScoreboardView scoreboard);
+extern DfStatus bg_go_player_scoreboard_remove(uint64_t context, DfInvocationId invocation, DfPlayerId player);
+extern DfStatus bg_go_player_form_send(uint64_t context, DfInvocationId invocation, DfPlayerId player, const DfFormView *form);
+extern DfStatus bg_go_player_form_close(uint64_t context, DfInvocationId invocation, DfPlayerId player);
 
-DfStatus bg_call_form_response(DfFormResponseFn callback, void *callback_context, DfPlayerId submitter, uint32_t outcome, DfStringView response_json) { return callback(callback_context, submitter, outcome, response_json); }
+DfStatus bg_call_form_response(DfFormResponseFn callback, void *callback_context, DfInvocationId invocation, DfPlayerId submitter, uint32_t outcome, DfStringView response_json) { return callback(callback_context, invocation, submitter, outcome, response_json); }
 void bg_call_form_drop(DfFormDropFn callback, void *callback_context) { callback(callback_context); }
-extern DfStatus bg_go_player_transform(uint64_t context, DfPlayerId player, uint32_t kind, DfVec3 vector, double yaw, double pitch);
-extern DfStatus bg_go_player_rotation(uint64_t context, DfPlayerId player, DfRotation *rotation);
-extern DfStatus bg_go_player_state_set(uint64_t context, DfPlayerId player, uint32_t kind, DfPlayerStateValue value);
-extern DfStatus bg_go_player_state_get(uint64_t context, DfPlayerId player, uint32_t kind, DfPlayerStateValue *value);
-extern DfStatus bg_go_player_effect(uint64_t context, DfPlayerId player, uint32_t operation, DfEffectView effect);
-extern DfStatus bg_go_player_entity_visibility(uint64_t context, DfPlayerId player, DfEntityId entity, uint8_t visible);
-extern DfStatus bg_go_player_skin_open(uint64_t context, DfPlayerId player, uint64_t *snapshot, DfSkinInfo *info);
-extern DfStatus bg_go_player_skin_animation_info(uint64_t context, uint64_t snapshot, uint64_t index, DfSkinAnimationInfo *info);
-extern DfStatus bg_go_player_skin_read(uint64_t context, uint64_t snapshot, DfSkinData *data);
-extern void bg_go_player_skin_close(uint64_t context, uint64_t snapshot);
-extern DfStatus bg_go_player_skin_set(uint64_t context, DfPlayerId player, const DfSkinView *skin);
-extern DfStatus bg_go_inventory_size(uint64_t context, DfInventoryId inventory, uint32_t *size);
-extern DfStatus bg_go_inventory_item_open(uint64_t context, DfInventoryId inventory, uint32_t slot, uint64_t *snapshot, DfItemStackInfo *info);
-extern DfStatus bg_go_player_held_item_open(uint64_t context, DfPlayerId player, uint32_t hand, uint64_t *snapshot, DfItemStackInfo *info);
-extern DfStatus bg_go_item_stack_read(uint64_t context, uint64_t snapshot, DfItemStackData *data);
-extern void bg_go_item_stack_close(uint64_t context, uint64_t snapshot);
-extern DfStatus bg_go_inventory_item_set(uint64_t context, DfInventoryId inventory, uint32_t slot, const DfItemStackViewV3 *item);
-extern DfStatus bg_go_inventory_item_add(uint64_t context, DfInventoryId inventory, const DfItemStackViewV3 *item, uint32_t *added);
-extern DfStatus bg_go_inventory_clear_slot(uint64_t context, DfInventoryId inventory, uint32_t slot);
-extern DfStatus bg_go_inventory_clear(uint64_t context, DfInventoryId inventory);
-extern DfStatus bg_go_player_held_items_set(uint64_t context, DfPlayerId player, const DfItemStackViewV3 *main_hand, const DfItemStackViewV3 *off_hand);
-extern DfStatus bg_go_player_held_slot_set(uint64_t context, DfPlayerId player, uint32_t slot);
+extern DfStatus bg_go_player_transform(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfVec3 vector, double yaw, double pitch);
+extern DfStatus bg_go_player_rotation(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfRotation *rotation);
+extern DfStatus bg_go_player_state_set(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfPlayerStateValue value);
+extern DfStatus bg_go_player_state_get(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfPlayerStateValue *value);
+extern DfStatus bg_go_player_effect(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t operation, DfEffectView effect);
+extern DfStatus bg_go_player_entity_visibility(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfEntityId entity, uint8_t visible);
+extern DfStatus bg_go_player_skin_open(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint64_t *snapshot, DfSkinInfo *info);
+extern DfStatus bg_go_player_skin_animation_info(uint64_t context, DfInvocationId invocation, uint64_t snapshot, uint64_t index, DfSkinAnimationInfo *info);
+extern DfStatus bg_go_player_skin_read(uint64_t context, DfInvocationId invocation, uint64_t snapshot, DfSkinData *data);
+extern void bg_go_player_skin_close(uint64_t context, DfInvocationId invocation, uint64_t snapshot);
+extern DfStatus bg_go_player_skin_set(uint64_t context, DfInvocationId invocation, DfPlayerId player, const DfSkinView *skin);
+extern DfStatus bg_go_inventory_size(uint64_t context, DfInvocationId invocation, DfInventoryId inventory, uint32_t *size);
+extern DfStatus bg_go_inventory_item_open(uint64_t context, DfInvocationId invocation, DfInventoryId inventory, uint32_t slot, uint64_t *snapshot, DfItemStackInfo *info);
+extern DfStatus bg_go_player_held_item_open(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t hand, uint64_t *snapshot, DfItemStackInfo *info);
+extern DfStatus bg_go_item_stack_read(uint64_t context, DfInvocationId invocation, uint64_t snapshot, DfItemStackData *data);
+extern void bg_go_item_stack_close(uint64_t context, DfInvocationId invocation, uint64_t snapshot);
+extern DfStatus bg_go_inventory_item_set(uint64_t context, DfInvocationId invocation, DfInventoryId inventory, uint32_t slot, const DfItemStackViewV3 *item);
+extern DfStatus bg_go_inventory_item_add(uint64_t context, DfInvocationId invocation, DfInventoryId inventory, const DfItemStackViewV3 *item, uint32_t *added);
+extern DfStatus bg_go_inventory_clear_slot(uint64_t context, DfInvocationId invocation, DfInventoryId inventory, uint32_t slot);
+extern DfStatus bg_go_inventory_clear(uint64_t context, DfInvocationId invocation, DfInventoryId inventory);
+extern DfStatus bg_go_player_held_items_set(uint64_t context, DfInvocationId invocation, DfPlayerId player, const DfItemStackViewV3 *main_hand, const DfItemStackViewV3 *off_hand);
+extern DfStatus bg_go_player_held_slot_set(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t slot);
+extern DfStatus bg_go_world_lookup(uint64_t context, DfInvocationId invocation, DfStringView name, DfWorldId *world);
+extern DfStatus bg_go_world_open(uint64_t context, DfInvocationId invocation, DfStringView name, uint32_t dimension, DfWorldId *world);
+extern DfStatus bg_go_world_name(uint64_t context, DfInvocationId invocation, DfWorldId world, DfStringBuffer *name);
+extern DfStatus bg_go_world_unload(uint64_t context, DfInvocationId invocation, DfWorldId world);
+extern DfStatus bg_go_world_save(uint64_t context, DfInvocationId invocation, DfWorldId world);
+extern DfStatus bg_go_world_block_get(uint64_t context, DfInvocationId invocation, DfWorldId world, DfBlockPos position, DfBlockData *block);
+extern DfStatus bg_go_world_block_set(uint64_t context, DfInvocationId invocation, DfWorldId world, DfBlockPos position, const DfBlockView *block);
+extern DfStatus bg_go_world_time_get(uint64_t context, DfInvocationId invocation, DfWorldId world, int64_t *time);
+extern DfStatus bg_go_world_time_set(uint64_t context, DfInvocationId invocation, DfWorldId world, int64_t time);
+extern DfStatus bg_go_world_spawn_get(uint64_t context, DfInvocationId invocation, DfWorldId world, DfBlockPos *position);
+extern DfStatus bg_go_world_spawn_set(uint64_t context, DfInvocationId invocation, DfWorldId world, DfBlockPos position);
 
-static DfStatus host_player_text(uint64_t context, DfPlayerId player, uint32_t kind, DfStringView message) {
-    return bg_go_player_text(context, player, kind, message);
+static DfStatus host_player_text(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfStringView message) {
+    return bg_go_player_text(context, invocation, player, kind, message);
 }
 
-static DfStatus host_player_title(uint64_t context, DfPlayerId player, DfTitleView title) {
-    return bg_go_player_title(context, player, title);
+static DfStatus host_player_title(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfTitleView title) {
+    return bg_go_player_title(context, invocation, player, title);
 }
 
-static DfStatus host_player_scoreboard(uint64_t context, DfPlayerId player, DfScoreboardView scoreboard) {
-    return bg_go_player_scoreboard(context, player, scoreboard);
+static DfStatus host_player_scoreboard(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfScoreboardView scoreboard) {
+    return bg_go_player_scoreboard(context, invocation, player, scoreboard);
 }
 
-static DfStatus host_player_scoreboard_remove(uint64_t context, DfPlayerId player) {
-    return bg_go_player_scoreboard_remove(context, player);
+static DfStatus host_player_scoreboard_remove(uint64_t context, DfInvocationId invocation, DfPlayerId player) {
+    return bg_go_player_scoreboard_remove(context, invocation, player);
 }
-static DfStatus host_player_form_send(uint64_t context, DfPlayerId player, const DfFormView *form) { return bg_go_player_form_send(context, player, form); }
-static DfStatus host_player_form_close(uint64_t context, DfPlayerId player) { return bg_go_player_form_close(context, player); }
+static DfStatus host_player_form_send(uint64_t context, DfInvocationId invocation, DfPlayerId player, const DfFormView *form) { return bg_go_player_form_send(context, invocation, player, form); }
+static DfStatus host_player_form_close(uint64_t context, DfInvocationId invocation, DfPlayerId player) { return bg_go_player_form_close(context, invocation, player); }
 
-static DfStatus host_player_transform(uint64_t context, DfPlayerId player, uint32_t kind, DfVec3 vector, double yaw, double pitch) {
-    return bg_go_player_transform(context, player, kind, vector, yaw, pitch);
-}
-
-static DfStatus host_player_rotation(uint64_t context, DfPlayerId player, DfRotation *rotation) {
-    return bg_go_player_rotation(context, player, rotation);
+static DfStatus host_player_transform(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfVec3 vector, double yaw, double pitch) {
+    return bg_go_player_transform(context, invocation, player, kind, vector, yaw, pitch);
 }
 
-static DfStatus host_player_state_set(uint64_t context, DfPlayerId player, uint32_t kind, DfPlayerStateValue value) {
-    return bg_go_player_state_set(context, player, kind, value);
+static DfStatus host_player_rotation(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfRotation *rotation) {
+    return bg_go_player_rotation(context, invocation, player, rotation);
 }
 
-static DfStatus host_player_state_get(uint64_t context, DfPlayerId player, uint32_t kind, DfPlayerStateValue *value) {
-    return bg_go_player_state_get(context, player, kind, value);
+static DfStatus host_player_state_set(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfPlayerStateValue value) {
+    return bg_go_player_state_set(context, invocation, player, kind, value);
 }
 
-static DfStatus host_player_effect(uint64_t context, DfPlayerId player, uint32_t operation, DfEffectView effect) {
-    return bg_go_player_effect(context, player, operation, effect);
+static DfStatus host_player_state_get(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfPlayerStateValue *value) {
+    return bg_go_player_state_get(context, invocation, player, kind, value);
 }
 
-static DfStatus host_player_entity_visibility(uint64_t context, DfPlayerId player, DfEntityId entity, uint8_t visible) {
-    return bg_go_player_entity_visibility(context, player, entity, visible);
+static DfStatus host_player_effect(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t operation, DfEffectView effect) {
+    return bg_go_player_effect(context, invocation, player, operation, effect);
 }
 
-static DfStatus host_player_skin_open(uint64_t context, DfPlayerId player, uint64_t *snapshot, DfSkinInfo *info) {
-    return bg_go_player_skin_open(context, player, snapshot, info);
+static DfStatus host_player_entity_visibility(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfEntityId entity, uint8_t visible) {
+    return bg_go_player_entity_visibility(context, invocation, player, entity, visible);
 }
 
-static DfStatus host_player_skin_animation_info(uint64_t context, uint64_t snapshot, uint64_t index, DfSkinAnimationInfo *info) {
-    return bg_go_player_skin_animation_info(context, snapshot, index, info);
+static DfStatus host_player_skin_open(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint64_t *snapshot, DfSkinInfo *info) {
+    return bg_go_player_skin_open(context, invocation, player, snapshot, info);
 }
 
-static DfStatus host_player_skin_read(uint64_t context, uint64_t snapshot, DfSkinData *data) {
-    return bg_go_player_skin_read(context, snapshot, data);
+static DfStatus host_player_skin_animation_info(uint64_t context, DfInvocationId invocation, uint64_t snapshot, uint64_t index, DfSkinAnimationInfo *info) {
+    return bg_go_player_skin_animation_info(context, invocation, snapshot, index, info);
 }
 
-static void host_player_skin_close(uint64_t context, uint64_t snapshot) {
-    bg_go_player_skin_close(context, snapshot);
+static DfStatus host_player_skin_read(uint64_t context, DfInvocationId invocation, uint64_t snapshot, DfSkinData *data) {
+    return bg_go_player_skin_read(context, invocation, snapshot, data);
 }
 
-static DfStatus host_player_skin_set(uint64_t context, DfPlayerId player, const DfSkinView *skin) {
-    return bg_go_player_skin_set(context, player, skin);
+static void host_player_skin_close(uint64_t context, DfInvocationId invocation, uint64_t snapshot) {
+    bg_go_player_skin_close(context, invocation, snapshot);
 }
 
-static DfStatus host_inventory_size(uint64_t context, DfInventoryId inventory, uint32_t *size) { return bg_go_inventory_size(context, inventory, size); }
-static DfStatus host_inventory_item_open(uint64_t context, DfInventoryId inventory, uint32_t slot, uint64_t *snapshot, DfItemStackInfo *info) { return bg_go_inventory_item_open(context, inventory, slot, snapshot, info); }
-static DfStatus host_player_held_item_open(uint64_t context, DfPlayerId player, uint32_t hand, uint64_t *snapshot, DfItemStackInfo *info) { return bg_go_player_held_item_open(context, player, hand, snapshot, info); }
-static DfStatus host_item_stack_read(uint64_t context, uint64_t snapshot, DfItemStackData *data) { return bg_go_item_stack_read(context, snapshot, data); }
-static void host_item_stack_close(uint64_t context, uint64_t snapshot) { bg_go_item_stack_close(context, snapshot); }
-static DfStatus host_inventory_item_set(uint64_t context, DfInventoryId inventory, uint32_t slot, const DfItemStackViewV3 *item) { return bg_go_inventory_item_set(context, inventory, slot, item); }
-static DfStatus host_inventory_item_add(uint64_t context, DfInventoryId inventory, const DfItemStackViewV3 *item, uint32_t *added) { return bg_go_inventory_item_add(context, inventory, item, added); }
-static DfStatus host_inventory_clear_slot(uint64_t context, DfInventoryId inventory, uint32_t slot) { return bg_go_inventory_clear_slot(context, inventory, slot); }
-static DfStatus host_inventory_clear(uint64_t context, DfInventoryId inventory) { return bg_go_inventory_clear(context, inventory); }
-static DfStatus host_player_held_items_set(uint64_t context, DfPlayerId player, const DfItemStackViewV3 *main_hand, const DfItemStackViewV3 *off_hand) { return bg_go_player_held_items_set(context, player, main_hand, off_hand); }
-static DfStatus host_player_held_slot_set(uint64_t context, DfPlayerId player, uint32_t slot) { return bg_go_player_held_slot_set(context, player, slot); }
+static DfStatus host_player_skin_set(uint64_t context, DfInvocationId invocation, DfPlayerId player, const DfSkinView *skin) {
+    return bg_go_player_skin_set(context, invocation, player, skin);
+}
+
+static DfStatus host_inventory_size(uint64_t context, DfInvocationId invocation, DfInventoryId inventory, uint32_t *size) { return bg_go_inventory_size(context, invocation, inventory, size); }
+static DfStatus host_inventory_item_open(uint64_t context, DfInvocationId invocation, DfInventoryId inventory, uint32_t slot, uint64_t *snapshot, DfItemStackInfo *info) { return bg_go_inventory_item_open(context, invocation, inventory, slot, snapshot, info); }
+static DfStatus host_player_held_item_open(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t hand, uint64_t *snapshot, DfItemStackInfo *info) { return bg_go_player_held_item_open(context, invocation, player, hand, snapshot, info); }
+static DfStatus host_item_stack_read(uint64_t context, DfInvocationId invocation, uint64_t snapshot, DfItemStackData *data) { return bg_go_item_stack_read(context, invocation, snapshot, data); }
+static void host_item_stack_close(uint64_t context, DfInvocationId invocation, uint64_t snapshot) { bg_go_item_stack_close(context, invocation, snapshot); }
+static DfStatus host_inventory_item_set(uint64_t context, DfInvocationId invocation, DfInventoryId inventory, uint32_t slot, const DfItemStackViewV3 *item) { return bg_go_inventory_item_set(context, invocation, inventory, slot, item); }
+static DfStatus host_inventory_item_add(uint64_t context, DfInvocationId invocation, DfInventoryId inventory, const DfItemStackViewV3 *item, uint32_t *added) { return bg_go_inventory_item_add(context, invocation, inventory, item, added); }
+static DfStatus host_inventory_clear_slot(uint64_t context, DfInvocationId invocation, DfInventoryId inventory, uint32_t slot) { return bg_go_inventory_clear_slot(context, invocation, inventory, slot); }
+static DfStatus host_inventory_clear(uint64_t context, DfInvocationId invocation, DfInventoryId inventory) { return bg_go_inventory_clear(context, invocation, inventory); }
+static DfStatus host_player_held_items_set(uint64_t context, DfInvocationId invocation, DfPlayerId player, const DfItemStackViewV3 *main_hand, const DfItemStackViewV3 *off_hand) { return bg_go_player_held_items_set(context, invocation, player, main_hand, off_hand); }
+static DfStatus host_player_held_slot_set(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t slot) { return bg_go_player_held_slot_set(context, invocation, player, slot); }
+static DfStatus host_world_lookup(uint64_t context, DfInvocationId invocation, DfStringView name, DfWorldId *world) { return bg_go_world_lookup(context, invocation, name, world); }
+static DfStatus host_world_open(uint64_t context, DfInvocationId invocation, DfStringView name, uint32_t dimension, DfWorldId *world) { return bg_go_world_open(context, invocation, name, dimension, world); }
+static DfStatus host_world_name(uint64_t context, DfInvocationId invocation, DfWorldId world, DfStringBuffer *name) { return bg_go_world_name(context, invocation, world, name); }
+static DfStatus host_world_unload(uint64_t context, DfInvocationId invocation, DfWorldId world) { return bg_go_world_unload(context, invocation, world); }
+static DfStatus host_world_save(uint64_t context, DfInvocationId invocation, DfWorldId world) { return bg_go_world_save(context, invocation, world); }
+static DfStatus host_world_block_get(uint64_t context, DfInvocationId invocation, DfWorldId world, DfBlockPos position, DfBlockData *block) { return bg_go_world_block_get(context, invocation, world, position, block); }
+static DfStatus host_world_block_set(uint64_t context, DfInvocationId invocation, DfWorldId world, DfBlockPos position, const DfBlockView *block) { return bg_go_world_block_set(context, invocation, world, position, block); }
+static DfStatus host_world_time_get(uint64_t context, DfInvocationId invocation, DfWorldId world, int64_t *time) { return bg_go_world_time_get(context, invocation, world, time); }
+static DfStatus host_world_time_set(uint64_t context, DfInvocationId invocation, DfWorldId world, int64_t time) { return bg_go_world_time_set(context, invocation, world, time); }
+static DfStatus host_world_spawn_get(uint64_t context, DfInvocationId invocation, DfWorldId world, DfBlockPos *position) { return bg_go_world_spawn_get(context, invocation, world, position); }
+static DfStatus host_world_spawn_set(uint64_t context, DfInvocationId invocation, DfWorldId world, DfBlockPos position) { return bg_go_world_spawn_set(context, invocation, world, position); }
 
 typedef DfStatus (*RuntimeCreateFn)(const DfRuntimeConfig *, DfRuntime **, uint8_t *, uint64_t);
 typedef void (*RuntimeDestroyFn)(DfRuntime *);
@@ -155,7 +180,7 @@ typedef DfStatus (*RuntimeEventFn)(DfRuntime *, DfEventId, const void *, void *)
 struct BgRuntimeLibrary {
     void *handle;
     DfRuntime *runtime;
-    DfHostApiV5 host_api;
+    DfHostApiV7 host_api;
     RuntimeDestroyFn destroy;
     RuntimeEnableFn enable;
     RuntimeDisableFn disable;
@@ -228,9 +253,9 @@ DfStatus bg_runtime_open(
         return DF_STATUS_ERROR;
     }
 
-    library->host_api = (DfHostApiV5) {
+    library->host_api = (DfHostApiV7) {
         .abi_version = DF_HOST_ABI_VERSION,
-        .struct_size = sizeof(DfHostApiV5),
+        .struct_size = sizeof(DfHostApiV7),
         .context = host_context,
         .player_text = host_player_text,
         .player_title = host_player_title,
@@ -260,6 +285,17 @@ DfStatus bg_runtime_open(
         .player_scoreboard_remove = host_player_scoreboard_remove,
         .player_form_send = host_player_form_send,
         .player_form_close = host_player_form_close,
+        .world_lookup = host_world_lookup,
+        .world_open = host_world_open,
+        .world_name = host_world_name,
+        .world_unload = host_world_unload,
+        .world_save = host_world_save,
+        .world_block_get = host_world_block_get,
+        .world_block_set = host_world_block_set,
+        .world_time_get = host_world_time_get,
+        .world_time_set = host_world_time_set,
+        .world_spawn_get = host_world_spawn_get,
+        .world_spawn_set = host_world_spawn_set,
     };
     DfRuntimeConfig config = {
         .plugin_directory = {

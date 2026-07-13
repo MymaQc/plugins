@@ -49,100 +49,100 @@ type testHealingSource struct{}
 
 func (testHealingSource) HealingSource() {}
 
-func (r *runtimeStub) HandlePlayerJoin(input native.PlayerJoinInput, _ bool) (bool, error) {
+func (r *runtimeStub) HandlePlayerJoin(_ native.InvocationID, input native.PlayerJoinInput, _ bool) (bool, error) {
 	r.joinInput = input
 	return r.joinCancelled, nil
 }
-func (r *runtimeStub) HandlePlayerQuit(input native.PlayerQuitInput) error {
+func (r *runtimeStub) HandlePlayerQuit(_ native.InvocationID, input native.PlayerQuitInput) error {
 	r.quitInput = input
 	return nil
 }
-func (r *runtimeStub) HandlePlayerHurt(input native.PlayerHurtInput, _ bool) (native.PlayerHurtOutput, error) {
+func (r *runtimeStub) HandlePlayerHurt(_ native.InvocationID, input native.PlayerHurtInput, _ bool) (native.PlayerHurtOutput, error) {
 	r.hurtInput = input
 	return r.hurtOutput, nil
 }
-func (r *runtimeStub) HandlePlayerHeal(input native.PlayerHealInput, _ bool) (native.PlayerHealOutput, error) {
+func (r *runtimeStub) HandlePlayerHeal(_ native.InvocationID, input native.PlayerHealInput, _ bool) (native.PlayerHealOutput, error) {
 	r.healInput = input
 	return r.healOutput, nil
 }
-func (r *runtimeStub) HandlePlayerBlockBreak(input native.PlayerBlockBreakInput, _ bool) (native.PlayerBlockBreakOutput, error) {
+func (r *runtimeStub) HandlePlayerBlockBreak(_ native.InvocationID, input native.PlayerBlockBreakInput, _ bool) (native.PlayerBlockBreakOutput, error) {
 	r.blockBreakInput = input
 	return r.blockBreakOutput, nil
 }
-func (r *runtimeStub) HandlePlayerBlockPlace(input native.PlayerBlockPlaceInput, _ bool) (bool, error) {
+func (r *runtimeStub) HandlePlayerBlockPlace(_ native.InvocationID, input native.PlayerBlockPlaceInput, _ bool) (bool, error) {
 	r.blockPlaceInput = input
 	return r.blockPlaceCancelled, nil
 }
-func (r *runtimeStub) HandlePlayerFoodLoss(input native.PlayerFoodLossInput, _ bool) (native.PlayerFoodLossOutput, error) {
+func (r *runtimeStub) HandlePlayerFoodLoss(_ native.InvocationID, input native.PlayerFoodLossInput, _ bool) (native.PlayerFoodLossOutput, error) {
 	r.foodLossInput = input
 	return r.foodLossOutput, nil
 }
-func (r *runtimeStub) HandlePlayerDeath(input native.PlayerDeathInput, _ bool) (bool, error) {
+func (r *runtimeStub) HandlePlayerDeath(_ native.InvocationID, input native.PlayerDeathInput, _ bool) (bool, error) {
 	r.deathInput = input
 	return r.keepInventory, nil
 }
-func (r *runtimeStub) HandlePlayerStartBreak(_ native.PlayerPositionInput, cancelled bool) (bool, error) {
+func (r *runtimeStub) HandlePlayerStartBreak(_ native.InvocationID, _ native.PlayerPositionInput, cancelled bool) (bool, error) {
 	return cancelled, nil
 }
-func (r *runtimeStub) HandlePlayerFireExtinguish(_ native.PlayerPositionInput, cancelled bool) (bool, error) {
+func (r *runtimeStub) HandlePlayerFireExtinguish(_ native.InvocationID, _ native.PlayerPositionInput, cancelled bool) (bool, error) {
 	return cancelled, nil
 }
-func (r *runtimeStub) HandlePlayerToggleSprint(_ native.PlayerToggleInput, cancelled bool) (bool, error) {
+func (r *runtimeStub) HandlePlayerToggleSprint(_ native.InvocationID, _ native.PlayerToggleInput, cancelled bool) (bool, error) {
 	return cancelled, nil
 }
-func (r *runtimeStub) HandlePlayerToggleSneak(_ native.PlayerToggleInput, cancelled bool) (bool, error) {
+func (r *runtimeStub) HandlePlayerToggleSneak(_ native.InvocationID, _ native.PlayerToggleInput, cancelled bool) (bool, error) {
 	return cancelled, nil
 }
-func (r *runtimeStub) HandlePlayerJump(native.PlayerID) error { return nil }
-func (r *runtimeStub) HandlePlayerTeleport(_ native.PlayerTeleportInput, cancelled bool) (bool, error) {
+func (r *runtimeStub) HandlePlayerJump(_ native.InvocationID, _ native.PlayerID) error { return nil }
+func (r *runtimeStub) HandlePlayerTeleport(_ native.InvocationID, _ native.PlayerTeleportInput, cancelled bool) (bool, error) {
 	return cancelled, nil
 }
-func (r *runtimeStub) HandlePlayerExperienceGain(_ native.PlayerID, amount int, cancelled bool) (native.PlayerExperienceGainOutput, error) {
+func (r *runtimeStub) HandlePlayerExperienceGain(_ native.InvocationID, _ native.PlayerID, amount int, cancelled bool) (native.PlayerExperienceGainOutput, error) {
 	return native.PlayerExperienceGainOutput{Cancelled: cancelled, Amount: amount}, nil
 }
-func (r *runtimeStub) HandlePlayerPunchAir(_ native.PlayerID, cancelled bool) (bool, error) {
+func (r *runtimeStub) HandlePlayerPunchAir(_ native.InvocationID, _ native.PlayerID, cancelled bool) (bool, error) {
 	return cancelled, nil
 }
-func (r *runtimeStub) HandlePlayerHeldSlotChange(_ native.PlayerHeldSlotChangeInput, cancelled bool) (bool, error) {
+func (r *runtimeStub) HandlePlayerHeldSlotChange(_ native.InvocationID, _ native.PlayerHeldSlotChangeInput, cancelled bool) (bool, error) {
 	return cancelled, nil
 }
-func (r *runtimeStub) HandlePlayerSleep(_ native.PlayerID, sendReminder, cancelled bool) (native.PlayerSleepOutput, error) {
+func (r *runtimeStub) HandlePlayerSleep(_ native.InvocationID, _ native.PlayerID, sendReminder, cancelled bool) (native.PlayerSleepOutput, error) {
 	return native.PlayerSleepOutput{Cancelled: cancelled, SendReminder: sendReminder}, nil
 }
-func (r *runtimeStub) HandlePlayerBlockPick(_ native.PlayerBlockPickInput, cancelled bool) (bool, error) {
+func (r *runtimeStub) HandlePlayerBlockPick(_ native.InvocationID, _ native.PlayerBlockPickInput, cancelled bool) (bool, error) {
 	return cancelled, nil
 }
-func (r *runtimeStub) HandlePlayerLecternPageTurn(input native.PlayerLecternPageTurnInput, cancelled bool) (native.PlayerLecternPageTurnOutput, error) {
+func (r *runtimeStub) HandlePlayerLecternPageTurn(_ native.InvocationID, input native.PlayerLecternPageTurnInput, cancelled bool) (native.PlayerLecternPageTurnOutput, error) {
 	return native.PlayerLecternPageTurnOutput{Cancelled: cancelled, NewPage: input.NewPage}, nil
 }
-func (r *runtimeStub) HandlePlayerSignEdit(_ native.PlayerSignEditInput, cancelled bool) (bool, error) {
+func (r *runtimeStub) HandlePlayerSignEdit(_ native.InvocationID, _ native.PlayerSignEditInput, cancelled bool) (bool, error) {
 	return cancelled, nil
 }
-func (r *runtimeStub) HandlePlayerItemUse(_ native.PlayerID, cancelled bool) (bool, error) {
+func (r *runtimeStub) HandlePlayerItemUse(_ native.InvocationID, _ native.PlayerID, cancelled bool) (bool, error) {
 	return cancelled, nil
 }
-func (r *runtimeStub) HandlePlayerItemUseOnBlock(_ native.PlayerItemUseOnBlockInput, cancelled bool) (bool, error) {
+func (r *runtimeStub) HandlePlayerItemUseOnBlock(_ native.InvocationID, _ native.PlayerItemUseOnBlockInput, cancelled bool) (bool, error) {
 	return cancelled, nil
 }
-func (r *runtimeStub) HandlePlayerItemConsume(_ native.PlayerID, _ native.ItemStack, cancelled bool) (bool, error) {
+func (r *runtimeStub) HandlePlayerItemConsume(_ native.InvocationID, _ native.PlayerID, _ native.ItemStack, cancelled bool) (bool, error) {
 	return cancelled, nil
 }
-func (r *runtimeStub) HandlePlayerItemRelease(_ native.PlayerID, _ native.ItemStack, _ time.Duration, cancelled bool) (bool, error) {
+func (r *runtimeStub) HandlePlayerItemRelease(_ native.InvocationID, _ native.PlayerID, _ native.ItemStack, _ time.Duration, cancelled bool) (bool, error) {
 	return cancelled, nil
 }
-func (r *runtimeStub) HandlePlayerItemDamage(_ native.PlayerID, _ native.ItemStack, damage int, cancelled bool) (native.PlayerItemDamageOutput, error) {
+func (r *runtimeStub) HandlePlayerItemDamage(_ native.InvocationID, _ native.PlayerID, _ native.ItemStack, damage int, cancelled bool) (native.PlayerItemDamageOutput, error) {
 	return native.PlayerItemDamageOutput{Cancelled: cancelled, Damage: damage}, nil
 }
-func (r *runtimeStub) HandlePlayerItemDrop(_ native.PlayerID, _ native.ItemStack, cancelled bool) (bool, error) {
+func (r *runtimeStub) HandlePlayerItemDrop(_ native.InvocationID, _ native.PlayerID, _ native.ItemStack, cancelled bool) (bool, error) {
 	return cancelled, nil
 }
 
 func (r *runtimeStub) Subscriptions() uint64 { return r.subscriptions }
-func (r *runtimeStub) HandlePlayerMove(input native.PlayerMoveInput, _ bool) (bool, error) {
+func (r *runtimeStub) HandlePlayerMove(_ native.InvocationID, input native.PlayerMoveInput, _ bool) (bool, error) {
 	r.moveInput = input
 	return r.moveCancelled, nil
 }
-func (r *runtimeStub) HandlePlayerChat(input native.PlayerChatInput, _ bool) (native.PlayerChatOutput, error) {
+func (r *runtimeStub) HandlePlayerChat(_ native.InvocationID, input native.PlayerChatInput, _ bool) (native.PlayerChatOutput, error) {
 	r.chatInput = input
 	return r.chatOutput, nil
 }

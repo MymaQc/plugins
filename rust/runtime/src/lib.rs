@@ -27,7 +27,7 @@ use dragonfly_plugin_sys::{
     DF_SUBSCRIPTION_PLAYER_SIGN_EDIT, DF_SUBSCRIPTION_PLAYER_SLEEP,
     DF_SUBSCRIPTION_PLAYER_START_BREAK, DF_SUBSCRIPTION_PLAYER_TELEPORT,
     DF_SUBSCRIPTION_PLAYER_TOGGLE_SNEAK, DF_SUBSCRIPTION_PLAYER_TOGGLE_SPRINT, DfCommandDescriptor,
-    DfCommandInput, DfCommandState, DfHostApiV5, DfItemStackSnapshot, DfPlayerBlockBreakInput,
+    DfCommandInput, DfCommandState, DfHostApiV7, DfItemStackSnapshot, DfPlayerBlockBreakInput,
     DfPlayerBlockBreakState, DfPlayerBlockPickInput, DfPlayerBlockPickState,
     DfPlayerBlockPlaceInput, DfPlayerBlockPlaceState, DfPlayerChatInput, DfPlayerChatState,
     DfPlayerDeathInput, DfPlayerDeathState, DfPlayerExperienceGainInput,
@@ -58,7 +58,7 @@ use std::slice;
 #[repr(C)]
 pub struct DfRuntimeConfig {
     pub plugin_directory: DfStringView,
-    pub host: *const DfHostApiV5,
+    pub host: *const DfHostApiV7,
 }
 
 pub struct DfRuntime {
@@ -95,7 +95,7 @@ impl Drop for LoadedPlugin {
 }
 
 impl DfRuntime {
-    fn load(plugin_directory: &Path, host: *const DfHostApiV5) -> Result<Self, String> {
+    fn load(plugin_directory: &Path, host: *const DfHostApiV7) -> Result<Self, String> {
         let mut paths = native_libraries(plugin_directory)?;
         paths.sort();
 
@@ -1230,7 +1230,7 @@ impl LoadedPlugin {
         self.enabled = false;
     }
 
-    unsafe fn open(path: &Path, host: *const DfHostApiV5) -> Result<Self, String> {
+    unsafe fn open(path: &Path, host: *const DfHostApiV7) -> Result<Self, String> {
         // SAFETY: loading native plugins is the purpose of this trusted plugin runtime.
         let library = unsafe { Library::new(path) }
             .map_err(|err| format!("load {}: {err}", path.display()))?;
@@ -1439,7 +1439,7 @@ pub unsafe extern "C" fn df_runtime_create(
             return Err("null host API".to_owned());
         };
         if host_api.abi_version != DF_HOST_ABI_VERSION
-            || host_api.struct_size < size_of::<DfHostApiV5>() as u32
+            || host_api.struct_size < size_of::<DfHostApiV7>() as u32
         {
             return Err("incompatible host API".to_owned());
         }
@@ -2327,9 +2327,9 @@ mod tests {
             std::env::temp_dir().join(format!("dragonfly-runtime-{}", std::process::id()));
         let _ = fs::remove_dir_all(&directory);
         fs::create_dir_all(&directory).unwrap();
-        let host = DfHostApiV5 {
+        let host = DfHostApiV7 {
             abi_version: DF_HOST_ABI_VERSION,
-            struct_size: size_of::<DfHostApiV5>() as u32,
+            struct_size: size_of::<DfHostApiV7>() as u32,
             context: 0,
             player_text: None,
             player_title: None,
@@ -2359,6 +2359,17 @@ mod tests {
             player_scoreboard_remove: None,
             player_form_send: None,
             player_form_close: None,
+            world_lookup: None,
+            world_open: None,
+            world_name: None,
+            world_unload: None,
+            world_save: None,
+            world_block_get: None,
+            world_block_set: None,
+            world_time_get: None,
+            world_time_set: None,
+            world_spawn_get: None,
+            world_spawn_set: None,
         };
         let runtime = DfRuntime::load(&directory, ptr::from_ref(&host)).unwrap();
         assert!(runtime.plugins.is_empty());

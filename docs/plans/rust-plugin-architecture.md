@@ -1,6 +1,6 @@
 # Native Plugin Architecture Plan
 
-Status: Proposed
+Status: Active implementation; initial managed-world/block slice complete, world sound/particle parity next
 
 Initial language: Rust
 
@@ -41,7 +41,7 @@ C is only the stable ABI shape. Plugin authors use an idiomatic Rust SDK and wri
 
 ## Dragonfly constraints
 
-This design is based on Dragonfly `master` at commit `a3fb52159c77d9f2ea5b6fe754ae525e1ac359f4`.
+This design is pinned to Dragonfly v0.11.0 / `master` commit `5e99a4689878f6f2cd39816ec87fb795da870fb0` (verified 2026-07-12).
 
 Relevant upstream behavior:
 
@@ -51,17 +51,17 @@ Relevant upstream behavior:
 - Many handlers are synchronous, cancellable, or mutate pointer arguments.
 - Most world/entity work occurs inside `world.Tx`.
 - `world.Tx` is not safe for concurrent use.
-- Awaiting nested `World.Exec` can deadlock.
+- Calling blocking `world.Call`, `World.Save`, or `World.Close` from that world's owner callback deadlocks.
 - `EntityHandle` is the persistent, transaction-safe identity for an entity.
 
 Sources:
 
-- [Dragonfly README](https://github.com/df-mc/dragonfly/blob/a3fb52159c77d9f2ea5b6fe754ae525e1ac359f4/README.md)
-- [Server lifecycle](https://github.com/df-mc/dragonfly/blob/a3fb52159c77d9f2ea5b6fe754ae525e1ac359f4/server/server.go)
-- [Player handlers](https://github.com/df-mc/dragonfly/blob/a3fb52159c77d9f2ea5b6fe754ae525e1ac359f4/server/player/handler.go)
-- [World handlers](https://github.com/df-mc/dragonfly/blob/a3fb52159c77d9f2ea5b6fe754ae525e1ac359f4/server/world/handler.go)
-- [World transactions](https://github.com/df-mc/dragonfly/blob/a3fb52159c77d9f2ea5b6fe754ae525e1ac359f4/server/world/tx.go)
-- [Entity handles](https://github.com/df-mc/dragonfly/blob/a3fb52159c77d9f2ea5b6fe754ae525e1ac359f4/server/world/entity.go)
+- [Dragonfly README](https://github.com/df-mc/dragonfly/blob/5e99a4689878f6f2cd39816ec87fb795da870fb0/README.md)
+- [Server lifecycle](https://github.com/df-mc/dragonfly/blob/5e99a4689878f6f2cd39816ec87fb795da870fb0/server/server.go)
+- [Player handlers](https://github.com/df-mc/dragonfly/blob/5e99a4689878f6f2cd39816ec87fb795da870fb0/server/player/handler.go)
+- [World handlers](https://github.com/df-mc/dragonfly/blob/5e99a4689878f6f2cd39816ec87fb795da870fb0/server/world/handler.go)
+- [World transactions](https://github.com/df-mc/dragonfly/blob/5e99a4689878f6f2cd39816ec87fb795da870fb0/server/world/tx.go)
+- [Entity handles](https://github.com/df-mc/dragonfly/blob/5e99a4689878f6f2cd39816ec87fb795da870fb0/server/world/entity.go)
 
 The ABI must not expose Go pointers, Go interfaces, `player.Player`, `world.Entity`, or `world.Tx`.
 
@@ -242,45 +242,39 @@ example:minigame_lobby
 example:arena_1
 ```
 
-World manager owns:
+World manager currently owns:
 
-- World registry and opaque ID generations.
-- Creation through `world.Config.New`.
+- World registry and opaque, never-reused handles.
+- Persistent creation/loading through namespaced IDs and `mcdb` below a configured root.
 - Handler installation before publication.
-- Provider and generator preset resolution.
-- Portal destination mapping.
-- Player evacuation before unload.
-- Save, close, and removal lifecycle.
-- Ownership and access checks between plugins.
-- World load/unload events.
+- Core-world protection.
+- Occupancy checks before unload.
+- Save, close, stale-handle rejection, and shutdown lifecycle.
+- Transaction-aware block reads/writes.
 
-Rust SDK exposes:
+Current Rust SDK exposes:
 
 ```rust
-fn bootstrap(&self, server: &mut ServerBuilder) {
-    server.worlds().configure("minecraft:overworld", WorldSpec::persistent("world"));
-    server.worlds().create(
-        "example:lobby",
-        WorldSpec::flat().autosave(true),
-    );
-}
-
-fn on_enable(&self, server: &Server) {
-    let lobby = server.worlds().get("example:lobby").unwrap();
+let lobby = World::open("example:lobby", Dimension::Overworld);
+if let Some(lobby) = lobby {
     lobby.set_time(6000);
+    lobby.set_block(
+        BlockPos { x: 0, y: 64, z: 0 },
+        &block::new("minecraft:stone"),
+    );
 }
 ```
 
-Bootstrap methods build declarations locally in Rust. Runtime returns one generated `ServerPlan` to Go. This avoids repeated reverse FFI calls during startup.
+`World::get` resolves core or custom names. `World::open` loads or creates a persistent custom world. Block properties preserve Dragonfly's exact `bool`, `uint8`, `int32`, and `string` state types through tagged little-endian NBT. Setters expose no host transport errors; lookup and reads return `Option` for unavailable/stale resources.
 
-Runtime world operations use generated commands such as:
+Remaining world parity:
 
-- `worlds.list` and `worlds.get`.
-- `worlds.create` and `worlds.unload`.
-- `world.save` and `world.settings`.
-- `world.block` and `world.set_block`.
-- `world.players`.
-- `player.teleport_to_world`.
+- World listing, dimensions, loaded-only block reads, and block-entity NBT.
+- Memory/flat/provider/generator specs and portal routing.
+- Player evacuation and transfer between worlds.
+- Typed sounds and particles.
+- World load/unload events and plugin access policy.
+- Rust-defined providers and generators through capability adapters.
 
 Core worlds may be configured during bootstrap but cannot be removed while the server runs. Unloading another world requires an evacuation destination and fails if evacuation cannot complete.
 
@@ -451,7 +445,7 @@ For each event, mirror Dragonfly capability exactly. Example: `HandleMove` permi
 
 ## Transaction-safe host actions
 
-Dragonfly v0.11 entity values are transaction-scoped. The host registry stores stable `EntityHandle` references and cached identity, never reusable `*player.Player` pointers. Command runnables register their live `*world.Tx` for the synchronous native call; event handlers refresh the current transaction-scoped player before dispatch. A target player is resolved from its handle inside that live transaction.
+Dragonfly v0.11 entity values are transaction-scoped. The host registry stores stable `EntityHandle` references and cached identity, never reusable `*player.Player` pointers. Every command, event, and form-response callback receives a monotonic opaque invocation ID mapped to exactly one live `*world.Tx`. The Rust SDK scopes that ID with panic-safe thread-local storage and returns it on host calls. A target player is resolved from its handle only inside that exact transaction; the host never searches concurrent callbacks for a usable transaction.
 
 Host callbacks execute synchronously while the plugin callback is active. Large values such as skins and item stacks use bounded Go-owned snapshots with RAII close on the Rust side. No Go pointer crosses or survives the ABI.
 
@@ -465,17 +459,17 @@ Event mutations return directly:
 - Replace chat text.
 - Change damage, XP, drops, knockback, or other mutable arguments.
 
-Current synchronous host actions include:
+Current host actions include:
 
 - Send message.
 - Teleport player.
-- Set block.
-- Play sound.
-- Add particle.
+- Read/set managed-world blocks.
+- Read/set world time and spawn.
+- Open, save, and unload managed worlds.
 
-Calls resolve through the already-active transaction; they must never call `world.CallRef` back into the same owner. Persistent background operations are not supported yet. Later support must enqueue operations into Go and resolve `EntityHandle` inside a new transaction. Transaction values must never escape a callback.
+Every synchronous player callback registers one invocation ID for its exact transaction. Same-world block operations use that `world.Tx` directly. Calls with no invocation are off-owner: writes enqueue through `World.Do` and reads use `world.Call`. Cross-world writes from callbacks enqueue, while cross-world synchronous block reads are rejected because reciprocal owner calls can deadlock. Save/unload are rejected from callbacks and run only off-owner. Transaction values never cross or survive the ABI; the asynchronous task API will provide callback-safe cross-world reads and lifecycle operations.
 
-The host ABI is currently v5. WIP releases intentionally make breaking ABI changes instead of retaining compatibility shims; runtime and plugins must be compiled from the same revision.
+The host ABI is currently v7. WIP releases intentionally make breaking ABI changes instead of retaining compatibility shims; runtime and plugins must be compiled from the same revision.
 
 ## Items and inventories
 
@@ -487,7 +481,7 @@ NBT uses standard fixed little-endian named-root compounds. The SDK hides encodi
 
 ## Object identity
 
-Use opaque, generation-tagged IDs:
+Use opaque IDs with stale-reference protection:
 
 ```c
 typedef struct {
@@ -497,11 +491,10 @@ typedef struct {
 
 typedef struct {
     uint64_t value;
-    uint64_t generation;
 } DfWorldId;
 ```
 
-Generation prevents stale references from affecting a reconnected player or replaced world. IDs never contain Go addresses.
+Player generations prevent reconnection aliasing. World handles are monotonic and never reused, so an unloaded handle cannot affect a replacement world. IDs never contain Go addresses.
 
 ## Commands
 

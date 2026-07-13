@@ -1,6 +1,7 @@
 package host
 
 import (
+	"context"
 	"math"
 	"runtime"
 	"slices"
@@ -19,10 +20,11 @@ import (
 
 // Players owns stable native IDs for the lifetime of connected Dragonfly players.
 type Players struct {
-	mu       sync.RWMutex
-	entries  map[*world.EntityHandle]*playerEntry
-	byID     map[native.PlayerID]*playerEntry
-	activeTx map[*world.Tx]int
+	mu             sync.RWMutex
+	entries        map[*world.EntityHandle]*playerEntry
+	byID           map[native.PlayerID]*playerEntry
+	invocations    map[native.InvocationID]*world.Tx
+	nextInvocation native.InvocationID
 }
 
 type playerEntry struct {
@@ -30,13 +32,12 @@ type playerEntry struct {
 	handle  *world.EntityHandle
 	name    string
 	latency uint64
-	last    *player.Player
 }
 
 func NewPlayers() *Players {
 	return &Players{
 		entries: map[*world.EntityHandle]*playerEntry{},
-		byID:    map[native.PlayerID]*playerEntry{}, activeTx: map[*world.Tx]int{},
+		byID:    map[native.PlayerID]*playerEntry{}, invocations: map[native.InvocationID]*world.Tx{},
 	}
 }
 
@@ -46,7 +47,7 @@ func (p *Players) Register(player *player.Player, generation uint64) native.Play
 	copy(id.UUID[:], uuid[:])
 	entry := &playerEntry{
 		id: id, handle: player.H(), name: player.Name(),
-		latency: uint64(max(player.Latency().Milliseconds(), 0)), last: player,
+		latency: uint64(max(player.Latency().Milliseconds(), 0)),
 	}
 	p.mu.Lock()
 	p.entries[player.H()] = entry
@@ -70,24 +71,14 @@ func (p *Players) Unregister(player *player.Player) {
 	}
 }
 
-func (p *Players) SendPlayerForm(id native.PlayerID, value native.PlayerForm) bool {
-	connected, ok := p.ResolveID(id)
-	if !ok {
-		return false
-	}
+func (p *Players) SendPlayerForm(invocation native.InvocationID, id native.PlayerID, value native.PlayerForm) bool {
 	f := &nativePlayerForm{id: value.ID, request: append([]byte(nil), value.RequestJSON...), players: p}
 	runtime.SetFinalizer(f, func(form *nativePlayerForm) { native.CancelPlayerForm(form.id) })
-	connected.SendForm(f)
-	return true
+	return p.mutatePlayer(invocation, id, func(connected *player.Player) { connected.SendForm(f) })
 }
 
-func (p *Players) ClosePlayerForm(id native.PlayerID) bool {
-	connected, ok := p.ResolveID(id)
-	if !ok {
-		return false
-	}
-	connected.CloseForm()
-	return true
+func (p *Players) ClosePlayerForm(invocation native.InvocationID, id native.PlayerID) bool {
+	return p.mutatePlayer(invocation, id, func(connected *player.Player) { connected.CloseForm() })
 }
 
 func (p *Players) ID(player *player.Player) (native.PlayerID, bool) {
@@ -98,7 +89,7 @@ func (p *Players) ID(player *player.Player) (native.PlayerID, bool) {
 		return native.PlayerID{}, false
 	}
 	p.mu.Lock()
-	entry.name, entry.latency, entry.last = player.Name(), uint64(max(player.Latency().Milliseconds(), 0)), player
+	entry.name, entry.latency = player.Name(), uint64(max(player.Latency().Milliseconds(), 0))
 	p.mu.Unlock()
 	return entry.id, true
 }
@@ -129,9 +120,6 @@ func (p *Players) CommandSnapshots() []native.CommandPlayer {
 	snapshots := make([]native.CommandPlayer, 0, len(entries))
 	for _, entry := range entries {
 		name, latency := entry.name, entry.latency
-		if connected, ok := p.ResolveID(entry.id); ok {
-			name, latency = connected.Name(), uint64(max(connected.Latency().Milliseconds(), 0))
-		}
 		snapshots = append(snapshots, native.CommandPlayer{
 			Player: entry.id, Name: name, LatencyMilliseconds: latency,
 		})
@@ -164,50 +152,89 @@ func (p *Players) ResolveUUID(uuid [16]byte) (native.PlayerID, bool) {
 	return native.PlayerID{}, false
 }
 
-func (p *Players) ResolveID(id native.PlayerID) (*player.Player, bool) {
+func (p *Players) ResolveID(id native.PlayerID, invocation native.InvocationID) (*player.Player, bool) {
 	p.mu.RLock()
 	entry, ok := p.byID[id]
-	transactions := make([]*world.Tx, 0, len(p.activeTx))
-	for tx := range p.activeTx {
-		transactions = append(transactions, tx)
+	tx, invoked := p.invocations[invocation]
+	p.mu.RUnlock()
+	if !ok || !invoked || invocation == 0 {
+		return nil, false
 	}
-	for _, candidate := range p.entries {
-		if candidate.last != nil {
-			transactions = append(transactions, candidate.last.Tx())
-		}
+	return playerInTransaction(entry.handle, tx)
+}
+
+func (p *Players) ResolveEntityID(id native.EntityID, invocation native.InvocationID) (*player.Player, bool) {
+	return p.ResolveID(native.PlayerID{UUID: id.UUID, Generation: id.Generation}, invocation)
+}
+
+// BeginInvocation registers tx for one synchronous native invocation. The returned end function is idempotent.
+func (p *Players) BeginInvocation(tx *world.Tx) (native.InvocationID, func()) {
+	if tx == nil {
+		return 0, func() {}
 	}
+	p.mu.Lock()
+	if p.nextInvocation == native.InvocationID(^uint64(0)) {
+		p.mu.Unlock()
+		return 0, func() {}
+	}
+	p.nextInvocation++
+	id := p.nextInvocation
+	p.invocations[id] = tx
+	p.mu.Unlock()
+	var once sync.Once
+	return id, func() {
+		once.Do(func() {
+			p.mu.Lock()
+			delete(p.invocations, id)
+			p.mu.Unlock()
+		})
+	}
+}
+
+// WithInvocation registers tx for the duration of function.
+func (p *Players) WithInvocation(tx *world.Tx, function func(native.InvocationID)) {
+	id, end := p.BeginInvocation(tx)
+	defer end()
+	function(id)
+}
+
+// InvocationTx resolves a live invocation to its exact owner transaction.
+func (p *Players) InvocationTx(id native.InvocationID) (*world.Tx, bool) {
+	if id == 0 {
+		return nil, false
+	}
+	p.mu.RLock()
+	tx, ok := p.invocations[id]
 	p.mu.RUnlock()
 	if !ok {
 		return nil, false
 	}
-	for _, tx := range transactions {
-		if connected, ok := playerInTransaction(entry.handle, tx); ok {
-			return connected, true
-		}
+	if _, ok := txWorld(tx); !ok {
+		return nil, false
 	}
-	return nil, false
+	return tx, true
 }
 
-func (p *Players) ResolveEntityID(id native.EntityID) (*player.Player, bool) {
-	return p.ResolveID(native.PlayerID{UUID: id.UUID, Generation: id.Generation})
-}
-
-func (p *Players) WithTx(tx *world.Tx, function func()) {
-	if tx == nil {
-		function()
+// EndInvocation removes id. It is safe to call for an unknown or already-ended invocation.
+func (p *Players) EndInvocation(id native.InvocationID) {
+	if id == 0 {
 		return
 	}
 	p.mu.Lock()
-	p.activeTx[tx]++
+	delete(p.invocations, id)
 	p.mu.Unlock()
+}
+
+func txWorld(tx *world.Tx) (value *world.World, ok bool) {
+	if tx == nil {
+		return nil, false
+	}
 	defer func() {
-		p.mu.Lock()
-		if p.activeTx[tx]--; p.activeTx[tx] == 0 {
-			delete(p.activeTx, tx)
+		if recover() != nil {
+			value, ok = nil, false
 		}
-		p.mu.Unlock()
 	}()
-	function()
+	return tx.World(), true
 }
 
 func playerInTransaction(handle *world.EntityHandle, tx *world.Tx) (connected *player.Player, ok bool) {
@@ -227,32 +254,67 @@ func playerInTransaction(handle *world.EntityHandle, tx *world.Tx) (connected *p
 	return connected, ok
 }
 
-func (p *Players) SendPlayerText(id native.PlayerID, kind native.PlayerTextKind, message string) bool {
-	connected, ok := p.ResolveID(id)
-	if !ok {
-		return false
-	}
-	return sendPlayerText(connected, kind, message)
+func (p *Players) playerEntry(id native.PlayerID) (*playerEntry, bool) {
+	p.mu.RLock()
+	entry, ok := p.byID[id]
+	p.mu.RUnlock()
+	return entry, ok
 }
 
-func (p *Players) SendPlayerTitle(id native.PlayerID, value native.PlayerTitle) bool {
-	connected, ok := p.ResolveID(id)
+func (p *Players) mutatePlayer(invocation native.InvocationID, id native.PlayerID, function func(*player.Player)) bool {
+	if connected, ok := p.ResolveID(id, invocation); ok {
+		function(connected)
+		return true
+	}
+	if invocation != 0 {
+		if _, ok := p.InvocationTx(invocation); !ok {
+			return false
+		}
+	}
+	entry, ok := p.playerEntry(id)
 	if !ok {
 		return false
 	}
+	task := world.NewEntityRef[*player.Player](entry.handle).Do(func(_ *world.Tx, connected *player.Player) {
+		function(connected)
+	})
+	return task.Err() == nil
+}
+
+func readPlayer[T any](p *Players, invocation native.InvocationID, id native.PlayerID, function func(*player.Player) T) (T, bool) {
+	if connected, ok := p.ResolveID(id, invocation); ok {
+		return function(connected), true
+	}
+	var zero T
+	if invocation != 0 {
+		return zero, false
+	}
+	entry, ok := p.playerEntry(id)
+	if !ok {
+		return zero, false
+	}
+	value, err := world.CallRef(context.Background(), world.NewEntityRef[*player.Player](entry.handle), func(_ *world.Tx, connected *player.Player) (T, error) {
+		return function(connected), nil
+	})
+	return value, err == nil
+}
+
+func (p *Players) SendPlayerText(invocation native.InvocationID, id native.PlayerID, kind native.PlayerTextKind, message string) bool {
+	return p.mutatePlayer(invocation, id, func(connected *player.Player) { sendPlayerText(connected, kind, message) })
+}
+
+func (p *Players) SendPlayerTitle(invocation native.InvocationID, id native.PlayerID, value native.PlayerTitle) bool {
 	t := title.New(value.Text).
 		WithSubtitle(value.Subtitle).
 		WithActionText(value.ActionText).
 		WithFadeInDuration(value.FadeIn).
 		WithDuration(value.Duration).
 		WithFadeOutDuration(value.FadeOut)
-	connected.SendTitle(t)
-	return true
+	return p.mutatePlayer(invocation, id, func(connected *player.Player) { connected.SendTitle(t) })
 }
 
-func (p *Players) SendPlayerScoreboard(id native.PlayerID, value native.PlayerScoreboard) bool {
-	connected, ok := p.ResolveID(id)
-	if !ok || len(value.Lines) > 15 {
+func (p *Players) SendPlayerScoreboard(invocation native.InvocationID, id native.PlayerID, value native.PlayerScoreboard) bool {
+	if len(value.Lines) > 15 {
 		return false
 	}
 	board := scoreboard.New(value.Name)
@@ -265,75 +327,62 @@ func (p *Players) SendPlayerScoreboard(id native.PlayerID, value native.PlayerSc
 	if value.Descending {
 		board.SetDescending()
 	}
-	connected.SendScoreboard(board)
-	return true
+	return p.mutatePlayer(invocation, id, func(connected *player.Player) { connected.SendScoreboard(board) })
 }
 
-func (p *Players) RemovePlayerScoreboard(id native.PlayerID) bool {
-	connected, ok := p.ResolveID(id)
-	if !ok {
-		return false
-	}
-	connected.RemoveScoreboard()
-	return true
+func (p *Players) RemovePlayerScoreboard(invocation native.InvocationID, id native.PlayerID) bool {
+	return p.mutatePlayer(invocation, id, func(connected *player.Player) { connected.RemoveScoreboard() })
 }
 
-func (p *Players) TransformPlayer(id native.PlayerID, kind native.PlayerTransformKind, vector native.Vec3, yaw, pitch float64) bool {
-	connected, ok := p.ResolveID(id)
-	if !ok || !finite(vector.X, vector.Y, vector.Z, yaw, pitch) {
+func (p *Players) TransformPlayer(invocation native.InvocationID, id native.PlayerID, kind native.PlayerTransformKind, vector native.Vec3, yaw, pitch float64) bool {
+	if !finite(vector.X, vector.Y, vector.Z, yaw, pitch) || kind > native.PlayerTransformVelocity {
 		return false
 	}
 	v := mgl64.Vec3{vector.X, vector.Y, vector.Z}
-	switch kind {
-	case native.PlayerTransformTeleport:
-		connected.Teleport(v)
-	case native.PlayerTransformMove:
-		connected.Move(v, yaw, pitch)
-	case native.PlayerTransformVelocity:
-		connected.SetVelocity(v)
-	default:
-		return false
-	}
-	return true
+	return p.mutatePlayer(invocation, id, func(connected *player.Player) {
+		switch kind {
+		case native.PlayerTransformTeleport:
+			connected.Teleport(v)
+		case native.PlayerTransformMove:
+			connected.Move(v, yaw, pitch)
+		case native.PlayerTransformVelocity:
+			connected.SetVelocity(v)
+		}
+	})
 }
 
-func (p *Players) PlayerRotation(id native.PlayerID) (native.Rotation, bool) {
-	connected, ok := p.ResolveID(id)
-	if !ok {
-		return native.Rotation{}, false
-	}
-	rotation := connected.Rotation()
-	return native.Rotation{Yaw: rotation.Yaw(), Pitch: rotation.Pitch()}, true
+func (p *Players) PlayerRotation(invocation native.InvocationID, id native.PlayerID) (native.Rotation, bool) {
+	return readPlayer(p, invocation, id, func(connected *player.Player) native.Rotation {
+		rotation := connected.Rotation()
+		return native.Rotation{Yaw: rotation.Yaw(), Pitch: rotation.Pitch()}
+	})
 }
 
-func (p *Players) SetPlayerState(id native.PlayerID, kind native.PlayerStateKind, value native.PlayerStateValue) bool {
-	connected, ok := p.ResolveID(id)
-	if !ok {
-		return false
-	}
-	return setPlayerState(connected, kind, value)
+func (p *Players) SetPlayerState(invocation native.InvocationID, id native.PlayerID, kind native.PlayerStateKind, value native.PlayerStateValue) bool {
+	return p.mutatePlayer(invocation, id, func(connected *player.Player) { setPlayerState(connected, kind, value) })
 }
 
-func (p *Players) PlayerState(id native.PlayerID, kind native.PlayerStateKind) (native.PlayerStateValue, bool) {
-	connected, ok := p.ResolveID(id)
-	if !ok {
-		return native.PlayerStateValue{}, false
-	}
-	return readPlayerState(connected, kind)
+func (p *Players) PlayerState(invocation native.InvocationID, id native.PlayerID, kind native.PlayerStateKind) (native.PlayerStateValue, bool) {
+	value, ok := readPlayer(p, invocation, id, func(connected *player.Player) struct {
+		value native.PlayerStateValue
+		ok    bool
+	} {
+		value, ok := readPlayerState(connected, kind)
+		return struct {
+			value native.PlayerStateValue
+			ok    bool
+		}{value, ok}
+	})
+	return value.value, ok && value.ok
 }
 
-func (p *Players) ChangePlayerEffect(id native.PlayerID, operation native.PlayerEffectOperation, value native.PlayerEffect) bool {
-	connected, ok := p.ResolveID(id)
-	if !ok {
-		return false
-	}
+func (p *Players) ChangePlayerEffect(invocation native.InvocationID, id native.PlayerID, operation native.PlayerEffectOperation, value native.PlayerEffect) bool {
 	effectType, ok := effect.ByID(int(value.Type))
 	if !ok {
 		return false
 	}
 	if operation == native.PlayerEffectRemove {
-		connected.RemoveEffect(effectType)
-		return true
+		return p.mutatePlayer(invocation, id, func(connected *player.Player) { connected.RemoveEffect(effectType) })
 	}
 	if operation != native.PlayerEffectAdd || value.Level < 0 || value.Duration < 0 {
 		return false
@@ -354,25 +403,47 @@ func (p *Players) ChangePlayerEffect(id native.PlayerID, operation native.Player
 	if value.ParticlesHidden {
 		applied = applied.WithoutParticles()
 	}
-	connected.AddEffect(applied)
-	return true
+	return p.mutatePlayer(invocation, id, func(connected *player.Player) { connected.AddEffect(applied) })
 }
 
-func (p *Players) SetPlayerEntityVisible(viewerID native.PlayerID, entityID native.EntityID, visible bool) bool {
-	viewer, ok := p.ResolveID(viewerID)
+func (p *Players) SetPlayerEntityVisible(invocation native.InvocationID, viewerID native.PlayerID, entityID native.EntityID, visible bool) bool {
+	viewer, ok := p.ResolveID(viewerID, invocation)
+	if ok {
+		entity, ok := p.ResolveEntityID(entityID, invocation)
+		if !ok {
+			return false
+		}
+		setPlayerEntityVisible(viewer, entity, visible)
+		return true
+	}
+	if invocation != 0 {
+		if _, ok := p.InvocationTx(invocation); !ok {
+			return false
+		}
+	}
+	viewerEntry, ok := p.playerEntry(viewerID)
 	if !ok {
 		return false
 	}
-	entity, ok := p.ResolveEntityID(entityID)
+	entityEntry, ok := p.playerEntry(native.PlayerID{UUID: entityID.UUID, Generation: entityID.Generation})
 	if !ok {
 		return false
 	}
+	task := world.NewEntityRef[*player.Player](viewerEntry.handle).Do(func(tx *world.Tx, connected *player.Player) {
+		entity, ok := playerInTransaction(entityEntry.handle, tx)
+		if ok {
+			setPlayerEntityVisible(connected, entity, visible)
+		}
+	})
+	return task.Err() == nil
+}
+
+func setPlayerEntityVisible(viewer, entity *player.Player, visible bool) {
 	if visible {
 		viewer.ShowEntity(entity)
 	} else {
 		viewer.HideEntity(entity)
 	}
-	return true
 }
 
 const (
@@ -382,25 +453,26 @@ const (
 	maxSkinIDBytes    = 4096
 )
 
-func (p *Players) PlayerSkin(id native.PlayerID) (native.PlayerSkin, bool) {
-	connected, ok := p.ResolveID(id)
-	if !ok {
-		return native.PlayerSkin{}, false
-	}
-	return playerSkinToNative(connected.Skin())
+func (p *Players) PlayerSkin(invocation native.InvocationID, id native.PlayerID) (native.PlayerSkin, bool) {
+	value, ok := readPlayer(p, invocation, id, func(connected *player.Player) struct {
+		skin native.PlayerSkin
+		ok   bool
+	} {
+		value, ok := playerSkinToNative(connected.Skin())
+		return struct {
+			skin native.PlayerSkin
+			ok   bool
+		}{value, ok}
+	})
+	return value.skin, ok && value.ok
 }
 
-func (p *Players) SetPlayerSkin(id native.PlayerID, value native.PlayerSkin) bool {
-	connected, ok := p.ResolveID(id)
-	if !ok {
-		return false
-	}
+func (p *Players) SetPlayerSkin(invocation native.InvocationID, id native.PlayerID, value native.PlayerSkin) bool {
 	converted, ok := playerSkinFromNative(value)
 	if !ok {
 		return false
 	}
-	connected.SetSkin(converted)
-	return true
+	return p.mutatePlayer(invocation, id, func(connected *player.Player) { connected.SetSkin(converted) })
 }
 
 func playerSkinToNative(value skin.Skin) (native.PlayerSkin, bool) {

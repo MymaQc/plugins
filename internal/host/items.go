@@ -13,127 +13,134 @@ import (
 
 const maxItemDataBytes = 16 << 20
 
-func (p *Players) InventorySize(id native.InventoryID) (uint32, bool) {
-	connected, ok := p.ResolveID(id.Player)
-	if !ok {
-		return 0, false
-	}
-	if id.Kind == native.InventoryOffhand {
-		return 1, true
-	}
-	inv, ok := playerInventory(connected, id.Kind)
-	if !ok {
-		return 0, false
-	}
-	return uint32(inv.Size()), true
+func (p *Players) InventorySize(invocation native.InvocationID, id native.InventoryID) (uint32, bool) {
+	value, ok := readPlayer(p, invocation, id.Player, func(connected *player.Player) uint32 {
+		if id.Kind == native.InventoryOffhand {
+			return 1
+		}
+		inv, valid := playerInventory(connected, id.Kind)
+		if !valid {
+			return 0
+		}
+		return uint32(inv.Size())
+	})
+	return value, ok && value != 0
 }
 
-func (p *Players) InventoryItem(id native.InventoryID, slot uint32) (native.ItemStack, bool) {
-	connected, ok := p.ResolveID(id.Player)
-	if !ok {
-		return native.ItemStack{}, false
-	}
-	var stack item.Stack
-	if id.Kind == native.InventoryOffhand {
-		if slot != 0 {
-			return native.ItemStack{}, false
+func (p *Players) InventoryItem(invocation native.InvocationID, id native.InventoryID, slot uint32) (native.ItemStack, bool) {
+	value, ok := readPlayer(p, invocation, id.Player, func(connected *player.Player) struct {
+		value native.ItemStack
+		ok    bool
+	} {
+		var stack item.Stack
+		if id.Kind == native.InventoryOffhand {
+			if slot != 0 {
+				return struct {
+					value native.ItemStack
+					ok    bool
+				}{}
+			}
+			_, stack = connected.HeldItems()
+		} else {
+			inv, valid := playerInventory(connected, id.Kind)
+			if !valid {
+				return struct {
+					value native.ItemStack
+					ok    bool
+				}{}
+			}
+			var err error
+			stack, err = inv.Item(int(slot))
+			if err != nil {
+				return struct {
+					value native.ItemStack
+					ok    bool
+				}{}
+			}
 		}
-		_, stack = connected.HeldItems()
-	} else {
-		inv, ok := playerInventory(connected, id.Kind)
-		if !ok {
-			return native.ItemStack{}, false
-		}
-		var err error
-		stack, err = inv.Item(int(slot))
-		if err != nil {
-			return native.ItemStack{}, false
-		}
-	}
-	return itemStackToNative(stack)
+		converted, valid := itemStackToNative(stack)
+		return struct {
+			value native.ItemStack
+			ok    bool
+		}{converted, valid}
+	})
+	return value.value, ok && value.ok
 }
 
-func (p *Players) SetInventoryItem(id native.InventoryID, slot uint32, value native.ItemStack) bool {
-	connected, ok := p.ResolveID(id.Player)
-	if !ok {
-		return false
-	}
+func (p *Players) SetInventoryItem(invocation native.InvocationID, id native.InventoryID, slot uint32, value native.ItemStack) bool {
 	stack, ok := itemStackFromNative(value)
 	if !ok {
 		return false
 	}
-	if id.Kind == native.InventoryOffhand {
-		if slot != 0 {
-			return false
-		}
-		main, _ := connected.HeldItems()
-		connected.SetHeldItems(main, stack)
-		return true
+	if id.Kind == native.InventoryOffhand && slot != 0 {
+		return false
 	}
-	inv, ok := playerInventory(connected, id.Kind)
-	return ok && inv.SetItem(int(slot), stack) == nil
+	return p.mutatePlayer(invocation, id.Player, func(connected *player.Player) {
+		if id.Kind == native.InventoryOffhand {
+			main, _ := connected.HeldItems()
+			connected.SetHeldItems(main, stack)
+			return
+		}
+		if inv, valid := playerInventory(connected, id.Kind); valid {
+			_ = inv.SetItem(int(slot), stack)
+		}
+	})
 }
 
-func (p *Players) AddInventoryItem(id native.InventoryID, value native.ItemStack) (uint32, bool) {
-	connected, ok := p.ResolveID(id.Player)
-	if !ok {
-		return 0, false
-	}
+func (p *Players) AddInventoryItem(invocation native.InvocationID, id native.InventoryID, value native.ItemStack) (uint32, bool) {
 	stack, ok := itemStackFromNative(value)
 	if !ok {
 		return 0, false
 	}
-	if id.Kind == native.InventoryOffhand {
-		main, offhand := connected.HeldItems()
-		temporary := inventory.New(1, nil)
-		_ = temporary.SetItem(0, offhand)
-		added, _ := temporary.AddItem(stack)
-		offhand, _ = temporary.Item(0)
-		connected.SetHeldItems(main, offhand)
-		return uint32(added), true
-	}
-	inv, ok := playerInventory(connected, id.Kind)
-	if !ok {
-		return 0, false
-	}
-	added, _ := inv.AddItem(stack)
-	return uint32(added), true
+	return readPlayer(p, invocation, id.Player, func(connected *player.Player) uint32 {
+		if id.Kind == native.InventoryOffhand {
+			main, offhand := connected.HeldItems()
+			temporary := inventory.New(1, nil)
+			_ = temporary.SetItem(0, offhand)
+			added, _ := temporary.AddItem(stack)
+			offhand, _ = temporary.Item(0)
+			connected.SetHeldItems(main, offhand)
+			return uint32(added)
+		}
+		inv, valid := playerInventory(connected, id.Kind)
+		if !valid {
+			return 0
+		}
+		added, _ := inv.AddItem(stack)
+		return uint32(added)
+	})
 }
 
-func (p *Players) ClearInventory(id native.InventoryID) bool {
-	connected, ok := p.ResolveID(id.Player)
-	if !ok {
-		return false
-	}
-	if id.Kind == native.InventoryOffhand {
-		main, _ := connected.HeldItems()
-		connected.SetHeldItems(main, item.Stack{})
-		return true
-	}
-	inv, ok := playerInventory(connected, id.Kind)
-	if ok {
-		inv.Clear()
-	}
-	return ok
+func (p *Players) ClearInventory(invocation native.InvocationID, id native.InventoryID) bool {
+	return p.mutatePlayer(invocation, id.Player, func(connected *player.Player) {
+		if id.Kind == native.InventoryOffhand {
+			main, _ := connected.HeldItems()
+			connected.SetHeldItems(main, item.Stack{})
+			return
+		}
+		if inv, valid := playerInventory(connected, id.Kind); valid {
+			inv.Clear()
+		}
+	})
 }
 
-func (p *Players) HeldItem(id native.PlayerID, hand uint32) (native.ItemStack, bool) {
-	connected, ok := p.ResolveID(id)
-	if !ok || hand > 1 {
+func (p *Players) HeldItem(invocation native.InvocationID, id native.PlayerID, hand uint32) (native.ItemStack, bool) {
+	if hand > 1 {
 		return native.ItemStack{}, false
 	}
-	main, offhand := connected.HeldItems()
-	if hand == 1 {
+	value, ok := readPlayer(p, invocation, id, func(connected *player.Player) struct {
+		value native.ItemStack
+		ok    bool
+	} { main, offhand := connected.HeldItems(); if hand == 1 {
 		main = offhand
-	}
-	return itemStackToNative(main)
+	}; converted, valid := itemStackToNative(main); return struct {
+		value native.ItemStack
+		ok    bool
+	}{converted, valid} })
+	return value.value, ok && value.ok
 }
 
-func (p *Players) SetHeldItems(id native.PlayerID, mainValue, offhandValue native.ItemStack) bool {
-	connected, ok := p.ResolveID(id)
-	if !ok {
-		return false
-	}
+func (p *Players) SetHeldItems(invocation native.InvocationID, id native.PlayerID, mainValue, offhandValue native.ItemStack) bool {
 	main, ok := itemStackFromNative(mainValue)
 	if !ok {
 		return false
@@ -142,13 +149,14 @@ func (p *Players) SetHeldItems(id native.PlayerID, mainValue, offhandValue nativ
 	if !ok {
 		return false
 	}
-	connected.SetHeldItems(main, offhand)
-	return true
+	return p.mutatePlayer(invocation, id, func(connected *player.Player) { connected.SetHeldItems(main, offhand) })
 }
 
-func (p *Players) SetHeldSlot(id native.PlayerID, slot uint32) bool {
-	connected, ok := p.ResolveID(id)
-	return ok && connected.SetHeldSlot(int(slot)) == nil
+func (p *Players) SetHeldSlot(invocation native.InvocationID, id native.PlayerID, slot uint32) bool {
+	if slot > 8 {
+		return false
+	}
+	return p.mutatePlayer(invocation, id, func(connected *player.Player) { _ = connected.SetHeldSlot(int(slot)) })
 }
 
 func playerInventory(connected *player.Player, kind native.InventoryKind) (*inventory.Inventory, bool) {
@@ -272,6 +280,9 @@ func marshalItemNBT(value map[string]any) ([]byte, bool) {
 	return encoded, err == nil && len(encoded) <= maxItemDataBytes
 }
 
+// MarshalNBT encodes a compound using Dragonfly's little-endian NBT transport.
+func MarshalNBT(value map[string]any) ([]byte, bool) { return marshalItemNBT(value) }
+
 func unmarshalItemNBT(data []byte) (map[string]any, bool) {
 	if len(data) > maxItemDataBytes {
 		return nil, false
@@ -280,6 +291,9 @@ func unmarshalItemNBT(data []byte) (map[string]any, bool) {
 	err := nbt.UnmarshalEncoding(data, &value, nbt.LittleEndian)
 	return value, err == nil
 }
+
+// UnmarshalNBT decodes a Dragonfly little-endian NBT compound.
+func UnmarshalNBT(data []byte) (map[string]any, bool) { return unmarshalItemNBT(data) }
 
 func itemStackDataSize(value native.ItemStack) int {
 	total := len(value.Identifier) + len(value.CustomName) + len(value.NBT) + len(value.ValuesNBT)

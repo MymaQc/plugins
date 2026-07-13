@@ -84,60 +84,108 @@ type ItemStack struct {
 	Enchantments   []ItemEnchantment
 }
 
+// WorldID is an opaque, process-local handle. Handles are never reused.
+type WorldID uint64
+
+type WorldDimension uint32
+
+const (
+	WorldDimensionOverworld WorldDimension = iota
+	WorldDimensionNether
+	WorldDimensionEnd
+)
+
+type WorldBlock struct {
+	Identifier    string
+	PropertiesNBT []byte
+}
+
 // Host executes synchronous actions requested by native plugins.
 type Host interface {
-	SendPlayerText(PlayerID, PlayerTextKind, string) bool
-	SendPlayerTitle(PlayerID, PlayerTitle) bool
-	SendPlayerScoreboard(PlayerID, PlayerScoreboard) bool
-	RemovePlayerScoreboard(PlayerID) bool
-	SendPlayerForm(PlayerID, PlayerForm) bool
-	ClosePlayerForm(PlayerID) bool
-	TransformPlayer(PlayerID, PlayerTransformKind, Vec3, float64, float64) bool
-	PlayerRotation(PlayerID) (Rotation, bool)
-	SetPlayerState(PlayerID, PlayerStateKind, PlayerStateValue) bool
-	PlayerState(PlayerID, PlayerStateKind) (PlayerStateValue, bool)
-	ChangePlayerEffect(PlayerID, PlayerEffectOperation, PlayerEffect) bool
-	SetPlayerEntityVisible(PlayerID, EntityID, bool) bool
-	PlayerSkin(PlayerID) (PlayerSkin, bool)
-	SetPlayerSkin(PlayerID, PlayerSkin) bool
-	InventorySize(InventoryID) (uint32, bool)
-	InventoryItem(InventoryID, uint32) (ItemStack, bool)
-	SetInventoryItem(InventoryID, uint32, ItemStack) bool
-	AddInventoryItem(InventoryID, ItemStack) (uint32, bool)
-	ClearInventory(InventoryID) bool
-	HeldItem(PlayerID, uint32) (ItemStack, bool)
-	SetHeldItems(PlayerID, ItemStack, ItemStack) bool
-	SetHeldSlot(PlayerID, uint32) bool
+	SendPlayerText(InvocationID, PlayerID, PlayerTextKind, string) bool
+	SendPlayerTitle(InvocationID, PlayerID, PlayerTitle) bool
+	SendPlayerScoreboard(InvocationID, PlayerID, PlayerScoreboard) bool
+	RemovePlayerScoreboard(InvocationID, PlayerID) bool
+	SendPlayerForm(InvocationID, PlayerID, PlayerForm) bool
+	ClosePlayerForm(InvocationID, PlayerID) bool
+	TransformPlayer(InvocationID, PlayerID, PlayerTransformKind, Vec3, float64, float64) bool
+	PlayerRotation(InvocationID, PlayerID) (Rotation, bool)
+	SetPlayerState(InvocationID, PlayerID, PlayerStateKind, PlayerStateValue) bool
+	PlayerState(InvocationID, PlayerID, PlayerStateKind) (PlayerStateValue, bool)
+	ChangePlayerEffect(InvocationID, PlayerID, PlayerEffectOperation, PlayerEffect) bool
+	SetPlayerEntityVisible(InvocationID, PlayerID, EntityID, bool) bool
+	PlayerSkin(InvocationID, PlayerID) (PlayerSkin, bool)
+	SetPlayerSkin(InvocationID, PlayerID, PlayerSkin) bool
+	InventorySize(InvocationID, InventoryID) (uint32, bool)
+	InventoryItem(InvocationID, InventoryID, uint32) (ItemStack, bool)
+	SetInventoryItem(InvocationID, InventoryID, uint32, ItemStack) bool
+	AddInventoryItem(InvocationID, InventoryID, ItemStack) (uint32, bool)
+	ClearInventory(InvocationID, InventoryID) bool
+	HeldItem(InvocationID, PlayerID, uint32) (ItemStack, bool)
+	SetHeldItems(InvocationID, PlayerID, ItemStack, ItemStack) bool
+	SetHeldSlot(InvocationID, PlayerID, uint32) bool
+	WorldByName(InvocationID, string) (WorldID, bool)
+	WorldName(InvocationID, WorldID) (string, bool)
+	OpenWorld(InvocationID, string, WorldDimension) (WorldID, bool)
+	UnloadWorld(InvocationID, WorldID) bool
+	WorldBlock(InvocationID, WorldID, BlockPos) (WorldBlock, bool)
+	SetWorldBlock(InvocationID, WorldID, BlockPos, WorldBlock) bool
+	WorldTime(InvocationID, WorldID) (int64, bool)
+	SetWorldTime(InvocationID, WorldID, int64) bool
+	WorldSpawn(InvocationID, WorldID) (BlockPos, bool)
+	SetWorldSpawn(InvocationID, WorldID, BlockPos) bool
+	SaveWorld(InvocationID, WorldID) bool
 }
 
 type noopHost struct{}
 
-func (noopHost) SendPlayerText(PlayerID, PlayerTextKind, string) bool { return false }
-func (noopHost) SendPlayerTitle(PlayerID, PlayerTitle) bool           { return false }
-func (noopHost) SendPlayerScoreboard(PlayerID, PlayerScoreboard) bool { return false }
-func (noopHost) RemovePlayerScoreboard(PlayerID) bool                 { return false }
-func (noopHost) SendPlayerForm(PlayerID, PlayerForm) bool             { return false }
-func (noopHost) ClosePlayerForm(PlayerID) bool                        { return false }
-func (noopHost) TransformPlayer(PlayerID, PlayerTransformKind, Vec3, float64, float64) bool {
+func (noopHost) SendPlayerText(InvocationID, PlayerID, PlayerTextKind, string) bool { return false }
+func (noopHost) SendPlayerTitle(InvocationID, PlayerID, PlayerTitle) bool           { return false }
+func (noopHost) SendPlayerScoreboard(InvocationID, PlayerID, PlayerScoreboard) bool { return false }
+func (noopHost) RemovePlayerScoreboard(InvocationID, PlayerID) bool                 { return false }
+func (noopHost) SendPlayerForm(InvocationID, PlayerID, PlayerForm) bool             { return false }
+func (noopHost) ClosePlayerForm(InvocationID, PlayerID) bool                        { return false }
+func (noopHost) TransformPlayer(InvocationID, PlayerID, PlayerTransformKind, Vec3, float64, float64) bool {
 	return false
 }
-func (noopHost) PlayerRotation(PlayerID) (Rotation, bool)                        { return Rotation{}, false }
-func (noopHost) SetPlayerState(PlayerID, PlayerStateKind, PlayerStateValue) bool { return false }
-func (noopHost) PlayerState(PlayerID, PlayerStateKind) (PlayerStateValue, bool) {
+func (noopHost) PlayerRotation(InvocationID, PlayerID) (Rotation, bool) { return Rotation{}, false }
+func (noopHost) SetPlayerState(InvocationID, PlayerID, PlayerStateKind, PlayerStateValue) bool {
+	return false
+}
+func (noopHost) PlayerState(InvocationID, PlayerID, PlayerStateKind) (PlayerStateValue, bool) {
 	return PlayerStateValue{}, false
 }
-func (noopHost) ChangePlayerEffect(PlayerID, PlayerEffectOperation, PlayerEffect) bool { return false }
-func (noopHost) SetPlayerEntityVisible(PlayerID, EntityID, bool) bool                  { return false }
-func (noopHost) PlayerSkin(PlayerID) (PlayerSkin, bool)                                { return PlayerSkin{}, false }
-func (noopHost) SetPlayerSkin(PlayerID, PlayerSkin) bool                               { return false }
-func (noopHost) InventorySize(InventoryID) (uint32, bool)                              { return 0, false }
-func (noopHost) InventoryItem(InventoryID, uint32) (ItemStack, bool)                   { return ItemStack{}, false }
-func (noopHost) SetInventoryItem(InventoryID, uint32, ItemStack) bool                  { return false }
-func (noopHost) AddInventoryItem(InventoryID, ItemStack) (uint32, bool)                { return 0, false }
-func (noopHost) ClearInventory(InventoryID) bool                                       { return false }
-func (noopHost) HeldItem(PlayerID, uint32) (ItemStack, bool)                           { return ItemStack{}, false }
-func (noopHost) SetHeldItems(PlayerID, ItemStack, ItemStack) bool                      { return false }
-func (noopHost) SetHeldSlot(PlayerID, uint32) bool                                     { return false }
+func (noopHost) ChangePlayerEffect(InvocationID, PlayerID, PlayerEffectOperation, PlayerEffect) bool {
+	return false
+}
+func (noopHost) SetPlayerEntityVisible(InvocationID, PlayerID, EntityID, bool) bool { return false }
+func (noopHost) PlayerSkin(InvocationID, PlayerID) (PlayerSkin, bool)               { return PlayerSkin{}, false }
+func (noopHost) SetPlayerSkin(InvocationID, PlayerID, PlayerSkin) bool              { return false }
+func (noopHost) InventorySize(InvocationID, InventoryID) (uint32, bool)             { return 0, false }
+func (noopHost) InventoryItem(InvocationID, InventoryID, uint32) (ItemStack, bool) {
+	return ItemStack{}, false
+}
+func (noopHost) SetInventoryItem(InvocationID, InventoryID, uint32, ItemStack) bool { return false }
+func (noopHost) AddInventoryItem(InvocationID, InventoryID, ItemStack) (uint32, bool) {
+	return 0, false
+}
+func (noopHost) ClearInventory(InvocationID, InventoryID) bool                  { return false }
+func (noopHost) HeldItem(InvocationID, PlayerID, uint32) (ItemStack, bool)      { return ItemStack{}, false }
+func (noopHost) SetHeldItems(InvocationID, PlayerID, ItemStack, ItemStack) bool { return false }
+func (noopHost) SetHeldSlot(InvocationID, PlayerID, uint32) bool                { return false }
+func (noopHost) WorldByName(InvocationID, string) (WorldID, bool)               { return 0, false }
+func (noopHost) WorldName(InvocationID, WorldID) (string, bool)                 { return "", false }
+func (noopHost) OpenWorld(InvocationID, string, WorldDimension) (WorldID, bool) { return 0, false }
+func (noopHost) UnloadWorld(InvocationID, WorldID) bool                         { return false }
+func (noopHost) WorldBlock(InvocationID, WorldID, BlockPos) (WorldBlock, bool) {
+	return WorldBlock{}, false
+}
+func (noopHost) SetWorldBlock(InvocationID, WorldID, BlockPos, WorldBlock) bool { return false }
+func (noopHost) WorldTime(InvocationID, WorldID) (int64, bool)                  { return 0, false }
+func (noopHost) SetWorldTime(InvocationID, WorldID, int64) bool                 { return false }
+func (noopHost) WorldSpawn(InvocationID, WorldID) (BlockPos, bool)              { return BlockPos{}, false }
+func (noopHost) SetWorldSpawn(InvocationID, WorldID, BlockPos) bool             { return false }
+func (noopHost) SaveWorld(InvocationID, WorldID) bool                           { return false }
 
 var (
 	hostSequence         atomic.Uint64
@@ -165,7 +213,7 @@ const maxFormsPerPlayer = 16
 type formRegistration struct {
 	host    uint64
 	player  PlayerID
-	respond func(PlayerID, bool, []byte) bool
+	respond func(InvocationID, PlayerID, bool, []byte) bool
 	drop    func()
 }
 type formState struct {
@@ -174,7 +222,7 @@ type formState struct {
 	players           map[PlayerID]int
 }
 
-func registerForm(host uint64, player PlayerID, respond func(PlayerID, bool, []byte) bool, drop func()) (uint64, bool) {
+func registerForm(host uint64, player PlayerID, respond func(InvocationID, PlayerID, bool, []byte) bool, drop func()) (uint64, bool) {
 	formMu.Lock()
 	defer formMu.Unlock()
 	state := formHostState[host]
@@ -192,7 +240,7 @@ func registerForm(host uint64, player PlayerID, respond func(PlayerID, bool, []b
 	return id, true
 }
 
-func CompletePlayerForm(id uint64, submitter PlayerID, closed bool, response []byte) bool {
+func CompletePlayerForm(id uint64, invocation InvocationID, submitter PlayerID, closed bool, response []byte) bool {
 	formMu.Lock()
 	registration, ok := forms[id]
 	if !ok {
@@ -216,7 +264,7 @@ func CompletePlayerForm(id uint64, submitter PlayerID, closed bool, response []b
 		formMu.Unlock()
 		return false
 	}
-	ok = registration.respond(submitter, closed, response)
+	ok = registration.respond(invocation, submitter, closed, response)
 	formMu.Lock()
 	state.inflight--
 	formCond.Broadcast()

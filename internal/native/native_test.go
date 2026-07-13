@@ -7,8 +7,11 @@ import (
 	"reflect"
 	"runtime"
 	"slices"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/sandertv/gophertunnel/minecraft/nbt"
 )
 
 func nativeArtifacts(t testing.TB) (string, string) {
@@ -47,6 +50,7 @@ func openTestRuntime(t testing.TB) *Runtime {
 }
 
 type recordingHost struct {
+	noopHost
 	player            PlayerID
 	texts             []string
 	kinds             []PlayerTextKind
@@ -74,39 +78,56 @@ type recordingHost struct {
 		Slot      uint32
 		Item      ItemStack
 	}
-	inventoryAdds []ItemStack
-	forms         []PlayerForm
-	formClosed    bool
+	inventoryAdds  []ItemStack
+	forms          []PlayerForm
+	formClosed     bool
+	worldOpened    string
+	worldDimension WorldDimension
+	worldID        WorldID
+	worldLookup    string
+	worldLookupOK  bool
+	worldName      string
+	worldBlock     WorldBlock
+	worldBlockOK   bool
+	worldBlockPos  BlockPos
+	worldBlockSet  WorldBlock
+	worldSaved     bool
+	worldUnloaded  bool
+	worldTime      int64
+	worldSpawn     BlockPos
 }
 
-func (h *recordingHost) SendPlayerText(player PlayerID, kind PlayerTextKind, message string) bool {
+func (h *recordingHost) SendPlayerText(_ InvocationID, player PlayerID, kind PlayerTextKind, message string) bool {
 	h.player = player
 	h.kinds = append(h.kinds, kind)
 	h.texts = append(h.texts, message)
 	return true
 }
 
-func (h *recordingHost) SendPlayerTitle(player PlayerID, title PlayerTitle) bool {
+func (h *recordingHost) SendPlayerTitle(_ InvocationID, player PlayerID, title PlayerTitle) bool {
 	h.player, h.title = player, title
 	return true
 }
 
-func (h *recordingHost) SendPlayerScoreboard(player PlayerID, scoreboard PlayerScoreboard) bool {
+func (h *recordingHost) SendPlayerScoreboard(_ InvocationID, player PlayerID, scoreboard PlayerScoreboard) bool {
 	h.player, h.scoreboard = player, scoreboard
 	return true
 }
 
-func (h *recordingHost) RemovePlayerScoreboard(player PlayerID) bool {
+func (h *recordingHost) RemovePlayerScoreboard(_ InvocationID, player PlayerID) bool {
 	h.player, h.scoreboardRemoved = player, true
 	return true
 }
-func (h *recordingHost) SendPlayerForm(_ PlayerID, form PlayerForm) bool {
+func (h *recordingHost) SendPlayerForm(_ InvocationID, _ PlayerID, form PlayerForm) bool {
 	h.forms = append(h.forms, form)
 	return true
 }
-func (h *recordingHost) ClosePlayerForm(PlayerID) bool { h.formClosed = true; return true }
+func (h *recordingHost) ClosePlayerForm(InvocationID, PlayerID) bool {
+	h.formClosed = true
+	return true
+}
 
-func (h *recordingHost) TransformPlayer(_ PlayerID, kind PlayerTransformKind, vector Vec3, yaw, pitch float64) bool {
+func (h *recordingHost) TransformPlayer(_ InvocationID, _ PlayerID, kind PlayerTransformKind, vector Vec3, yaw, pitch float64) bool {
 	h.transforms = append(h.transforms, kind)
 	h.vectors = append(h.vectors, vector)
 	h.yaws = append(h.yaws, yaw)
@@ -114,47 +135,47 @@ func (h *recordingHost) TransformPlayer(_ PlayerID, kind PlayerTransformKind, ve
 	return true
 }
 
-func (h *recordingHost) PlayerRotation(PlayerID) (Rotation, bool) {
+func (h *recordingHost) PlayerRotation(InvocationID, PlayerID) (Rotation, bool) {
 	return h.rotation, true
 }
 
-func (h *recordingHost) SetPlayerState(_ PlayerID, kind PlayerStateKind, value PlayerStateValue) bool {
+func (h *recordingHost) SetPlayerState(_ InvocationID, _ PlayerID, kind PlayerStateKind, value PlayerStateValue) bool {
 	h.states = append(h.states, kind)
 	h.values = append(h.values, value)
 	return true
 }
 
-func (h *recordingHost) PlayerState(_ PlayerID, kind PlayerStateKind) (PlayerStateValue, bool) {
+func (h *recordingHost) PlayerState(_ InvocationID, _ PlayerID, kind PlayerStateKind) (PlayerStateValue, bool) {
 	h.reads = append(h.reads, kind)
 	return h.state, true
 }
 
-func (h *recordingHost) ChangePlayerEffect(_ PlayerID, operation PlayerEffectOperation, effect PlayerEffect) bool {
+func (h *recordingHost) ChangePlayerEffect(_ InvocationID, _ PlayerID, operation PlayerEffectOperation, effect PlayerEffect) bool {
 	h.effectOps = append(h.effectOps, operation)
 	h.effects = append(h.effects, effect)
 	return true
 }
 
-func (h *recordingHost) SetPlayerEntityVisible(_ PlayerID, entity EntityID, visible bool) bool {
+func (h *recordingHost) SetPlayerEntityVisible(_ InvocationID, _ PlayerID, entity EntityID, visible bool) bool {
 	h.entities = append(h.entities, entity)
 	h.visible = append(h.visible, visible)
 	return true
 }
 
-func (h *recordingHost) PlayerSkin(PlayerID) (PlayerSkin, bool) {
+func (h *recordingHost) PlayerSkin(InvocationID, PlayerID) (PlayerSkin, bool) {
 	return h.skin, true
 }
 
-func (h *recordingHost) SetPlayerSkin(_ PlayerID, skin PlayerSkin) bool {
+func (h *recordingHost) SetPlayerSkin(_ InvocationID, _ PlayerID, skin PlayerSkin) bool {
 	h.setSkins = append(h.setSkins, skin)
 	return true
 }
 
-func (h *recordingHost) InventorySize(InventoryID) (uint32, bool) { return 36, true }
-func (h *recordingHost) InventoryItem(InventoryID, uint32) (ItemStack, bool) {
+func (h *recordingHost) InventorySize(InvocationID, InventoryID) (uint32, bool) { return 36, true }
+func (h *recordingHost) InventoryItem(InvocationID, InventoryID, uint32) (ItemStack, bool) {
 	return h.inventoryItem, true
 }
-func (h *recordingHost) SetInventoryItem(inventory InventoryID, slot uint32, item ItemStack) bool {
+func (h *recordingHost) SetInventoryItem(_ InvocationID, inventory InventoryID, slot uint32, item ItemStack) bool {
 	h.inventorySets = append(h.inventorySets, struct {
 		Inventory InventoryID
 		Slot      uint32
@@ -162,14 +183,53 @@ func (h *recordingHost) SetInventoryItem(inventory InventoryID, slot uint32, ite
 	}{inventory, slot, item})
 	return true
 }
-func (h *recordingHost) AddInventoryItem(_ InventoryID, item ItemStack) (uint32, bool) {
+func (h *recordingHost) AddInventoryItem(_ InvocationID, _ InventoryID, item ItemStack) (uint32, bool) {
 	h.inventoryAdds = append(h.inventoryAdds, item)
 	return item.Count, true
 }
-func (h *recordingHost) ClearInventory(InventoryID) bool                  { return true }
-func (h *recordingHost) HeldItem(PlayerID, uint32) (ItemStack, bool)      { return h.inventoryItem, true }
-func (h *recordingHost) SetHeldItems(PlayerID, ItemStack, ItemStack) bool { return true }
-func (h *recordingHost) SetHeldSlot(PlayerID, uint32) bool                { return true }
+func (h *recordingHost) ClearInventory(InvocationID, InventoryID) bool { return true }
+func (h *recordingHost) HeldItem(InvocationID, PlayerID, uint32) (ItemStack, bool) {
+	return h.inventoryItem, true
+}
+func (h *recordingHost) SetHeldItems(InvocationID, PlayerID, ItemStack, ItemStack) bool {
+	return true
+}
+func (h *recordingHost) SetHeldSlot(InvocationID, PlayerID, uint32) bool { return true }
+func (h *recordingHost) OpenWorld(_ InvocationID, name string, dimension WorldDimension) (WorldID, bool) {
+	h.worldOpened, h.worldDimension = name, dimension
+	return h.worldID, h.worldID != 0
+}
+func (h *recordingHost) WorldByName(_ InvocationID, name string) (WorldID, bool) {
+	h.worldLookup = name
+	return h.worldID, h.worldLookupOK && h.worldID != 0
+}
+func (h *recordingHost) WorldName(_ InvocationID, id WorldID) (string, bool) {
+	return h.worldName, id == h.worldID && h.worldName != ""
+}
+func (h *recordingHost) WorldBlock(_ InvocationID, id WorldID, position BlockPos) (WorldBlock, bool) {
+	h.worldBlockPos = position
+	return h.worldBlock, id == h.worldID && h.worldBlockOK
+}
+func (h *recordingHost) SetWorldBlock(_ InvocationID, id WorldID, position BlockPos, value WorldBlock) bool {
+	h.worldBlockPos, h.worldBlockSet = position, value
+	return id == h.worldID
+}
+func (h *recordingHost) SaveWorld(_ InvocationID, id WorldID) bool {
+	h.worldSaved = id == h.worldID
+	return h.worldSaved
+}
+func (h *recordingHost) UnloadWorld(_ InvocationID, id WorldID) bool {
+	h.worldUnloaded = id == h.worldID
+	return h.worldUnloaded
+}
+func (h *recordingHost) SetWorldTime(_ InvocationID, _ WorldID, value int64) bool {
+	h.worldTime = value
+	return true
+}
+func (h *recordingHost) SetWorldSpawn(_ InvocationID, _ WorldID, position BlockPos) bool {
+	h.worldSpawn = position
+	return true
+}
 
 func TestPluginCanMessagePlayer(t *testing.T) {
 	library, plugins := nativeArtifacts(t)
@@ -183,7 +243,7 @@ func TestPluginCanMessagePlayer(t *testing.T) {
 		t.Fatal(err)
 	}
 	id := PlayerID{Generation: 42}
-	if _, err := runtime.HandlePlayerJoin(PlayerJoinInput{Player: id, Name: "TestPlayer"}, false); err != nil {
+	if _, err := runtime.HandlePlayerJoin(0, PlayerJoinInput{Player: id, Name: "TestPlayer"}, false); err != nil {
 		t.Fatal(err)
 	}
 	wantTexts := []string{"Welcome from a Rust plugin.", "Rust tip", "Rust popup", "Rust jukebox popup"}
@@ -200,7 +260,7 @@ func TestPluginCanMessagePlayer(t *testing.T) {
 	if !reflect.DeepEqual(host.scoreboard, wantScoreboard) {
 		t.Fatalf("scoreboard = %+v, want %+v", host.scoreboard, wantScoreboard)
 	}
-	if err := runtime.HandlePlayerQuit(PlayerQuitInput{Player: id, Name: "TestPlayer"}); err != nil {
+	if err := runtime.HandlePlayerQuit(0, PlayerQuitInput{Player: id, Name: "TestPlayer"}); err != nil {
 		t.Fatal(err)
 	}
 	if !host.scoreboardRemoved {
@@ -220,14 +280,14 @@ func TestFormResponseRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	id := PlayerID{Generation: 77}
-	if _, err := runtime.HandlePlayerJoin(PlayerJoinInput{Player: id, Name: "FormPlayer"}, false); err != nil {
+	if _, err := runtime.HandlePlayerJoin(0, PlayerJoinInput{Player: id, Name: "FormPlayer"}, false); err != nil {
 		t.Fatal(err)
 	}
 	if len(host.forms) == 0 || !bytes.Contains(host.forms[len(host.forms)-1].RequestJSON, []byte(`"type":"form"`)) {
 		t.Fatalf("menu form not sent: %+v", host.forms)
 	}
 	menu := host.forms[len(host.forms)-1]
-	if !CompletePlayerForm(menu.ID, id, false, []byte("0")) {
+	if !CompletePlayerForm(menu.ID, 0, id, false, []byte("0")) {
 		t.Fatal("menu response rejected")
 	}
 	if len(host.forms) < 2 || !bytes.Contains(host.forms[len(host.forms)-1].RequestJSON, []byte(`"type":"custom_form"`)) {
@@ -235,7 +295,7 @@ func TestFormResponseRoundTrip(t *testing.T) {
 	}
 	custom := host.forms[len(host.forms)-1]
 	response := []byte(`[null,null,null,"Alex",true,5,1,2]`)
-	if !CompletePlayerForm(custom.ID, id, false, response) {
+	if !CompletePlayerForm(custom.ID, 0, id, false, response) {
 		t.Fatal("custom response rejected")
 	}
 	if !slices.Contains(host.texts, "Hello Alex: volume 5, colour #1, speed #2") {
@@ -248,18 +308,18 @@ func TestFormRegistryIsBoundedAndDrained(t *testing.T) {
 	player := PlayerID{Generation: 9}
 	dropped := 0
 	for index := 0; index < maxFormsPerPlayer; index++ {
-		if _, ok := registerForm(host, player, func(PlayerID, bool, []byte) bool { return true }, func() { dropped++ }); !ok {
+		if _, ok := registerForm(host, player, func(InvocationID, PlayerID, bool, []byte) bool { return true }, func() { dropped++ }); !ok {
 			t.Fatalf("registration %d rejected", index)
 		}
 	}
-	if _, ok := registerForm(host, player, func(PlayerID, bool, []byte) bool { return true }, func() { dropped++ }); ok {
+	if _, ok := registerForm(host, player, func(InvocationID, PlayerID, bool, []byte) bool { return true }, func() { dropped++ }); ok {
 		t.Fatal("registration beyond per-player bound accepted")
 	}
 	drainHostForms(host, false)
 	if dropped != maxFormsPerPlayer {
 		t.Fatalf("dropped = %d, want %d", dropped, maxFormsPerPlayer)
 	}
-	if _, ok := registerForm(host, player, func(PlayerID, bool, []byte) bool { return true }, func() { dropped++ }); !ok {
+	if _, ok := registerForm(host, player, func(InvocationID, PlayerID, bool, []byte) bool { return true }, func() { dropped++ }); !ok {
 		t.Fatal("registry did not reopen after non-closing drain")
 	}
 	unregisterHost(host)
@@ -272,7 +332,7 @@ func TestFormDrainWaitsForConcurrentDrop(t *testing.T) {
 	host := registerHost(noopHost{})
 	player := PlayerID{Generation: 10}
 	started, release := make(chan struct{}), make(chan struct{})
-	id, ok := registerForm(host, player, func(PlayerID, bool, []byte) bool { return true }, func() { close(started); <-release })
+	id, ok := registerForm(host, player, func(InvocationID, PlayerID, bool, []byte) bool { return true }, func() { close(started); <-release })
 	if !ok {
 		t.Fatal("form registration rejected")
 	}
@@ -297,7 +357,7 @@ func TestFormDrainWaitsForConcurrentDrop(t *testing.T) {
 func TestClosingFormDrainKeepsRegistrationGateClosed(t *testing.T) {
 	host := registerHost(noopHost{})
 	drainHostForms(host, true)
-	if _, ok := registerForm(host, PlayerID{Generation: 11}, func(PlayerID, bool, []byte) bool {
+	if _, ok := registerForm(host, PlayerID{Generation: 11}, func(InvocationID, PlayerID, bool, []byte) bool {
 		return true
 	}, func() {}); ok {
 		t.Fatal("form registered after closing drain")
@@ -311,7 +371,7 @@ func TestFormRejectsWrongPlayerAndOversizedResponse(t *testing.T) {
 	player := PlayerID{Generation: 11}
 	dropped := 0
 	register := func() uint64 {
-		id, ok := registerForm(host, player, func(PlayerID, bool, []byte) bool {
+		id, ok := registerForm(host, player, func(InvocationID, PlayerID, bool, []byte) bool {
 			t.Fatal("invalid response reached Rust callback")
 			return true
 		}, func() { dropped++ })
@@ -320,10 +380,10 @@ func TestFormRejectsWrongPlayerAndOversizedResponse(t *testing.T) {
 		}
 		return id
 	}
-	if CompletePlayerForm(register(), PlayerID{Generation: 12}, false, []byte("0")) {
+	if CompletePlayerForm(register(), 0, PlayerID{Generation: 12}, false, []byte("0")) {
 		t.Fatal("response from wrong player accepted")
 	}
-	if CompletePlayerForm(register(), player, false, make([]byte, maxFormJSONBytes+1)) {
+	if CompletePlayerForm(register(), 0, player, false, make([]byte, maxFormJSONBytes+1)) {
 		t.Fatal("oversized response accepted")
 	}
 	if dropped != 2 {
@@ -333,15 +393,15 @@ func TestFormRejectsWrongPlayerAndOversizedResponse(t *testing.T) {
 
 func TestMovementGuard(t *testing.T) {
 	runtime := openTestRuntime(t)
-	if runtime.PluginCount() != 8 {
-		t.Fatalf("plugin count = %d, want 8", runtime.PluginCount())
+	if runtime.PluginCount() != 9 {
+		t.Fatalf("plugin count = %d, want 9", runtime.PluginCount())
 	}
 	if runtime.Subscriptions()&PlayerMoveSubscription == 0 {
 		t.Fatal("movement subscription missing")
 	}
 
 	input := PlayerMoveInput{NewPosition: Vec3{X: 10, Y: 64, Z: 10}}
-	cancelled, err := runtime.HandlePlayerMove(input, false)
+	cancelled, err := runtime.HandlePlayerMove(0, input, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -350,7 +410,7 @@ func TestMovementGuard(t *testing.T) {
 	}
 
 	input.NewPosition.Y = -65
-	cancelled, err = runtime.HandlePlayerMove(input, false)
+	cancelled, err = runtime.HandlePlayerMove(0, input, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -672,12 +732,13 @@ func TestCommand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(commands) != 3 {
-		t.Fatalf("commands = %#v, want hello, items, and ping", commands)
+	if len(commands) != 4 {
+		t.Fatalf("commands = %#v, want hello, items, ping, and world", commands)
 	}
 	hello := commandNamed(t, commands, "hello")
 	_ = commandNamed(t, commands, "items")
 	_ = commandNamed(t, commands, "ping")
+	_ = commandNamed(t, commands, "world")
 	optionalFound := false
 	for _, overload := range hello.Overloads {
 		for _, parameter := range overload.Parameters {
@@ -697,6 +758,130 @@ func TestCommand(t *testing.T) {
 	if output.Failed || output.Message != "HELLO, DANICK! DRAGONFLY PLUGINS ROCK" {
 		t.Fatalf("output = %#v", output)
 	}
+}
+
+func TestWorldCommandHostCalls(t *testing.T) {
+	library, plugins := nativeArtifacts(t)
+	properties, err := nbt.MarshalEncoding(map[string]any{}, nbt.LittleEndian)
+	if err != nil {
+		t.Fatal(err)
+	}
+	host := &recordingHost{
+		worldID: 42, worldLookupOK: true, worldName: "minecraft:overworld",
+		worldBlock: WorldBlock{Identifier: "minecraft:gold_block", PropertiesNBT: properties}, worldBlockOK: true,
+	}
+	runtime, err := OpenWithHost(library, plugins, host)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(runtime.Close)
+	if err := runtime.Enable(); err != nil {
+		t.Fatal(err)
+	}
+	commands, err := runtime.Commands()
+	if err != nil {
+		t.Fatal(err)
+	}
+	world := commandNamed(t, commands, "world")
+	player := PlayerID{Generation: 23}
+	output, err := runtime.HandleCommand(world.Index, CommandInput{
+		Source: "WorldTester", SourceKind: CommandSourcePlayer, SourcePlayer: &player,
+		OnlinePlayers: []CommandPlayer{{Player: player, Name: "WorldTester"}},
+		Arguments:     "open example:arena",
+	})
+	if err != nil || output.Failed {
+		t.Fatalf("output=%+v error=%v", output, err)
+	}
+	if host.worldOpened != "example:arena" || host.worldDimension != WorldDimensionOverworld ||
+		host.worldTime != 6000 || host.worldSpawn != (BlockPos{X: 0, Y: 64, Z: 0}) {
+		t.Fatalf("world calls = name %q dimension %d time %d spawn %+v", host.worldOpened, host.worldDimension, host.worldTime, host.worldSpawn)
+	}
+	if !slices.Contains(host.texts, "Opened example:arena.") {
+		t.Fatalf("texts = %q", host.texts)
+	}
+
+	host.texts = nil
+	output, err = runtime.HandleCommand(world.Index, CommandInput{
+		Source: "WorldTester", SourceKind: CommandSourcePlayer, SourcePlayer: &player,
+		OnlinePlayers: []CommandPlayer{{Player: player, Name: "WorldTester"}},
+		Arguments:     "inspect 2 3 4",
+	})
+	if err != nil || output.Failed {
+		t.Fatalf("inspect output=%+v error=%v", output, err)
+	}
+	if host.worldLookup != "minecraft:overworld" || host.worldBlockPos != (BlockPos{X: 2, Y: 3, Z: 4}) ||
+		!slices.ContainsFunc(host.texts, func(message string) bool { return strings.Contains(message, "minecraft:gold_block") }) {
+		t.Fatalf("inspect calls = lookup %q position %+v texts %q", host.worldLookup, host.worldBlockPos, host.texts)
+	}
+
+	host.texts = nil
+	output, err = runtime.HandleCommand(world.Index, CommandInput{
+		Source: "WorldTester", SourceKind: CommandSourcePlayer, SourcePlayer: &player,
+		OnlinePlayers: []CommandPlayer{{Player: player, Name: "WorldTester"}},
+		Arguments:     "set-stone -2 70 9",
+	})
+	if err != nil || output.Failed {
+		t.Fatalf("set output=%+v error=%v", output, err)
+	}
+	if host.worldBlockPos != (BlockPos{X: -2, Y: 70, Z: 9}) || host.worldBlockSet.Identifier != "minecraft:stone" || len(host.worldBlockSet.PropertiesNBT) == 0 {
+		t.Fatalf("set call = position %+v block %+v", host.worldBlockPos, host.worldBlockSet)
+	}
+}
+
+func TestWorldCommandRejectsFailedAndMalformedHostReads(t *testing.T) {
+	library, plugins := nativeArtifacts(t)
+	host := &recordingHost{worldID: 42}
+	runtime, err := OpenWithHost(library, plugins, host)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(runtime.Close)
+	if err := runtime.Enable(); err != nil {
+		t.Fatal(err)
+	}
+	commands, err := runtime.Commands()
+	if err != nil {
+		t.Fatal(err)
+	}
+	world := commandNamed(t, commands, "world")
+	player := PlayerID{Generation: 24}
+	input := CommandInput{
+		Source: "WorldTester", SourceKind: CommandSourcePlayer, SourcePlayer: &player,
+		OnlinePlayers: []CommandPlayer{{Player: player, Name: "WorldTester"}}, Arguments: "inspect 0 64 0",
+	}
+	run := func(t *testing.T, want string) {
+		t.Helper()
+		host.texts = nil
+		output, err := runtime.HandleCommand(world.Index, input)
+		if err != nil || output.Failed {
+			t.Fatalf("output=%+v error=%v", output, err)
+		}
+		if !slices.Contains(host.texts, want) {
+			t.Fatalf("texts = %q, want %q", host.texts, want)
+		}
+	}
+
+	t.Run("lookup failure", func(t *testing.T) {
+		host.worldLookupOK = false
+		run(t, "Overworld is unavailable.")
+	})
+	t.Run("stale handle", func(t *testing.T) {
+		host.worldLookupOK, host.worldBlockOK = true, false
+		run(t, "Could not read block.")
+	})
+	t.Run("malformed properties", func(t *testing.T) {
+		host.worldBlockOK = true
+		host.worldBlock = WorldBlock{Identifier: "minecraft:stone", PropertiesNBT: []byte{0xff}}
+		run(t, "Could not read block.")
+	})
+	t.Run("identifier buffer too small", func(t *testing.T) {
+		host.worldBlock = WorldBlock{Identifier: strings.Repeat("x", maxBlockIdentifierBytes+1)}
+		run(t, "Could not read block.")
+	})
+	t.Run("properties buffer too small", func(t *testing.T) {
+		host.worldBlock = WorldBlock{Identifier: "minecraft:stone", PropertiesNBT: make([]byte, maxBlockPropertiesBytes+1)}
+		run(t, "Could not read block.")
+	})
 }
 
 func commandNamed(t *testing.T, commands []Command, name string) Command {
@@ -754,7 +939,7 @@ func TestChatFilter(t *testing.T) {
 		t.Fatal("chat subscription missing")
 	}
 
-	output, err := runtime.HandlePlayerChat(PlayerChatInput{Message: "foo fighters"}, false)
+	output, err := runtime.HandlePlayerChat(0, PlayerChatInput{Message: "foo fighters"}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -765,7 +950,7 @@ func TestChatFilter(t *testing.T) {
 		t.Fatalf("replacement = %v, want bar fighters", output.Replacement)
 	}
 
-	output, err = runtime.HandlePlayerChat(PlayerChatInput{Message: "blocked"}, false)
+	output, err = runtime.HandlePlayerChat(0, PlayerChatInput{Message: "blocked"}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -780,14 +965,14 @@ func TestPlayerJoinAndQuit(t *testing.T) {
 		t.Fatal("join or quit subscription missing")
 	}
 	id := PlayerID{Generation: 12}
-	cancelled, err := runtime.HandlePlayerJoin(PlayerJoinInput{Player: id, Name: "Danick"}, false)
+	cancelled, err := runtime.HandlePlayerJoin(0, PlayerJoinInput{Player: id, Name: "Danick"}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if cancelled {
 		t.Fatal("lifecycle logger cancelled join")
 	}
-	if err := runtime.HandlePlayerQuit(PlayerQuitInput{Player: id, Name: "Danick"}); err != nil {
+	if err := runtime.HandlePlayerQuit(0, PlayerQuitInput{Player: id, Name: "Danick"}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -797,7 +982,7 @@ func TestPlayerHurtAndHeal(t *testing.T) {
 	if runtime.Subscriptions()&PlayerHurtSubscription == 0 || runtime.Subscriptions()&PlayerHealSubscription == 0 {
 		t.Fatal("hurt or heal subscription missing")
 	}
-	hurt, err := runtime.HandlePlayerHurt(PlayerHurtInput{
+	hurt, err := runtime.HandlePlayerHurt(0, PlayerHurtInput{
 		Damage:         4,
 		AttackImmunity: 500 * time.Millisecond,
 		Source:         DamageSource{Name: "testDamageSource", ReducedByArmour: true},
@@ -808,7 +993,7 @@ func TestPlayerHurtAndHeal(t *testing.T) {
 	if hurt.Cancelled || hurt.Damage != 4 || hurt.AttackImmunity != 500*time.Millisecond {
 		t.Fatalf("hurt = %+v", hurt)
 	}
-	heal, err := runtime.HandlePlayerHeal(PlayerHealInput{Health: 2, Source: HealingSource{Name: "testHealingSource"}}, false)
+	heal, err := runtime.HandlePlayerHeal(0, PlayerHealInput{Health: 2, Source: HealingSource{Name: "testHealingSource"}}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -822,7 +1007,7 @@ func TestPlayerBlockBreakAndPlace(t *testing.T) {
 	if runtime.Subscriptions()&PlayerBlockBreakSubscription == 0 || runtime.Subscriptions()&PlayerBlockPlaceSubscription == 0 {
 		t.Fatal("block-break or block-place subscription missing")
 	}
-	broken, err := runtime.HandlePlayerBlockBreak(PlayerBlockBreakInput{
+	broken, err := runtime.HandlePlayerBlockBreak(0, PlayerBlockBreakInput{
 		Position:   BlockPos{X: 1, Y: 2, Z: 3},
 		Block:      "minecraft:stone",
 		Experience: 4,
@@ -833,7 +1018,7 @@ func TestPlayerBlockBreakAndPlace(t *testing.T) {
 	if broken.Cancelled || broken.Experience != 4 {
 		t.Fatalf("block break = %+v", broken)
 	}
-	cancelled, err := runtime.HandlePlayerBlockPlace(PlayerBlockPlaceInput{
+	cancelled, err := runtime.HandlePlayerBlockPlace(0, PlayerBlockPlaceInput{
 		Position: BlockPos{X: 4, Y: 5, Z: 6},
 		Block:    "minecraft:dirt",
 	}, false)
@@ -850,14 +1035,14 @@ func TestPlayerFoodLossAndDeath(t *testing.T) {
 	if runtime.Subscriptions()&PlayerFoodLossSubscription == 0 || runtime.Subscriptions()&PlayerDeathSubscription == 0 {
 		t.Fatal("food-loss or death subscription missing")
 	}
-	food, err := runtime.HandlePlayerFoodLoss(PlayerFoodLossInput{From: 10, To: 9}, false)
+	food, err := runtime.HandlePlayerFoodLoss(0, PlayerFoodLossInput{From: 10, To: 9}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if food.Cancelled || food.To != 9 {
 		t.Fatalf("food loss = %+v", food)
 	}
-	keep, err := runtime.HandlePlayerDeath(PlayerDeathInput{Source: DamageSource{Name: "testDamageSource"}}, false)
+	keep, err := runtime.HandlePlayerDeath(0, PlayerDeathInput{Source: DamageSource{Name: "testDamageSource"}}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -871,11 +1056,11 @@ func TestPlayerToggleSprintAndSneak(t *testing.T) {
 	if runtime.Subscriptions()&PlayerToggleSprintSubscription == 0 || runtime.Subscriptions()&PlayerToggleSneakSubscription == 0 {
 		t.Fatal("sprint-toggle or sneak-toggle subscription missing")
 	}
-	for name, handle := range map[string]func(PlayerToggleInput, bool) (bool, error){
+	for name, handle := range map[string]func(InvocationID, PlayerToggleInput, bool) (bool, error){
 		"sprint": runtime.HandlePlayerToggleSprint,
 		"sneak":  runtime.HandlePlayerToggleSneak,
 	} {
-		cancelled, err := handle(PlayerToggleInput{After: true}, false)
+		cancelled, err := handle(0, PlayerToggleInput{After: true}, false)
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
@@ -890,10 +1075,10 @@ func TestPlayerJumpAndTeleport(t *testing.T) {
 	if runtime.Subscriptions()&PlayerJumpSubscription == 0 || runtime.Subscriptions()&PlayerTeleportSubscription == 0 {
 		t.Fatal("jump or teleport subscription missing")
 	}
-	if err := runtime.HandlePlayerJump(PlayerID{}); err != nil {
+	if err := runtime.HandlePlayerJump(0, PlayerID{}); err != nil {
 		t.Fatal(err)
 	}
-	cancelled, err := runtime.HandlePlayerTeleport(PlayerTeleportInput{Position: Vec3{X: 1, Y: 64, Z: 2}}, false)
+	cancelled, err := runtime.HandlePlayerTeleport(0, PlayerTeleportInput{Position: Vec3{X: 1, Y: 64, Z: 2}}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -907,14 +1092,14 @@ func TestPlayerExperienceGainAndPunchAir(t *testing.T) {
 	if runtime.Subscriptions()&PlayerExperienceGainSubscription == 0 || runtime.Subscriptions()&PlayerPunchAirSubscription == 0 {
 		t.Fatal("experience-gain or punch-air subscription missing")
 	}
-	output, err := runtime.HandlePlayerExperienceGain(PlayerID{}, 5, false)
+	output, err := runtime.HandlePlayerExperienceGain(0, PlayerID{}, 5, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if output.Cancelled || output.Amount != 5 {
 		t.Fatalf("experience gain = %+v", output)
 	}
-	cancelled, err := runtime.HandlePlayerPunchAir(PlayerID{}, false)
+	cancelled, err := runtime.HandlePlayerPunchAir(0, PlayerID{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -928,14 +1113,14 @@ func TestPlayerHeldSlotChangeAndSleep(t *testing.T) {
 	if runtime.Subscriptions()&PlayerHeldSlotChangeSubscription == 0 || runtime.Subscriptions()&PlayerSleepSubscription == 0 {
 		t.Fatal("held-slot-change or sleep subscription missing")
 	}
-	cancelled, err := runtime.HandlePlayerHeldSlotChange(PlayerHeldSlotChangeInput{From: 1, To: 2}, false)
+	cancelled, err := runtime.HandlePlayerHeldSlotChange(0, PlayerHeldSlotChangeInput{From: 1, To: 2}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if cancelled {
 		t.Fatal("held-slot change cancelled")
 	}
-	output, err := runtime.HandlePlayerSleep(PlayerID{}, true, false)
+	output, err := runtime.HandlePlayerSleep(0, PlayerID{}, true, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -949,14 +1134,14 @@ func TestPlayerBlockPickAndLecternPageTurn(t *testing.T) {
 	if runtime.Subscriptions()&PlayerBlockPickSubscription == 0 || runtime.Subscriptions()&PlayerLecternPageTurnSubscription == 0 {
 		t.Fatal("block-pick or lectern-page subscription missing")
 	}
-	cancelled, err := runtime.HandlePlayerBlockPick(PlayerBlockPickInput{Block: "minecraft:stone"}, false)
+	cancelled, err := runtime.HandlePlayerBlockPick(0, PlayerBlockPickInput{Block: "minecraft:stone"}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if cancelled {
 		t.Fatal("block pick cancelled")
 	}
-	output, err := runtime.HandlePlayerLecternPageTurn(PlayerLecternPageTurnInput{OldPage: 1, NewPage: 2}, false)
+	output, err := runtime.HandlePlayerLecternPageTurn(0, PlayerLecternPageTurnInput{OldPage: 1, NewPage: 2}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -970,14 +1155,14 @@ func TestPlayerSignEditAndItemUse(t *testing.T) {
 	if runtime.Subscriptions()&PlayerSignEditSubscription == 0 || runtime.Subscriptions()&PlayerItemUseSubscription == 0 {
 		t.Fatal("sign-edit or item-use subscription missing")
 	}
-	cancelled, err := runtime.HandlePlayerSignEdit(PlayerSignEditInput{OldText: "old", NewText: "new"}, false)
+	cancelled, err := runtime.HandlePlayerSignEdit(0, PlayerSignEditInput{OldText: "old", NewText: "new"}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if cancelled {
 		t.Fatal("sign edit cancelled")
 	}
-	cancelled, err = runtime.HandlePlayerItemUse(PlayerID{}, false)
+	cancelled, err = runtime.HandlePlayerItemUse(0, PlayerID{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -991,7 +1176,7 @@ func TestPlayerItemUseOnBlock(t *testing.T) {
 	if runtime.Subscriptions()&PlayerItemUseOnBlockSubscription == 0 {
 		t.Fatal("item-use-on-block subscription missing")
 	}
-	cancelled, err := runtime.HandlePlayerItemUseOnBlock(PlayerItemUseOnBlockInput{Face: 1, ClickPosition: Vec3{X: 0.5, Y: 1, Z: 0.5}}, false)
+	cancelled, err := runtime.HandlePlayerItemUseOnBlock(0, PlayerItemUseOnBlockInput{Face: 1, ClickPosition: Vec3{X: 0.5, Y: 1, Z: 0.5}}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1006,14 +1191,14 @@ func TestPlayerItemConsumeAndRelease(t *testing.T) {
 		t.Fatal("item-consume or item-release subscription missing")
 	}
 	stack := ItemStack{Identifier: "minecraft:apple", Count: 1}
-	cancelled, err := runtime.HandlePlayerItemConsume(PlayerID{}, stack, false)
+	cancelled, err := runtime.HandlePlayerItemConsume(0, PlayerID{}, stack, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if cancelled {
 		t.Fatal("item consume cancelled")
 	}
-	cancelled, err = runtime.HandlePlayerItemRelease(PlayerID{}, stack, time.Second, false)
+	cancelled, err = runtime.HandlePlayerItemRelease(0, PlayerID{}, stack, time.Second, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1032,7 +1217,7 @@ func TestPlayerItemEventPreservesFullStack(t *testing.T) {
 		Lore: []string{"one", "two"}, NBT: nbtData, ValuesNBT: valuesNBT,
 		Enchantments: []ItemEnchantment{{ID: 9, Level: 5}},
 	}
-	cancelled, err := runtime.HandlePlayerItemConsume(PlayerID{}, stack, false)
+	cancelled, err := runtime.HandlePlayerItemConsume(0, PlayerID{}, stack, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1047,14 +1232,14 @@ func TestPlayerItemDamageAndDrop(t *testing.T) {
 		t.Fatal("item-damage or item-drop subscription missing")
 	}
 	stack := ItemStack{Identifier: "minecraft:diamond_sword", Count: 1}
-	output, err := runtime.HandlePlayerItemDamage(PlayerID{}, stack, 1, false)
+	output, err := runtime.HandlePlayerItemDamage(0, PlayerID{}, stack, 1, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if output.Cancelled || output.Damage != 1 {
 		t.Fatalf("item damage = %+v", output)
 	}
-	cancelled, err := runtime.HandlePlayerItemDrop(PlayerID{}, stack, false)
+	cancelled, err := runtime.HandlePlayerItemDrop(0, PlayerID{}, stack, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1065,7 +1250,7 @@ func TestPlayerItemDamageAndDrop(t *testing.T) {
 
 func TestCancellationIsMonotonic(t *testing.T) {
 	runtime := openTestRuntime(t)
-	cancelled, err := runtime.HandlePlayerMove(PlayerMoveInput{NewPosition: Vec3{Y: 64}}, true)
+	cancelled, err := runtime.HandlePlayerMove(0, PlayerMoveInput{NewPosition: Vec3{Y: 64}}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1077,7 +1262,7 @@ func TestCancellationIsMonotonic(t *testing.T) {
 func TestLifecycleControlsDispatch(t *testing.T) {
 	runtime := openTestRuntime(t)
 	runtime.Disable()
-	cancelled, err := runtime.HandlePlayerMove(PlayerMoveInput{NewPosition: Vec3{Y: -65}}, false)
+	cancelled, err := runtime.HandlePlayerMove(0, PlayerMoveInput{NewPosition: Vec3{Y: -65}}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1087,7 +1272,7 @@ func TestLifecycleControlsDispatch(t *testing.T) {
 	if err := runtime.Enable(); err != nil {
 		t.Fatal(err)
 	}
-	cancelled, err = runtime.HandlePlayerMove(PlayerMoveInput{NewPosition: Vec3{Y: -65}}, false)
+	cancelled, err = runtime.HandlePlayerMove(0, PlayerMoveInput{NewPosition: Vec3{Y: -65}}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1116,7 +1301,7 @@ func BenchmarkNativeRustMovement(b *testing.B) {
 	input := PlayerMoveInput{NewPosition: Vec3{Y: 64}}
 	b.ReportAllocs()
 	for b.Loop() {
-		if _, err := runtime.HandlePlayerMove(input, false); err != nil {
+		if _, err := runtime.HandlePlayerMove(0, input, false); err != nil {
 			b.Fatal(err)
 		}
 	}

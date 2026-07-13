@@ -35,7 +35,7 @@ func TestPlayerCommandResolvesStableHandle(t *testing.T) {
 		if runnable.P2.enumType != "direct_player" {
 			t.Fatalf("enum type = %q", runnable.P2.enumType)
 		}
-		cmd.New("direct", "", nil, runnables...).Execute("send TestPlayer", &commandSourceStub{}, nil)
+		cmd.New("direct", "", nil, runnables...).Execute("send TestPlayer", &commandSourceStub{}, player.Tx())
 		if !strings.HasPrefix(runtime.input.Arguments, "send ") || !strings.Contains(runtime.input.Arguments, ":77:") {
 			t.Fatalf("arguments = %q", runtime.input.Arguments)
 		}
@@ -114,7 +114,7 @@ func TestMissingOptionalPlayerStaysAbsent(t *testing.T) {
 		},
 		players: NewPlayers(),
 	}
-	if value := parameter.transport(); value != "" {
+	if value := parameter.transport(0); value != "" {
 		t.Fatalf("transport = %q, want empty", value)
 	}
 }

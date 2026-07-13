@@ -4,7 +4,7 @@
 #include "dragonfly_plugin.h"
 
 typedef struct BgRuntimeLibrary BgRuntimeLibrary;
-DfStatus bg_call_form_response(DfFormResponseFn callback, void *callback_context, DfPlayerId submitter, uint32_t outcome, DfStringView response_json);
+DfStatus bg_call_form_response(DfFormResponseFn callback, void *callback_context, DfInvocationId invocation, DfPlayerId submitter, uint32_t outcome, DfStringView response_json);
 void bg_call_form_drop(DfFormDropFn callback, void *callback_context);
 
 DfStatus bg_runtime_open(

@@ -322,7 +322,7 @@ extern "C" {
 #endif
 
 #define DF_ABI_VERSION 1u
-#define DF_HOST_ABI_VERSION 5u
+#define DF_HOST_ABI_VERSION 7u
 #define DF_STATUS_OK 0
 #define DF_STATUS_ERROR 1
 
@@ -331,9 +331,11 @@ typedef uint32_t DfEventId;
 
 typedef struct { uint8_t bytes[16]; uint64_t generation; } DfPlayerId;
 typedef struct { uint8_t bytes[16]; uint64_t generation; } DfEntityId;
+typedef uint64_t DfInvocationId;
 typedef struct { double x; double y; double z; } DfVec3;
 typedef struct { double yaw; double pitch; } DfRotation;
 typedef struct { int32_t x; int32_t y; int32_t z; } DfBlockPos;
+typedef struct { uint64_t value; } DfWorldId;
 typedef struct { const uint8_t *data; uint64_t len; } DfStringView;
 typedef struct { uint8_t *data; uint64_t len; uint64_t capacity; } DfStringBuffer;
 typedef struct { DfStringView name; uint32_t flags; } DfDamageSourceView;
@@ -352,6 +354,11 @@ typedef struct { int32_t metadata; uint32_t count; uint32_t damage; uint8_t unbr
 typedef struct { uint64_t snapshot; DfItemStackInfo info; } DfItemStackSnapshot;
 typedef struct { DfStringBuffer identifier; DfStringBuffer custom_name; DfStringBuffer lore_bytes; DfStringBuffer nbt; DfStringBuffer values_nbt; DfByteSpan *lore; uint64_t lore_capacity; DfItemEnchantment *enchantments; uint64_t enchantment_capacity; } DfItemStackData;
 typedef struct { DfStringView identifier; int32_t metadata; uint32_t count; uint32_t damage; uint8_t unbreakable; int32_t anvil_cost; DfStringView custom_name; const DfStringView *lore; uint64_t lore_count; DfStringView nbt; DfStringView values_nbt; const DfItemEnchantment *enchantments; uint64_t enchantment_count; } DfItemStackViewV3;
+#define DF_WORLD_DIMENSION_OVERWORLD 0u
+#define DF_WORLD_DIMENSION_NETHER 1u
+#define DF_WORLD_DIMENSION_END 2u
+typedef struct { DfStringBuffer identifier; DfStringBuffer properties_nbt; } DfBlockData;
+typedef struct { DfStringView identifier; DfStringView properties_nbt; } DfBlockView;
 #define DF_PLAYER_TRANSFORM_TELEPORT 0u
 #define DF_PLAYER_TRANSFORM_MOVE 1u
 #define DF_PLAYER_TRANSFORM_VELOCITY 2u
@@ -371,7 +378,7 @@ typedef struct { DfStringView identifier; int32_t metadata; uint32_t count; uint
 	b.WriteString(`
 typedef struct { DfStringView text; DfStringView subtitle; DfStringView action_text; uint64_t fade_in_milliseconds; uint64_t duration_milliseconds; uint64_t fade_out_milliseconds; } DfTitleView;
 typedef struct { DfStringView name; const DfStringView *lines; uint64_t line_count; uint8_t padding; uint8_t descending; } DfScoreboardView;
-typedef DfStatus (*DfFormResponseFn)(void *callback_context, DfPlayerId submitter, uint32_t outcome, DfStringView response_json);
+typedef DfStatus (*DfFormResponseFn)(void *callback_context, DfInvocationId invocation, DfPlayerId submitter, uint32_t outcome, DfStringView response_json);
 typedef void (*DfFormDropFn)(void *callback_context);
 typedef struct { DfStringView request_json; void *callback_context; DfFormResponseFn response; DfFormDropFn drop; } DfFormView;
 #define DF_FORM_RESPONSE_SUBMITTED 0u
@@ -385,36 +392,47 @@ typedef struct { uint32_t width; uint32_t height; uint8_t persona; uint64_t play
 typedef struct { DfStringBuffer play_fab_id; DfStringBuffer full_id; DfStringBuffer pixels; DfStringBuffer model_default; DfStringBuffer model_animated_face; DfStringBuffer model; DfStringBuffer cape_pixels; DfStringBuffer *animation_pixels; uint64_t animation_capacity; } DfSkinData;
 typedef struct { uint32_t width; uint32_t height; uint32_t animation_type; int64_t frame_count; int64_t expression; DfStringView pixels; } DfSkinAnimationView;
 typedef struct { uint32_t width; uint32_t height; uint8_t persona; DfStringView play_fab_id; DfStringView full_id; DfStringView pixels; DfStringView model_default; DfStringView model_animated_face; DfStringView model; uint32_t cape_width; uint32_t cape_height; DfStringView cape_pixels; const DfSkinAnimationView *animations; uint64_t animation_count; } DfSkinView;
-typedef DfStatus (*DfHostPlayerTextFn)(uint64_t context, DfPlayerId player, uint32_t kind, DfStringView message);
-typedef DfStatus (*DfHostPlayerTitleFn)(uint64_t context, DfPlayerId player, DfTitleView title);
-typedef DfStatus (*DfHostPlayerScoreboardFn)(uint64_t context, DfPlayerId player, DfScoreboardView scoreboard);
-typedef DfStatus (*DfHostPlayerScoreboardRemoveFn)(uint64_t context, DfPlayerId player);
-typedef DfStatus (*DfHostPlayerFormSendFn)(uint64_t context, DfPlayerId player, const DfFormView *form);
-typedef DfStatus (*DfHostPlayerFormCloseFn)(uint64_t context, DfPlayerId player);
-typedef DfStatus (*DfHostPlayerTransformFn)(uint64_t context, DfPlayerId player, uint32_t kind, DfVec3 vector, double yaw, double pitch);
-typedef DfStatus (*DfHostPlayerRotationFn)(uint64_t context, DfPlayerId player, DfRotation *rotation);
-typedef DfStatus (*DfHostPlayerStateSetFn)(uint64_t context, DfPlayerId player, uint32_t kind, DfPlayerStateValue value);
-typedef DfStatus (*DfHostPlayerStateGetFn)(uint64_t context, DfPlayerId player, uint32_t kind, DfPlayerStateValue *value);
-typedef DfStatus (*DfHostPlayerEffectFn)(uint64_t context, DfPlayerId player, uint32_t operation, DfEffectView effect);
-typedef DfStatus (*DfHostPlayerEntityVisibilityFn)(uint64_t context, DfPlayerId player, DfEntityId entity, uint8_t visible);
+typedef DfStatus (*DfHostPlayerTextFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfStringView message);
+typedef DfStatus (*DfHostPlayerTitleFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfTitleView title);
+typedef DfStatus (*DfHostPlayerScoreboardFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfScoreboardView scoreboard);
+typedef DfStatus (*DfHostPlayerScoreboardRemoveFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player);
+typedef DfStatus (*DfHostPlayerFormSendFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, const DfFormView *form);
+typedef DfStatus (*DfHostPlayerFormCloseFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player);
+typedef DfStatus (*DfHostPlayerTransformFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfVec3 vector, double yaw, double pitch);
+typedef DfStatus (*DfHostPlayerRotationFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfRotation *rotation);
+typedef DfStatus (*DfHostPlayerStateSetFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfPlayerStateValue value);
+typedef DfStatus (*DfHostPlayerStateGetFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfPlayerStateValue *value);
+typedef DfStatus (*DfHostPlayerEffectFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t operation, DfEffectView effect);
+typedef DfStatus (*DfHostPlayerEntityVisibilityFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfEntityId entity, uint8_t visible);
 /* Skin snapshots freeze one skin across metadata and data reads. Open owns a snapshot until close. */
 /* A zero-length buffer may have a null data pointer. Read performs no partial writes on insufficient capacity. */
-typedef DfStatus (*DfHostPlayerSkinOpenFn)(uint64_t context, DfPlayerId player, uint64_t *snapshot, DfSkinInfo *info);
-typedef DfStatus (*DfHostPlayerSkinAnimationInfoFn)(uint64_t context, uint64_t snapshot, uint64_t index, DfSkinAnimationInfo *info);
-typedef DfStatus (*DfHostPlayerSkinReadFn)(uint64_t context, uint64_t snapshot, DfSkinData *data);
-typedef void (*DfHostPlayerSkinCloseFn)(uint64_t context, uint64_t snapshot);
-typedef DfStatus (*DfHostPlayerSkinSetFn)(uint64_t context, DfPlayerId player, const DfSkinView *skin);
-typedef DfStatus (*DfHostInventorySizeFn)(uint64_t context, DfInventoryId inventory, uint32_t *size);
-typedef DfStatus (*DfHostInventoryItemOpenFn)(uint64_t context, DfInventoryId inventory, uint32_t slot, uint64_t *snapshot, DfItemStackInfo *info);
-typedef DfStatus (*DfHostPlayerHeldItemOpenFn)(uint64_t context, DfPlayerId player, uint32_t hand, uint64_t *snapshot, DfItemStackInfo *info);
-typedef DfStatus (*DfHostItemStackReadFn)(uint64_t context, uint64_t snapshot, DfItemStackData *data);
-typedef void (*DfHostItemStackCloseFn)(uint64_t context, uint64_t snapshot);
-typedef DfStatus (*DfHostInventoryItemSetFn)(uint64_t context, DfInventoryId inventory, uint32_t slot, const DfItemStackViewV3 *item);
-typedef DfStatus (*DfHostInventoryItemAddFn)(uint64_t context, DfInventoryId inventory, const DfItemStackViewV3 *item, uint32_t *added);
-typedef DfStatus (*DfHostInventoryClearSlotFn)(uint64_t context, DfInventoryId inventory, uint32_t slot);
-typedef DfStatus (*DfHostInventoryClearFn)(uint64_t context, DfInventoryId inventory);
-typedef DfStatus (*DfHostPlayerHeldItemsSetFn)(uint64_t context, DfPlayerId player, const DfItemStackViewV3 *main_hand, const DfItemStackViewV3 *off_hand);
-typedef DfStatus (*DfHostPlayerHeldSlotSetFn)(uint64_t context, DfPlayerId player, uint32_t slot);
+typedef DfStatus (*DfHostPlayerSkinOpenFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint64_t *snapshot, DfSkinInfo *info);
+typedef DfStatus (*DfHostPlayerSkinAnimationInfoFn)(uint64_t context, DfInvocationId invocation, uint64_t snapshot, uint64_t index, DfSkinAnimationInfo *info);
+typedef DfStatus (*DfHostPlayerSkinReadFn)(uint64_t context, DfInvocationId invocation, uint64_t snapshot, DfSkinData *data);
+typedef void (*DfHostPlayerSkinCloseFn)(uint64_t context, DfInvocationId invocation, uint64_t snapshot);
+typedef DfStatus (*DfHostPlayerSkinSetFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, const DfSkinView *skin);
+typedef DfStatus (*DfHostInventorySizeFn)(uint64_t context, DfInvocationId invocation, DfInventoryId inventory, uint32_t *size);
+typedef DfStatus (*DfHostInventoryItemOpenFn)(uint64_t context, DfInvocationId invocation, DfInventoryId inventory, uint32_t slot, uint64_t *snapshot, DfItemStackInfo *info);
+typedef DfStatus (*DfHostPlayerHeldItemOpenFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t hand, uint64_t *snapshot, DfItemStackInfo *info);
+typedef DfStatus (*DfHostItemStackReadFn)(uint64_t context, DfInvocationId invocation, uint64_t snapshot, DfItemStackData *data);
+typedef void (*DfHostItemStackCloseFn)(uint64_t context, DfInvocationId invocation, uint64_t snapshot);
+typedef DfStatus (*DfHostInventoryItemSetFn)(uint64_t context, DfInvocationId invocation, DfInventoryId inventory, uint32_t slot, const DfItemStackViewV3 *item);
+typedef DfStatus (*DfHostInventoryItemAddFn)(uint64_t context, DfInvocationId invocation, DfInventoryId inventory, const DfItemStackViewV3 *item, uint32_t *added);
+typedef DfStatus (*DfHostInventoryClearSlotFn)(uint64_t context, DfInvocationId invocation, DfInventoryId inventory, uint32_t slot);
+typedef DfStatus (*DfHostInventoryClearFn)(uint64_t context, DfInvocationId invocation, DfInventoryId inventory);
+typedef DfStatus (*DfHostPlayerHeldItemsSetFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, const DfItemStackViewV3 *main_hand, const DfItemStackViewV3 *off_hand);
+typedef DfStatus (*DfHostPlayerHeldSlotSetFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t slot);
+typedef DfStatus (*DfHostWorldLookupFn)(uint64_t context, DfInvocationId invocation, DfStringView name, DfWorldId *world);
+typedef DfStatus (*DfHostWorldOpenFn)(uint64_t context, DfInvocationId invocation, DfStringView name, uint32_t dimension, DfWorldId *world);
+typedef DfStatus (*DfHostWorldNameFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, DfStringBuffer *name);
+typedef DfStatus (*DfHostWorldUnloadFn)(uint64_t context, DfInvocationId invocation, DfWorldId world);
+typedef DfStatus (*DfHostWorldSaveFn)(uint64_t context, DfInvocationId invocation, DfWorldId world);
+typedef DfStatus (*DfHostWorldBlockGetFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, DfBlockPos position, DfBlockData *block);
+typedef DfStatus (*DfHostWorldBlockSetFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, DfBlockPos position, const DfBlockView *block);
+typedef DfStatus (*DfHostWorldTimeGetFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, int64_t *time);
+typedef DfStatus (*DfHostWorldTimeSetFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, int64_t time);
+typedef DfStatus (*DfHostWorldSpawnGetFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, DfBlockPos *position);
+typedef DfStatus (*DfHostWorldSpawnSetFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, DfBlockPos position);
 typedef struct {
     uint32_t abi_version;
     uint32_t struct_size;
@@ -447,7 +465,18 @@ typedef struct {
     DfHostPlayerScoreboardRemoveFn player_scoreboard_remove;
     DfHostPlayerFormSendFn player_form_send;
     DfHostPlayerFormCloseFn player_form_close;
-} DfHostApiV5;
+    DfHostWorldLookupFn world_lookup;
+    DfHostWorldOpenFn world_open;
+    DfHostWorldNameFn world_name;
+    DfHostWorldUnloadFn world_unload;
+    DfHostWorldSaveFn world_save;
+    DfHostWorldBlockGetFn world_block_get;
+    DfHostWorldBlockSetFn world_block_set;
+    DfHostWorldTimeGetFn world_time_get;
+    DfHostWorldTimeSetFn world_time_set;
+    DfHostWorldSpawnGetFn world_spawn_get;
+    DfHostWorldSpawnSetFn world_spawn_set;
+} DfHostApiV7;
 #define DF_COMMAND_PARAMETER_SUBCOMMAND 1u
 #define DF_COMMAND_PARAMETER_ENUM 2u
 #define DF_COMMAND_PARAMETER_STRING 3u
@@ -465,7 +494,7 @@ typedef struct { DfPlayerId player; DfStringView name; uint64_t latency_millisec
 #define DF_COMMAND_SOURCE_UNKNOWN 0u
 #define DF_COMMAND_SOURCE_PLAYER 1u
 #define DF_COMMAND_SOURCE_CONSOLE 2u
-typedef struct { DfStringView source; DfStringView arguments; uint32_t source_kind; DfPlayerId source_player; const DfCommandPlayer *online_players; uint64_t online_player_count; } DfCommandInput;
+typedef struct { DfInvocationId invocation; DfStringView source; DfStringView arguments; uint32_t source_kind; DfPlayerId source_player; const DfCommandPlayer *online_players; uint64_t online_player_count; } DfCommandInput;
 typedef struct { uint8_t failed; DfStringBuffer output; } DfCommandState;
 
 typedef struct {
@@ -480,6 +509,7 @@ typedef struct {
 		name := cName(evt)
 		fmt.Fprintf(&b, "#define DF_EVENT_%s %du\n\n", upper, evt.ID)
 		fmt.Fprintf(&b, "typedef struct {\n")
+		fmt.Fprintf(&b, "    DfInvocationId invocation;\n")
 		if len(evt.Input) == 0 {
 			fmt.Fprintf(&b, "    uint8_t _reserved;\n")
 		}
@@ -502,7 +532,7 @@ typedef DfStatus (*DfPluginLifecycleFn)(void *instance);
 typedef const DfCommandDescriptor *(*DfPluginCommandsFn)(void *instance, uint64_t *count);
 typedef DfStatus (*DfHandleCommandFn)(void *instance, uint64_t command, const DfCommandInput *input, DfCommandState *state);
 typedef DfStatus (*DfCommandEnumOptionsFn)(void *instance, uint64_t command, uint64_t overload, uint64_t parameter, const DfCommandEnumContext *context, DfStringBuffer *output);
-typedef DfStatus (*DfPluginSetHostFn)(void *instance, const DfHostApiV5 *host);
+typedef DfStatus (*DfPluginSetHostFn)(void *instance, const DfHostApiV7 *host);
 typedef void (*DfPluginDestroyFn)(void *instance);
 
 typedef struct {
@@ -522,7 +552,7 @@ typedef struct {
 typedef const DfPluginApiV1 *(*DfPluginEntryV1Fn)(void);
 
 typedef struct DfRuntime DfRuntime;
-typedef struct { DfStringView plugin_directory; const DfHostApiV5 *host; } DfRuntimeConfig;
+typedef struct { DfStringView plugin_directory; const DfHostApiV7 *host; } DfRuntimeConfig;
 
 DfStatus df_runtime_create(const DfRuntimeConfig *config, DfRuntime **out, uint8_t *error, uint64_t error_capacity);
 DfStatus df_runtime_enable(DfRuntime *runtime);
@@ -552,7 +582,7 @@ func generateRust(events []event, player playerSchema) []byte {
 	b.WriteString(`use core::ffi::c_void;
 
 pub const DF_ABI_VERSION: u32 = 1;
-pub const DF_HOST_ABI_VERSION: u32 = 5;
+pub const DF_HOST_ABI_VERSION: u32 = 7;
 pub const DF_STATUS_OK: DfStatus = 0;
 pub const DF_STATUS_ERROR: DfStatus = 1;
 pub type DfStatus = i32;
@@ -564,6 +594,7 @@ pub struct DfPlayerId { pub bytes: [u8; 16], pub generation: u64 }
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DfEntityId { pub bytes: [u8; 16], pub generation: u64 }
+pub type DfInvocationId = u64;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DfVec3 { pub x: f64, pub y: f64, pub z: f64 }
@@ -573,6 +604,9 @@ pub struct DfRotation { pub yaw: f64, pub pitch: f64 }
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DfBlockPos { pub x: i32, pub y: i32, pub z: i32 }
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfWorldId { pub value: u64 }
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct DfStringView { pub data: *const u8, pub len: u64 }
@@ -619,6 +653,15 @@ pub struct DfItemStackData { pub identifier: DfStringBuffer, pub custom_name: Df
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct DfItemStackViewV3 { pub identifier: DfStringView, pub metadata: i32, pub count: u32, pub damage: u32, pub unbreakable: u8, pub anvil_cost: i32, pub custom_name: DfStringView, pub lore: *const DfStringView, pub lore_count: u64, pub nbt: DfStringView, pub values_nbt: DfStringView, pub enchantments: *const DfItemEnchantment, pub enchantment_count: u64 }
+pub const DF_WORLD_DIMENSION_OVERWORLD: u32 = 0;
+pub const DF_WORLD_DIMENSION_NETHER: u32 = 1;
+pub const DF_WORLD_DIMENSION_END: u32 = 2;
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct DfBlockData { pub identifier: DfStringBuffer, pub properties_nbt: DfStringBuffer }
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct DfBlockView { pub identifier: DfStringView, pub properties_nbt: DfStringView }
 pub const DF_PLAYER_TRANSFORM_TELEPORT: u32 = 0;
 pub const DF_PLAYER_TRANSFORM_MOVE: u32 = 1;
 pub const DF_PLAYER_TRANSFORM_VELOCITY: u32 = 2;
@@ -644,7 +687,7 @@ pub struct DfTitleView { pub text: DfStringView, pub subtitle: DfStringView, pub
 pub struct DfScoreboardView { pub name: DfStringView, pub lines: *const DfStringView, pub line_count: u64, pub padding: u8, pub descending: u8 }
 pub const DF_FORM_RESPONSE_SUBMITTED: u32 = 0;
 pub const DF_FORM_RESPONSE_CLOSED: u32 = 1;
-pub type DfFormResponseFn = unsafe extern "C" fn(callback_context: *mut c_void, submitter: DfPlayerId, outcome: u32, response_json: DfStringView) -> DfStatus;
+pub type DfFormResponseFn = unsafe extern "C" fn(callback_context: *mut c_void, invocation: DfInvocationId, submitter: DfPlayerId, outcome: u32, response_json: DfStringView) -> DfStatus;
 pub type DfFormDropFn = unsafe extern "C" fn(callback_context: *mut c_void);
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
@@ -672,37 +715,48 @@ pub struct DfSkinAnimationView { pub width: u32, pub height: u32, pub animation_
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct DfSkinView { pub width: u32, pub height: u32, pub persona: u8, pub play_fab_id: DfStringView, pub full_id: DfStringView, pub pixels: DfStringView, pub model_default: DfStringView, pub model_animated_face: DfStringView, pub model: DfStringView, pub cape_width: u32, pub cape_height: u32, pub cape_pixels: DfStringView, pub animations: *const DfSkinAnimationView, pub animation_count: u64 }
-pub type DfHostPlayerTextFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, kind: u32, message: DfStringView) -> DfStatus;
-pub type DfHostPlayerTitleFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, title: DfTitleView) -> DfStatus;
-pub type DfHostPlayerScoreboardFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, scoreboard: DfScoreboardView) -> DfStatus;
-pub type DfHostPlayerScoreboardRemoveFn = unsafe extern "C" fn(context: u64, player: DfPlayerId) -> DfStatus;
-pub type DfHostPlayerFormSendFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, form: *const DfFormView) -> DfStatus;
-pub type DfHostPlayerFormCloseFn = unsafe extern "C" fn(context: u64, player: DfPlayerId) -> DfStatus;
-pub type DfHostPlayerTransformFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, kind: u32, vector: DfVec3, yaw: f64, pitch: f64) -> DfStatus;
-pub type DfHostPlayerRotationFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, rotation: *mut DfRotation) -> DfStatus;
-pub type DfHostPlayerStateSetFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, kind: u32, value: DfPlayerStateValue) -> DfStatus;
-pub type DfHostPlayerStateGetFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, kind: u32, value: *mut DfPlayerStateValue) -> DfStatus;
-pub type DfHostPlayerEffectFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, operation: u32, effect: DfEffectView) -> DfStatus;
-pub type DfHostPlayerEntityVisibilityFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, entity: DfEntityId, visible: u8) -> DfStatus;
-pub type DfHostPlayerSkinOpenFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, snapshot: *mut u64, info: *mut DfSkinInfo) -> DfStatus;
-pub type DfHostPlayerSkinAnimationInfoFn = unsafe extern "C" fn(context: u64, snapshot: u64, index: u64, info: *mut DfSkinAnimationInfo) -> DfStatus;
-pub type DfHostPlayerSkinReadFn = unsafe extern "C" fn(context: u64, snapshot: u64, data: *mut DfSkinData) -> DfStatus;
-pub type DfHostPlayerSkinCloseFn = unsafe extern "C" fn(context: u64, snapshot: u64);
-pub type DfHostPlayerSkinSetFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, skin: *const DfSkinView) -> DfStatus;
-pub type DfHostInventorySizeFn = unsafe extern "C" fn(context: u64, inventory: DfInventoryId, size: *mut u32) -> DfStatus;
-pub type DfHostInventoryItemOpenFn = unsafe extern "C" fn(context: u64, inventory: DfInventoryId, slot: u32, snapshot: *mut u64, info: *mut DfItemStackInfo) -> DfStatus;
-pub type DfHostPlayerHeldItemOpenFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, hand: u32, snapshot: *mut u64, info: *mut DfItemStackInfo) -> DfStatus;
-pub type DfHostItemStackReadFn = unsafe extern "C" fn(context: u64, snapshot: u64, data: *mut DfItemStackData) -> DfStatus;
-pub type DfHostItemStackCloseFn = unsafe extern "C" fn(context: u64, snapshot: u64);
-pub type DfHostInventoryItemSetFn = unsafe extern "C" fn(context: u64, inventory: DfInventoryId, slot: u32, item: *const DfItemStackViewV3) -> DfStatus;
-pub type DfHostInventoryItemAddFn = unsafe extern "C" fn(context: u64, inventory: DfInventoryId, item: *const DfItemStackViewV3, added: *mut u32) -> DfStatus;
-pub type DfHostInventoryClearSlotFn = unsafe extern "C" fn(context: u64, inventory: DfInventoryId, slot: u32) -> DfStatus;
-pub type DfHostInventoryClearFn = unsafe extern "C" fn(context: u64, inventory: DfInventoryId) -> DfStatus;
-pub type DfHostPlayerHeldItemsSetFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, main_hand: *const DfItemStackViewV3, off_hand: *const DfItemStackViewV3) -> DfStatus;
-pub type DfHostPlayerHeldSlotSetFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, slot: u32) -> DfStatus;
+pub type DfHostPlayerTextFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, player: DfPlayerId, kind: u32, message: DfStringView) -> DfStatus;
+pub type DfHostPlayerTitleFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, player: DfPlayerId, title: DfTitleView) -> DfStatus;
+pub type DfHostPlayerScoreboardFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, player: DfPlayerId, scoreboard: DfScoreboardView) -> DfStatus;
+pub type DfHostPlayerScoreboardRemoveFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, player: DfPlayerId) -> DfStatus;
+pub type DfHostPlayerFormSendFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, player: DfPlayerId, form: *const DfFormView) -> DfStatus;
+pub type DfHostPlayerFormCloseFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, player: DfPlayerId) -> DfStatus;
+pub type DfHostPlayerTransformFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, player: DfPlayerId, kind: u32, vector: DfVec3, yaw: f64, pitch: f64) -> DfStatus;
+pub type DfHostPlayerRotationFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, player: DfPlayerId, rotation: *mut DfRotation) -> DfStatus;
+pub type DfHostPlayerStateSetFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, player: DfPlayerId, kind: u32, value: DfPlayerStateValue) -> DfStatus;
+pub type DfHostPlayerStateGetFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, player: DfPlayerId, kind: u32, value: *mut DfPlayerStateValue) -> DfStatus;
+pub type DfHostPlayerEffectFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, player: DfPlayerId, operation: u32, effect: DfEffectView) -> DfStatus;
+pub type DfHostPlayerEntityVisibilityFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, player: DfPlayerId, entity: DfEntityId, visible: u8) -> DfStatus;
+pub type DfHostPlayerSkinOpenFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, player: DfPlayerId, snapshot: *mut u64, info: *mut DfSkinInfo) -> DfStatus;
+pub type DfHostPlayerSkinAnimationInfoFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, snapshot: u64, index: u64, info: *mut DfSkinAnimationInfo) -> DfStatus;
+pub type DfHostPlayerSkinReadFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, snapshot: u64, data: *mut DfSkinData) -> DfStatus;
+pub type DfHostPlayerSkinCloseFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, snapshot: u64);
+pub type DfHostPlayerSkinSetFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, player: DfPlayerId, skin: *const DfSkinView) -> DfStatus;
+pub type DfHostInventorySizeFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, inventory: DfInventoryId, size: *mut u32) -> DfStatus;
+pub type DfHostInventoryItemOpenFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, inventory: DfInventoryId, slot: u32, snapshot: *mut u64, info: *mut DfItemStackInfo) -> DfStatus;
+pub type DfHostPlayerHeldItemOpenFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, player: DfPlayerId, hand: u32, snapshot: *mut u64, info: *mut DfItemStackInfo) -> DfStatus;
+pub type DfHostItemStackReadFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, snapshot: u64, data: *mut DfItemStackData) -> DfStatus;
+pub type DfHostItemStackCloseFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, snapshot: u64);
+pub type DfHostInventoryItemSetFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, inventory: DfInventoryId, slot: u32, item: *const DfItemStackViewV3) -> DfStatus;
+pub type DfHostInventoryItemAddFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, inventory: DfInventoryId, item: *const DfItemStackViewV3, added: *mut u32) -> DfStatus;
+pub type DfHostInventoryClearSlotFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, inventory: DfInventoryId, slot: u32) -> DfStatus;
+pub type DfHostInventoryClearFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, inventory: DfInventoryId) -> DfStatus;
+pub type DfHostPlayerHeldItemsSetFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, player: DfPlayerId, main_hand: *const DfItemStackViewV3, off_hand: *const DfItemStackViewV3) -> DfStatus;
+pub type DfHostPlayerHeldSlotSetFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, player: DfPlayerId, slot: u32) -> DfStatus;
+pub type DfHostWorldLookupFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, name: DfStringView, world: *mut DfWorldId) -> DfStatus;
+pub type DfHostWorldOpenFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, name: DfStringView, dimension: u32, world: *mut DfWorldId) -> DfStatus;
+pub type DfHostWorldNameFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, world: DfWorldId, name: *mut DfStringBuffer) -> DfStatus;
+pub type DfHostWorldUnloadFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, world: DfWorldId) -> DfStatus;
+pub type DfHostWorldSaveFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, world: DfWorldId) -> DfStatus;
+pub type DfHostWorldBlockGetFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, world: DfWorldId, position: DfBlockPos, block: *mut DfBlockData) -> DfStatus;
+pub type DfHostWorldBlockSetFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, world: DfWorldId, position: DfBlockPos, block: *const DfBlockView) -> DfStatus;
+pub type DfHostWorldTimeGetFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, world: DfWorldId, time: *mut i64) -> DfStatus;
+pub type DfHostWorldTimeSetFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, world: DfWorldId, time: i64) -> DfStatus;
+pub type DfHostWorldSpawnGetFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, world: DfWorldId, position: *mut DfBlockPos) -> DfStatus;
+pub type DfHostWorldSpawnSetFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, world: DfWorldId, position: DfBlockPos) -> DfStatus;
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
-pub struct DfHostApiV5 { pub abi_version: u32, pub struct_size: u32, pub context: u64, pub player_text: Option<DfHostPlayerTextFn>, pub player_title: Option<DfHostPlayerTitleFn>, pub player_transform: Option<DfHostPlayerTransformFn>, pub player_rotation: Option<DfHostPlayerRotationFn>, pub player_state_set: Option<DfHostPlayerStateSetFn>, pub player_state_get: Option<DfHostPlayerStateGetFn>, pub player_effect: Option<DfHostPlayerEffectFn>, pub player_entity_visibility: Option<DfHostPlayerEntityVisibilityFn>, pub player_skin_open: Option<DfHostPlayerSkinOpenFn>, pub player_skin_animation_info: Option<DfHostPlayerSkinAnimationInfoFn>, pub player_skin_read: Option<DfHostPlayerSkinReadFn>, pub player_skin_close: Option<DfHostPlayerSkinCloseFn>, pub player_skin_set: Option<DfHostPlayerSkinSetFn>, pub inventory_size: Option<DfHostInventorySizeFn>, pub inventory_item_open: Option<DfHostInventoryItemOpenFn>, pub player_held_item_open: Option<DfHostPlayerHeldItemOpenFn>, pub item_stack_read: Option<DfHostItemStackReadFn>, pub item_stack_close: Option<DfHostItemStackCloseFn>, pub inventory_item_set: Option<DfHostInventoryItemSetFn>, pub inventory_item_add: Option<DfHostInventoryItemAddFn>, pub inventory_clear_slot: Option<DfHostInventoryClearSlotFn>, pub inventory_clear: Option<DfHostInventoryClearFn>, pub player_held_items_set: Option<DfHostPlayerHeldItemsSetFn>, pub player_held_slot_set: Option<DfHostPlayerHeldSlotSetFn>, pub player_scoreboard: Option<DfHostPlayerScoreboardFn>, pub player_scoreboard_remove: Option<DfHostPlayerScoreboardRemoveFn>, pub player_form_send: Option<DfHostPlayerFormSendFn>, pub player_form_close: Option<DfHostPlayerFormCloseFn> }
+pub struct DfHostApiV7 { pub abi_version: u32, pub struct_size: u32, pub context: u64, pub player_text: Option<DfHostPlayerTextFn>, pub player_title: Option<DfHostPlayerTitleFn>, pub player_transform: Option<DfHostPlayerTransformFn>, pub player_rotation: Option<DfHostPlayerRotationFn>, pub player_state_set: Option<DfHostPlayerStateSetFn>, pub player_state_get: Option<DfHostPlayerStateGetFn>, pub player_effect: Option<DfHostPlayerEffectFn>, pub player_entity_visibility: Option<DfHostPlayerEntityVisibilityFn>, pub player_skin_open: Option<DfHostPlayerSkinOpenFn>, pub player_skin_animation_info: Option<DfHostPlayerSkinAnimationInfoFn>, pub player_skin_read: Option<DfHostPlayerSkinReadFn>, pub player_skin_close: Option<DfHostPlayerSkinCloseFn>, pub player_skin_set: Option<DfHostPlayerSkinSetFn>, pub inventory_size: Option<DfHostInventorySizeFn>, pub inventory_item_open: Option<DfHostInventoryItemOpenFn>, pub player_held_item_open: Option<DfHostPlayerHeldItemOpenFn>, pub item_stack_read: Option<DfHostItemStackReadFn>, pub item_stack_close: Option<DfHostItemStackCloseFn>, pub inventory_item_set: Option<DfHostInventoryItemSetFn>, pub inventory_item_add: Option<DfHostInventoryItemAddFn>, pub inventory_clear_slot: Option<DfHostInventoryClearSlotFn>, pub inventory_clear: Option<DfHostInventoryClearFn>, pub player_held_items_set: Option<DfHostPlayerHeldItemsSetFn>, pub player_held_slot_set: Option<DfHostPlayerHeldSlotSetFn>, pub player_scoreboard: Option<DfHostPlayerScoreboardFn>, pub player_scoreboard_remove: Option<DfHostPlayerScoreboardRemoveFn>, pub player_form_send: Option<DfHostPlayerFormSendFn>, pub player_form_close: Option<DfHostPlayerFormCloseFn>, pub world_lookup: Option<DfHostWorldLookupFn>, pub world_open: Option<DfHostWorldOpenFn>, pub world_name: Option<DfHostWorldNameFn>, pub world_unload: Option<DfHostWorldUnloadFn>, pub world_save: Option<DfHostWorldSaveFn>, pub world_block_get: Option<DfHostWorldBlockGetFn>, pub world_block_set: Option<DfHostWorldBlockSetFn>, pub world_time_get: Option<DfHostWorldTimeGetFn>, pub world_time_set: Option<DfHostWorldTimeSetFn>, pub world_spawn_get: Option<DfHostWorldSpawnGetFn>, pub world_spawn_set: Option<DfHostWorldSpawnSetFn> }
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct DfCommandParameter { pub kind: u32, pub optional: u8, pub name: DfStringView, pub values: *const DfStringView, pub value_count: u64 }
@@ -732,7 +786,7 @@ pub const DF_COMMAND_SOURCE_PLAYER: u32 = 1;
 pub const DF_COMMAND_SOURCE_CONSOLE: u32 = 2;
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
-pub struct DfCommandInput { pub source: DfStringView, pub arguments: DfStringView, pub source_kind: u32, pub source_player: DfPlayerId, pub online_players: *const DfCommandPlayer, pub online_player_count: u64 }
+pub struct DfCommandInput { pub invocation: DfInvocationId, pub source: DfStringView, pub arguments: DfStringView, pub source_kind: u32, pub source_player: DfPlayerId, pub online_players: *const DfCommandPlayer, pub online_player_count: u64 }
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct DfCommandState { pub failed: u8, pub output: DfStringBuffer }
@@ -748,6 +802,7 @@ pub struct DfAbiHeader { pub abi_version: u32, pub struct_size: u32, pub subscri
 		fmt.Fprintf(&b, "pub const DF_SUBSCRIPTION_%s: u64 = 1u64 << %d;\n", upper, evt.ID-1)
 		b.WriteString("#[repr(C)]\n#[derive(Clone, Copy, Debug, Default)]\n")
 		fmt.Fprintf(&b, "pub struct %sInput {\n", name)
+		b.WriteString("    pub invocation: DfInvocationId,\n")
 		if len(evt.Input) == 0 {
 			b.WriteString("    pub _reserved: u8,\n")
 		}
@@ -770,7 +825,7 @@ pub type DfPluginLifecycleFn = unsafe extern "C" fn(instance: *mut c_void) -> Df
 pub type DfPluginCommandsFn = unsafe extern "C" fn(instance: *mut c_void, count: *mut u64) -> *const DfCommandDescriptor;
 pub type DfHandleCommandFn = unsafe extern "C" fn(instance: *mut c_void, command: u64, input: *const DfCommandInput, state: *mut DfCommandState) -> DfStatus;
 pub type DfCommandEnumOptionsFn = unsafe extern "C" fn(instance: *mut c_void, command: u64, overload: u64, parameter: u64, context: *const DfCommandEnumContext, output: *mut DfStringBuffer) -> DfStatus;
-pub type DfPluginSetHostFn = unsafe extern "C" fn(instance: *mut c_void, host: *const DfHostApiV5) -> DfStatus;
+pub type DfPluginSetHostFn = unsafe extern "C" fn(instance: *mut c_void, host: *const DfHostApiV7) -> DfStatus;
 pub type DfPluginDestroyFn = unsafe extern "C" fn(instance: *mut c_void);
 pub type DfHandleEventFn = unsafe extern "C" fn(instance: *mut c_void, event_id: DfEventId, input: *const c_void, state: *mut c_void) -> DfStatus;
 

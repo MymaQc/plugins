@@ -19,7 +19,7 @@ const (
 )
 
 //export bg_go_player_form_send
-func bg_go_player_form_send(context C.uint64_t, player C.DfPlayerId, view *C.DfFormView) C.DfStatus {
+func bg_go_player_form_send(context C.uint64_t, invocation C.DfInvocationId, player C.DfPlayerId, view *C.DfFormView) C.DfStatus {
 	host, ok := resolveHost(uint64(context))
 	if !ok || view == nil || view.response == nil || view.drop == nil || view.request_json.len == 0 || view.request_json.len > maxFormJSONBytes || view.request_json.data == nil {
 		return C.DF_STATUS_ERROR
@@ -29,7 +29,7 @@ func bg_go_player_form_send(context C.uint64_t, player C.DfPlayerId, view *C.DfF
 		return C.DF_STATUS_ERROR
 	}
 	callbackContext, responseCallback, dropCallback := view.callback_context, view.response, view.drop
-	id, ok := registerForm(uint64(context), playerID(player), func(submitter PlayerID, closed bool, response []byte) bool {
+	id, ok := registerForm(uint64(context), playerID(player), func(responseInvocation InvocationID, submitter PlayerID, closed bool, response []byte) bool {
 		outcome := C.uint32_t(C.DF_FORM_RESPONSE_SUBMITTED)
 		if closed {
 			outcome = C.uint32_t(C.DF_FORM_RESPONSE_CLOSED)
@@ -39,12 +39,12 @@ func bg_go_player_form_send(context C.uint64_t, player C.DfPlayerId, view *C.DfF
 			responseView.data = (*C.uint8_t)(unsafe.Pointer(&response[0]))
 			responseView.len = C.uint64_t(len(response))
 		}
-		return C.bg_call_form_response(responseCallback, callbackContext, cPlayerID(submitter), outcome, responseView) == C.DF_STATUS_OK
+		return C.bg_call_form_response(responseCallback, callbackContext, C.DfInvocationId(responseInvocation), cPlayerID(submitter), outcome, responseView) == C.DF_STATUS_OK
 	}, func() { C.bg_call_form_drop(dropCallback, callbackContext) })
 	if !ok {
 		return C.DF_STATUS_ERROR
 	}
-	if !host.SendPlayerForm(playerID(player), PlayerForm{ID: id, RequestJSON: request}) {
+	if !host.SendPlayerForm(InvocationID(invocation), playerID(player), PlayerForm{ID: id, RequestJSON: request}) {
 		abandonForm(id)
 		return C.DF_STATUS_ERROR
 	}
@@ -52,9 +52,9 @@ func bg_go_player_form_send(context C.uint64_t, player C.DfPlayerId, view *C.DfF
 }
 
 //export bg_go_player_form_close
-func bg_go_player_form_close(context C.uint64_t, player C.DfPlayerId) C.DfStatus {
+func bg_go_player_form_close(context C.uint64_t, invocation C.DfInvocationId, player C.DfPlayerId) C.DfStatus {
 	host, ok := resolveHost(uint64(context))
-	if !ok || !host.ClosePlayerForm(playerID(player)) {
+	if !ok || !host.ClosePlayerForm(InvocationID(invocation), playerID(player)) {
 		return C.DF_STATUS_ERROR
 	}
 	return C.DF_STATUS_OK
@@ -70,7 +70,7 @@ func cPlayerID(id PlayerID) C.DfPlayerId {
 }
 
 //export bg_go_player_text
-func bg_go_player_text(context C.uint64_t, player C.DfPlayerId, kind C.uint32_t, message C.DfStringView) C.DfStatus {
+func bg_go_player_text(context C.uint64_t, invocation C.DfInvocationId, player C.DfPlayerId, kind C.uint32_t, message C.DfStringView) C.DfStatus {
 	host, ok := resolveHost(uint64(context))
 	if !ok {
 		return C.DF_STATUS_ERROR
@@ -80,14 +80,14 @@ func bg_go_player_text(context C.uint64_t, player C.DfPlayerId, kind C.uint32_t,
 		id.UUID[index] = byte(player.bytes[index])
 	}
 	id.Generation = uint64(player.generation)
-	if !host.SendPlayerText(id, PlayerTextKind(kind), stringView(message)) {
+	if !host.SendPlayerText(InvocationID(invocation), id, PlayerTextKind(kind), stringView(message)) {
 		return C.DF_STATUS_ERROR
 	}
 	return C.DF_STATUS_OK
 }
 
 //export bg_go_player_scoreboard
-func bg_go_player_scoreboard(context C.uint64_t, player C.DfPlayerId, view C.DfScoreboardView) C.DfStatus {
+func bg_go_player_scoreboard(context C.uint64_t, invocation C.DfInvocationId, player C.DfPlayerId, view C.DfScoreboardView) C.DfStatus {
 	host, ok := resolveHost(uint64(context))
 	if !ok || view.line_count > maxScoreboardLines || (view.line_count != 0 && view.lines == nil) {
 		return C.DF_STATUS_ERROR
@@ -97,7 +97,7 @@ func bg_go_player_scoreboard(context C.uint64_t, player C.DfPlayerId, view C.DfS
 	for index, line := range lineViews {
 		lines[index] = stringView(line)
 	}
-	if !host.SendPlayerScoreboard(playerID(player), PlayerScoreboard{
+	if !host.SendPlayerScoreboard(InvocationID(invocation), playerID(player), PlayerScoreboard{
 		Name: stringView(view.name), Lines: lines, Padding: view.padding != 0, Descending: view.descending != 0,
 	}) {
 		return C.DF_STATUS_ERROR
@@ -106,16 +106,16 @@ func bg_go_player_scoreboard(context C.uint64_t, player C.DfPlayerId, view C.DfS
 }
 
 //export bg_go_player_scoreboard_remove
-func bg_go_player_scoreboard_remove(context C.uint64_t, player C.DfPlayerId) C.DfStatus {
+func bg_go_player_scoreboard_remove(context C.uint64_t, invocation C.DfInvocationId, player C.DfPlayerId) C.DfStatus {
 	host, ok := resolveHost(uint64(context))
-	if !ok || !host.RemovePlayerScoreboard(playerID(player)) {
+	if !ok || !host.RemovePlayerScoreboard(InvocationID(invocation), playerID(player)) {
 		return C.DF_STATUS_ERROR
 	}
 	return C.DF_STATUS_OK
 }
 
 //export bg_go_player_title
-func bg_go_player_title(context C.uint64_t, player C.DfPlayerId, value C.DfTitleView) C.DfStatus {
+func bg_go_player_title(context C.uint64_t, invocation C.DfInvocationId, player C.DfPlayerId, value C.DfTitleView) C.DfStatus {
 	host, ok := resolveHost(uint64(context))
 	if !ok {
 		return C.DF_STATUS_ERROR
@@ -132,33 +132,33 @@ func bg_go_player_title(context C.uint64_t, player C.DfPlayerId, value C.DfTitle
 		Duration:   milliseconds(value.duration_milliseconds),
 		FadeOut:    milliseconds(value.fade_out_milliseconds),
 	}
-	if !host.SendPlayerTitle(id, title) {
+	if !host.SendPlayerTitle(InvocationID(invocation), id, title) {
 		return C.DF_STATUS_ERROR
 	}
 	return C.DF_STATUS_OK
 }
 
 //export bg_go_player_transform
-func bg_go_player_transform(context C.uint64_t, player C.DfPlayerId, kind C.uint32_t, vector C.DfVec3, yaw C.double, pitch C.double) C.DfStatus {
+func bg_go_player_transform(context C.uint64_t, invocation C.DfInvocationId, player C.DfPlayerId, kind C.uint32_t, vector C.DfVec3, yaw C.double, pitch C.double) C.DfStatus {
 	host, ok := resolveHost(uint64(context))
 	if !ok {
 		return C.DF_STATUS_ERROR
 	}
 	id := playerID(player)
 	position := Vec3{X: float64(vector.x), Y: float64(vector.y), Z: float64(vector.z)}
-	if !host.TransformPlayer(id, PlayerTransformKind(kind), position, float64(yaw), float64(pitch)) {
+	if !host.TransformPlayer(InvocationID(invocation), id, PlayerTransformKind(kind), position, float64(yaw), float64(pitch)) {
 		return C.DF_STATUS_ERROR
 	}
 	return C.DF_STATUS_OK
 }
 
 //export bg_go_player_rotation
-func bg_go_player_rotation(context C.uint64_t, player C.DfPlayerId, rotation *C.DfRotation) C.DfStatus {
+func bg_go_player_rotation(context C.uint64_t, invocation C.DfInvocationId, player C.DfPlayerId, rotation *C.DfRotation) C.DfStatus {
 	host, ok := resolveHost(uint64(context))
 	if !ok || rotation == nil {
 		return C.DF_STATUS_ERROR
 	}
-	value, ok := host.PlayerRotation(playerID(player))
+	value, ok := host.PlayerRotation(InvocationID(invocation), playerID(player))
 	if !ok {
 		return C.DF_STATUS_ERROR
 	}
@@ -168,9 +168,9 @@ func bg_go_player_rotation(context C.uint64_t, player C.DfPlayerId, rotation *C.
 }
 
 //export bg_go_player_state_set
-func bg_go_player_state_set(context C.uint64_t, player C.DfPlayerId, kind C.uint32_t, value C.DfPlayerStateValue) C.DfStatus {
+func bg_go_player_state_set(context C.uint64_t, invocation C.DfInvocationId, player C.DfPlayerId, kind C.uint32_t, value C.DfPlayerStateValue) C.DfStatus {
 	host, ok := resolveHost(uint64(context))
-	if !ok || !host.SetPlayerState(playerID(player), PlayerStateKind(kind), PlayerStateValue{
+	if !ok || !host.SetPlayerState(InvocationID(invocation), playerID(player), PlayerStateKind(kind), PlayerStateValue{
 		Number: float64(value.number), Integer: int64(value.integer),
 	}) {
 		return C.DF_STATUS_ERROR
@@ -179,12 +179,12 @@ func bg_go_player_state_set(context C.uint64_t, player C.DfPlayerId, kind C.uint
 }
 
 //export bg_go_player_state_get
-func bg_go_player_state_get(context C.uint64_t, player C.DfPlayerId, kind C.uint32_t, value *C.DfPlayerStateValue) C.DfStatus {
+func bg_go_player_state_get(context C.uint64_t, invocation C.DfInvocationId, player C.DfPlayerId, kind C.uint32_t, value *C.DfPlayerStateValue) C.DfStatus {
 	host, ok := resolveHost(uint64(context))
 	if !ok || value == nil {
 		return C.DF_STATUS_ERROR
 	}
-	state, ok := host.PlayerState(playerID(player), PlayerStateKind(kind))
+	state, ok := host.PlayerState(InvocationID(invocation), playerID(player), PlayerStateKind(kind))
 	if !ok {
 		return C.DF_STATUS_ERROR
 	}
@@ -194,9 +194,9 @@ func bg_go_player_state_get(context C.uint64_t, player C.DfPlayerId, kind C.uint
 }
 
 //export bg_go_player_effect
-func bg_go_player_effect(context C.uint64_t, player C.DfPlayerId, operation C.uint32_t, value C.DfEffectView) C.DfStatus {
+func bg_go_player_effect(context C.uint64_t, invocation C.DfInvocationId, player C.DfPlayerId, operation C.uint32_t, value C.DfEffectView) C.DfStatus {
 	host, ok := resolveHost(uint64(context))
-	if !ok || !host.ChangePlayerEffect(playerID(player), PlayerEffectOperation(operation), PlayerEffect{
+	if !ok || !host.ChangePlayerEffect(InvocationID(invocation), playerID(player), PlayerEffectOperation(operation), PlayerEffect{
 		Type: EffectType(value.effect_type), Level: int32(value.level),
 		Duration: milliseconds(value.duration_milliseconds), Ambient: value.ambient != 0,
 		Infinite: value.infinite != 0, ParticlesHidden: value.particles_hidden != 0,
@@ -207,21 +207,21 @@ func bg_go_player_effect(context C.uint64_t, player C.DfPlayerId, operation C.ui
 }
 
 //export bg_go_player_entity_visibility
-func bg_go_player_entity_visibility(context C.uint64_t, player C.DfPlayerId, entity C.DfEntityId, visible C.uint8_t) C.DfStatus {
+func bg_go_player_entity_visibility(context C.uint64_t, invocation C.DfInvocationId, player C.DfPlayerId, entity C.DfEntityId, visible C.uint8_t) C.DfStatus {
 	host, ok := resolveHost(uint64(context))
-	if !ok || !host.SetPlayerEntityVisible(playerID(player), entityID(entity), visible != 0) {
+	if !ok || !host.SetPlayerEntityVisible(InvocationID(invocation), playerID(player), entityID(entity), visible != 0) {
 		return C.DF_STATUS_ERROR
 	}
 	return C.DF_STATUS_OK
 }
 
 //export bg_go_player_skin_open
-func bg_go_player_skin_open(context C.uint64_t, player C.DfPlayerId, snapshot *C.uint64_t, info *C.DfSkinInfo) C.DfStatus {
+func bg_go_player_skin_open(context C.uint64_t, invocation C.DfInvocationId, player C.DfPlayerId, snapshot *C.uint64_t, info *C.DfSkinInfo) C.DfStatus {
 	host, ok := resolveHost(uint64(context))
 	if !ok || snapshot == nil || info == nil {
 		return C.DF_STATUS_ERROR
 	}
-	value, ok := host.PlayerSkin(playerID(player))
+	value, ok := host.PlayerSkin(InvocationID(invocation), playerID(player))
 	if !ok || !validPlayerSkinPayload(value) {
 		return C.DF_STATUS_ERROR
 	}
@@ -235,7 +235,7 @@ func bg_go_player_skin_open(context C.uint64_t, player C.DfPlayerId, snapshot *C
 }
 
 //export bg_go_player_skin_animation_info
-func bg_go_player_skin_animation_info(context C.uint64_t, snapshot C.uint64_t, index C.uint64_t, info *C.DfSkinAnimationInfo) C.DfStatus {
+func bg_go_player_skin_animation_info(context C.uint64_t, invocation C.DfInvocationId, snapshot C.uint64_t, index C.uint64_t, info *C.DfSkinAnimationInfo) C.DfStatus {
 	value, ok := resolveSkinSnapshot(uint64(context), uint64(snapshot))
 	if !ok || info == nil || uint64(index) >= uint64(len(value.Animations)) {
 		return C.DF_STATUS_ERROR
@@ -250,7 +250,7 @@ func bg_go_player_skin_animation_info(context C.uint64_t, snapshot C.uint64_t, i
 }
 
 //export bg_go_player_skin_read
-func bg_go_player_skin_read(context C.uint64_t, snapshot C.uint64_t, data *C.DfSkinData) C.DfStatus {
+func bg_go_player_skin_read(context C.uint64_t, invocation C.DfInvocationId, snapshot C.uint64_t, data *C.DfSkinData) C.DfStatus {
 	value, ok := resolveSkinSnapshot(uint64(context), uint64(snapshot))
 	if !ok || data == nil || len(value.Animations) > maxSkinAnimations || uint64(data.animation_capacity) < uint64(len(value.Animations)) {
 		return C.DF_STATUS_ERROR
@@ -290,12 +290,12 @@ func bg_go_player_skin_read(context C.uint64_t, snapshot C.uint64_t, data *C.DfS
 }
 
 //export bg_go_player_skin_close
-func bg_go_player_skin_close(context C.uint64_t, snapshot C.uint64_t) {
+func bg_go_player_skin_close(context C.uint64_t, invocation C.DfInvocationId, snapshot C.uint64_t) {
 	unregisterSkinSnapshot(uint64(context), uint64(snapshot))
 }
 
 //export bg_go_player_skin_set
-func bg_go_player_skin_set(context C.uint64_t, player C.DfPlayerId, view *C.DfSkinView) C.DfStatus {
+func bg_go_player_skin_set(context C.uint64_t, invocation C.DfInvocationId, player C.DfPlayerId, view *C.DfSkinView) C.DfStatus {
 	host, ok := resolveHost(uint64(context))
 	if !ok || view == nil || !validSkinViewPayload(view) {
 		return C.DF_STATUS_ERROR
@@ -351,7 +351,7 @@ func bg_go_player_skin_set(context C.uint64_t, player C.DfPlayerId, view *C.DfSk
 			}
 		}
 	}
-	if !host.SetPlayerSkin(playerID(player), value) {
+	if !host.SetPlayerSkin(InvocationID(invocation), playerID(player), value) {
 		return C.DF_STATUS_ERROR
 	}
 	return C.DF_STATUS_OK

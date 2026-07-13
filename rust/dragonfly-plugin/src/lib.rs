@@ -3,9 +3,14 @@
 extern crate self as dragonfly_plugin;
 
 use core::sync::atomic::{AtomicPtr, Ordering};
+use std::cell::Cell;
 
+pub mod block;
 pub mod form;
 mod item_nbt;
+pub mod world;
+
+pub use world::{Dimension, World};
 
 pub use dragonfly_plugin_macros::{Command, CommandEnum, plugin};
 
@@ -48,8 +53,34 @@ pub mod Event {
     pub use super::PlayerToggleSprintEventData as PlayerToggleSprint;
 }
 
-static HOST_API: AtomicPtr<dragonfly_plugin_sys::DfHostApiV5> =
+static HOST_API: AtomicPtr<dragonfly_plugin_sys::DfHostApiV7> =
     AtomicPtr::new(core::ptr::null_mut());
+
+std::thread_local! {
+    static CURRENT_INVOCATION: Cell<dragonfly_plugin_sys::DfInvocationId> = const { Cell::new(0) };
+}
+
+#[doc(hidden)]
+pub fn current_invocation() -> dragonfly_plugin_sys::DfInvocationId {
+    CURRENT_INVOCATION.get()
+}
+
+#[doc(hidden)]
+pub fn with_invocation<R>(
+    invocation: dragonfly_plugin_sys::DfInvocationId,
+    function: impl FnOnce() -> R,
+) -> R {
+    struct Restore(dragonfly_plugin_sys::DfInvocationId);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            CURRENT_INVOCATION.set(self.0);
+        }
+    }
+
+    let previous = CURRENT_INVOCATION.replace(invocation);
+    let _restore = Restore(previous);
+    function()
+}
 
 const MAX_SKIN_DATA_BYTES: u64 = 64 << 20;
 const MAX_SKIN_ANIMATIONS: usize = 256;
@@ -57,20 +88,21 @@ pub const MAX_SCOREBOARD_LINES: usize = 15;
 
 struct SkinSnapshot {
     context: u64,
+    invocation: dragonfly_plugin_sys::DfInvocationId,
     id: u64,
     close: dragonfly_plugin_sys::DfHostPlayerSkinCloseFn,
 }
 
 impl Drop for SkinSnapshot {
     fn drop(&mut self) {
-        unsafe { (self.close)(self.context, self.id) }
+        unsafe { (self.close)(self.context, self.invocation, self.id) }
     }
 }
 
 #[doc(hidden)]
 /// # Safety
 /// `host` must remain valid while plugin callbacks may execute.
-pub unsafe fn install_host(host: *const dragonfly_plugin_sys::DfHostApiV5) {
+pub unsafe fn install_host(host: *const dragonfly_plugin_sys::DfHostApiV7) {
     HOST_API.store(host.cast_mut(), Ordering::Release);
 }
 
@@ -259,7 +291,7 @@ impl ItemStack {
 
     fn from_snapshot(raw: &dragonfly_plugin_sys::DfItemStackSnapshot) -> Option<Self> {
         let host = host_api()?;
-        read_item_stack_snapshot(host, raw.snapshot, raw.info)
+        read_item_stack_snapshot(host, current_invocation(), raw.snapshot, raw.info)
     }
 
     pub fn potion(potion: Potion, count: u32) -> Self {
@@ -496,8 +528,14 @@ impl Inventory {
             return 0;
         };
         let mut value = 0;
-        if unsafe { size(host.context, self.raw_id(), &mut value) }
-            != dragonfly_plugin_sys::DF_STATUS_OK
+        if unsafe {
+            size(
+                host.context,
+                current_invocation(),
+                self.raw_id(),
+                &mut value,
+            )
+        } != dragonfly_plugin_sys::DF_STATUS_OK
         {
             return 0;
         }
@@ -512,7 +550,16 @@ impl Inventory {
         let slot = u32::try_from(slot).ok()?;
         read_item_stack(|host, snapshot, info| {
             let open = host.inventory_item_open?;
-            Some(unsafe { open(host.context, self.raw_id(), slot, snapshot, info) })
+            Some(unsafe {
+                open(
+                    host.context,
+                    current_invocation(),
+                    self.raw_id(),
+                    slot,
+                    snapshot,
+                    info,
+                )
+            })
         })
     }
 
@@ -524,7 +571,15 @@ impl Inventory {
         let Some(set) = host.inventory_item_set else {
             return;
         };
-        let _ = item.with_raw(|item| unsafe { set(host.context, self.raw_id(), slot, item) });
+        let _ = item.with_raw(|item| unsafe {
+            set(
+                host.context,
+                current_invocation(),
+                self.raw_id(),
+                slot,
+                item,
+            )
+        });
     }
 
     pub fn add_item(&self, item: &ItemStack) -> u32 {
@@ -534,7 +589,15 @@ impl Inventory {
         };
         item.with_raw(|item| {
             let mut added = 0;
-            let status = unsafe { add(host.context, self.raw_id(), item, &mut added) };
+            let status = unsafe {
+                add(
+                    host.context,
+                    current_invocation(),
+                    self.raw_id(),
+                    item,
+                    &mut added,
+                )
+            };
             if status == dragonfly_plugin_sys::DF_STATUS_OK {
                 added
             } else {
@@ -552,7 +615,7 @@ impl Inventory {
         let Some(clear) = host.inventory_clear_slot else {
             return;
         };
-        let _ = unsafe { clear(host.context, self.raw_id(), slot) };
+        let _ = unsafe { clear(host.context, current_invocation(), self.raw_id(), slot) };
     }
 
     pub fn clear(&self) {
@@ -560,19 +623,20 @@ impl Inventory {
         let Some(clear) = host.inventory_clear else {
             return;
         };
-        let _ = unsafe { clear(host.context, self.raw_id()) };
+        let _ = unsafe { clear(host.context, current_invocation(), self.raw_id()) };
     }
 }
 
 struct ItemSnapshot {
     context: u64,
+    invocation: dragonfly_plugin_sys::DfInvocationId,
     id: u64,
     close: dragonfly_plugin_sys::DfHostItemStackCloseFn,
 }
 
 impl Drop for ItemSnapshot {
     fn drop(&mut self) {
-        unsafe { (self.close)(self.context, self.id) }
+        unsafe { (self.close)(self.context, self.invocation, self.id) }
     }
 }
 
@@ -592,7 +656,7 @@ impl Player {
         let Some(close) = host.player_form_close else {
             return;
         };
-        let _ = unsafe { close(host.context, self.raw_id()) };
+        let _ = unsafe { close(host.context, current_invocation(), self.raw_id()) };
     }
 
     pub const fn inventory(&self) -> Inventory {
@@ -630,7 +694,13 @@ impl Player {
         };
         let _ = main_hand.with_raw(|main_hand| {
             off_hand.with_raw(|off_hand| unsafe {
-                set(host.context, self.raw_id(), main_hand, off_hand)
+                set(
+                    host.context,
+                    current_invocation(),
+                    self.raw_id(),
+                    main_hand,
+                    off_hand,
+                )
             })
         });
     }
@@ -640,13 +710,22 @@ impl Player {
         let Some(set) = host.player_held_slot_set else {
             return;
         };
-        let _ = unsafe { set(host.context, self.raw_id(), slot) };
+        let _ = unsafe { set(host.context, current_invocation(), self.raw_id(), slot) };
     }
 
     fn held_item(&self, hand: u32) -> Option<ItemStack> {
         read_item_stack(|host, snapshot, info| {
             let open = host.player_held_item_open?;
-            Some(unsafe { open(host.context, self.raw_id(), hand, snapshot, info) })
+            Some(unsafe {
+                open(
+                    host.context,
+                    current_invocation(),
+                    self.raw_id(),
+                    hand,
+                    snapshot,
+                    info,
+                )
+            })
         })
     }
 }
@@ -987,7 +1066,7 @@ impl Player {
             duration_milliseconds: duration_milliseconds(title.duration),
             fade_out_milliseconds: duration_milliseconds(title.fade_out),
         };
-        let _ = unsafe { send(host.context, self.raw_id(), view) };
+        let _ = unsafe { send(host.context, current_invocation(), self.raw_id(), view) };
     }
 
     pub fn send_scoreboard(&self, scoreboard: &Scoreboard) {
@@ -1007,7 +1086,7 @@ impl Player {
             padding: u8::from(scoreboard.padding),
             descending: u8::from(scoreboard.descending),
         };
-        let _ = unsafe { send(host.context, self.raw_id(), view) };
+        let _ = unsafe { send(host.context, current_invocation(), self.raw_id(), view) };
     }
 
     pub fn remove_scoreboard(&self) {
@@ -1015,7 +1094,7 @@ impl Player {
         let Some(remove) = host.player_scoreboard_remove else {
             return;
         };
-        let _ = unsafe { remove(host.context, self.raw_id()) };
+        let _ = unsafe { remove(host.context, current_invocation(), self.raw_id()) };
     }
 
     pub fn teleport(&self, position: Vec3) {
@@ -1054,7 +1133,7 @@ impl Player {
             return Rotation::default();
         };
         let mut raw = dragonfly_plugin_sys::DfRotation::default();
-        let _ = unsafe { read(host.context, self.raw_id(), &mut raw) };
+        let _ = unsafe { read(host.context, current_invocation(), self.raw_id(), &mut raw) };
         Rotation {
             yaw: raw.yaw,
             pitch: raw.pitch,
@@ -1122,7 +1201,7 @@ impl Player {
             },
             animation_count: animations.len() as u64,
         };
-        let _ = unsafe { set(host.context, self.raw_id(), &view) };
+        let _ = unsafe { set(host.context, current_invocation(), self.raw_id(), &view) };
     }
 
     fn send_text(&self, kind: u32, message: &str) {
@@ -1136,6 +1215,7 @@ impl Player {
         let _ = unsafe {
             send(
                 host.context,
+                current_invocation(),
                 self.raw_id(),
                 kind,
                 string_view_from_str(message),
@@ -1156,7 +1236,17 @@ impl Player {
             y: vector.y,
             z: vector.z,
         };
-        let _ = unsafe { transform(host.context, self.raw_id(), kind, raw, yaw, pitch) };
+        let _ = unsafe {
+            transform(
+                host.context,
+                current_invocation(),
+                self.raw_id(),
+                kind,
+                raw,
+                yaw,
+                pitch,
+            )
+        };
     }
 
     fn set_state(&self, kind: u32, number: f64, integer: i64) {
@@ -1168,7 +1258,15 @@ impl Player {
             return;
         };
         let value = dragonfly_plugin_sys::DfPlayerStateValue { number, integer };
-        let _ = unsafe { set(host.context, self.raw_id(), kind, value) };
+        let _ = unsafe {
+            set(
+                host.context,
+                current_invocation(),
+                self.raw_id(),
+                kind,
+                value,
+            )
+        };
     }
 
     fn set_entity_visible(&self, entity: Entity, visible: bool) {
@@ -1182,6 +1280,7 @@ impl Player {
         let _ = unsafe {
             change(
                 host.context,
+                current_invocation(),
                 self.raw_id(),
                 entity.raw_id(),
                 u8::from(visible),
@@ -1199,12 +1298,22 @@ impl Player {
 
         let mut snapshot_id = 0;
         let mut info = dragonfly_plugin_sys::DfSkinInfo::default();
-        let status = unsafe { open(host.context, self.raw_id(), &mut snapshot_id, &mut info) };
+        let invocation = current_invocation();
+        let status = unsafe {
+            open(
+                host.context,
+                invocation,
+                self.raw_id(),
+                &mut snapshot_id,
+                &mut info,
+            )
+        };
         if status != dragonfly_plugin_sys::DF_STATUS_OK {
             return None;
         }
         let snapshot = SkinSnapshot {
             context: host.context,
+            invocation,
             id: snapshot_id,
             close,
         };
@@ -1218,7 +1327,13 @@ impl Player {
         for index in 0..animation_count {
             let mut animation = dragonfly_plugin_sys::DfSkinAnimationInfo::default();
             let status = unsafe {
-                animation_info_fn(host.context, snapshot.id, index as u64, &mut animation)
+                animation_info_fn(
+                    host.context,
+                    snapshot.invocation,
+                    snapshot.id,
+                    index as u64,
+                    &mut animation,
+                )
             };
             if status != dragonfly_plugin_sys::DF_STATUS_OK {
                 return None;
@@ -1275,7 +1390,7 @@ impl Player {
             },
             animation_capacity: animation_buffers.len() as u64,
         };
-        let status = unsafe { read(host.context, snapshot.id, &mut data) };
+        let status = unsafe { read(host.context, snapshot.invocation, snapshot.id, &mut data) };
         if status != dragonfly_plugin_sys::DF_STATUS_OK {
             return None;
         }
@@ -1334,7 +1449,15 @@ impl Player {
             return dragonfly_plugin_sys::DfPlayerStateValue::default();
         };
         let mut value = dragonfly_plugin_sys::DfPlayerStateValue::default();
-        let _ = unsafe { get(host.context, self.raw_id(), kind, &mut value) };
+        let _ = unsafe {
+            get(
+                host.context,
+                current_invocation(),
+                self.raw_id(),
+                kind,
+                &mut value,
+            )
+        };
         value
     }
 
@@ -1482,7 +1605,15 @@ impl Player {
             infinite: u8::from(effect.infinite),
             particles_hidden: u8::from(effect.particles_hidden),
         };
-        let _ = unsafe { change(host.context, self.raw_id(), operation, raw) };
+        let _ = unsafe {
+            change(
+                host.context,
+                current_invocation(),
+                self.raw_id(),
+                operation,
+                raw,
+            )
+        };
     }
 }
 
@@ -2037,13 +2168,13 @@ fn slice_pointer<T>(value: &[T]) -> *const T {
     }
 }
 
-fn host_api() -> Option<&'static dragonfly_plugin_sys::DfHostApiV5> {
+fn host_api() -> Option<&'static dragonfly_plugin_sys::DfHostApiV7> {
     unsafe { HOST_API.load(Ordering::Acquire).as_ref() }
 }
 
 fn read_item_stack(
     open: impl FnOnce(
-        &dragonfly_plugin_sys::DfHostApiV5,
+        &dragonfly_plugin_sys::DfHostApiV7,
         *mut u64,
         *mut dragonfly_plugin_sys::DfItemStackInfo,
     ) -> Option<dragonfly_plugin_sys::DfStatus>,
@@ -2057,14 +2188,16 @@ fn read_item_stack(
     }
     let snapshot = ItemSnapshot {
         context: host.context,
+        invocation: current_invocation(),
         id: snapshot_id,
         close,
     };
-    read_item_stack_snapshot(host, snapshot.id, info)
+    read_item_stack_snapshot(host, snapshot.invocation, snapshot.id, info)
 }
 
 fn read_item_stack_snapshot(
-    host: &dragonfly_plugin_sys::DfHostApiV5,
+    host: &dragonfly_plugin_sys::DfHostApiV7,
+    invocation: dragonfly_plugin_sys::DfInvocationId,
     snapshot_id: u64,
     info: dragonfly_plugin_sys::DfItemStackInfo,
 ) -> Option<ItemStack> {
@@ -2119,7 +2252,9 @@ fn read_item_stack_snapshot(
         },
         enchantment_capacity: enchantments.len() as u64,
     };
-    if unsafe { read(host.context, snapshot_id, &mut data) } != dragonfly_plugin_sys::DF_STATUS_OK {
+    if unsafe { read(host.context, invocation, snapshot_id, &mut data) }
+        != dragonfly_plugin_sys::DF_STATUS_OK
+    {
         return None;
     }
     finish_buffer(&mut identifier, data.identifier)?;
@@ -3128,6 +3263,39 @@ pub trait Plugin: Default + Send + Sync + 'static {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn invocation_scope_restores_nested_value() {
+        assert_eq!(current_invocation(), 0);
+        with_invocation(11, || {
+            assert_eq!(current_invocation(), 11);
+            with_invocation(22, || assert_eq!(current_invocation(), 22));
+            assert_eq!(current_invocation(), 11);
+        });
+        assert_eq!(current_invocation(), 0);
+    }
+
+    #[test]
+    fn invocation_scope_restores_value_after_panic() {
+        let panic = std::panic::catch_unwind(|| {
+            with_invocation(33, || panic!("test panic"));
+        });
+        assert!(panic.is_err());
+        assert_eq!(current_invocation(), 0);
+    }
+
+    #[test]
+    fn invocation_scope_is_thread_local() {
+        with_invocation(44, || {
+            let child = std::thread::spawn(|| {
+                assert_eq!(current_invocation(), 0);
+                with_invocation(55, current_invocation)
+            });
+            assert_eq!(child.join().unwrap(), 55);
+            assert_eq!(current_invocation(), 44);
+        });
+        assert_eq!(current_invocation(), 0);
+    }
 
     #[test]
     fn scoreboard_enforces_protocol_limit_and_matches_line_semantics() {

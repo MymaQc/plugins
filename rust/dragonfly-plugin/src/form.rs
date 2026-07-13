@@ -506,13 +506,21 @@ where
         response: Some(respond::<F, C>),
         drop: Some(drop_completion::<F, C>),
     };
-    if unsafe { send(host.context, player.raw_id(), &view) } != crate::__private::sys::DF_STATUS_OK
+    if unsafe {
+        send(
+            host.context,
+            crate::current_invocation(),
+            player.raw_id(),
+            &view,
+        )
+    } != crate::__private::sys::DF_STATUS_OK
     {
         unsafe { drop(Box::from_raw(context.cast::<Completion<F, C>>())) };
     }
 }
 unsafe extern "C" fn respond<F, C>(
     context: *mut c_void,
+    invocation: crate::__private::sys::DfInvocationId,
     submitter: crate::__private::sys::DfPlayerId,
     outcome: u32,
     response: crate::__private::sys::DfStringView,
@@ -526,25 +534,27 @@ where
     }
     let completion = unsafe { Box::from_raw(context.cast::<Completion<F, C>>()) };
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let value = if outcome == crate::__private::sys::DF_FORM_RESPONSE_CLOSED {
-            None
-        } else if outcome == crate::__private::sys::DF_FORM_RESPONSE_SUBMITTED {
-            let bytes = if response.len == 0 {
-                &[][..]
-            } else if response.data.is_null() {
-                return false;
+        crate::with_invocation(invocation, || {
+            let value = if outcome == crate::__private::sys::DF_FORM_RESPONSE_CLOSED {
+                None
+            } else if outcome == crate::__private::sys::DF_FORM_RESPONSE_SUBMITTED {
+                let bytes = if response.len == 0 {
+                    &[][..]
+                } else if response.data.is_null() {
+                    return false;
+                } else {
+                    unsafe { core::slice::from_raw_parts(response.data, response.len as usize) }
+                };
+                let Some(parsed) = completion.form.parse_response(bytes) else {
+                    return false;
+                };
+                Some(parsed)
             } else {
-                unsafe { core::slice::from_raw_parts(response.data, response.len as usize) }
-            };
-            let Some(parsed) = completion.form.parse_response(bytes) else {
                 return false;
             };
-            Some(parsed)
-        } else {
-            return false;
-        };
-        (completion.callback)(Player::from_id(submitter), value);
-        true
+            (completion.callback)(Player::from_id(submitter), value);
+            true
+        })
     }));
     if matches!(result, Ok(true)) {
         crate::__private::sys::DF_STATUS_OK
