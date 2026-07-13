@@ -2,8 +2,8 @@
 
 use core::ffi::c_void;
 
-pub const DF_ABI_VERSION: u32 = 1;
-pub const DF_HOST_ABI_VERSION: u32 = 13;
+pub const DF_ABI_VERSION: u32 = 2;
+pub const DF_HOST_ABI_VERSION: u32 = 14;
 pub const DF_STATUS_OK: DfStatus = 0;
 pub const DF_STATUS_ERROR: DfStatus = 1;
 pub type DfStatus = i32;
@@ -126,6 +126,7 @@ pub const DF_ENTITY_ENDER_PEARL: u32 = 9;
 pub const DF_ENTITY_BOTTLE_OF_ENCHANTING: u32 = 10;
 pub const DF_ENTITY_SPLASH_POTION: u32 = 11;
 pub const DF_ENTITY_LINGERING_POTION: u32 = 12;
+pub const DF_ENTITY_CUSTOM: u32 = 13;
 pub const DF_ENTITY_ARROW_CRITICAL: u32 = 1;
 pub const DF_ENTITY_ARROW_DISABLE_PICKUP: u32 = 2;
 pub const DF_ENTITY_ARROW_OBTAIN_ON_PICKUP: u32 = 4;
@@ -145,7 +146,10 @@ pub struct DfPlayerIdBuffer { pub data: *mut DfPlayerId, pub len: u64, pub capac
 pub struct DfEntitySpawnOptions { pub position: DfVec3, pub rotation: DfRotation, pub velocity: DfVec3, pub name_tag: DfStringView }
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
-pub struct DfEntitySpawnViewV1 { pub kind: u32, pub flags: u32, pub options: DfEntitySpawnOptions, pub owner: DfEntityId, pub damage: f64, pub fuse_milliseconds: u64, pub experience: i32, pub potion: u32, pub punch_level: i32, pub piercing_level: i32, pub text: DfStringView, pub item: *const DfItemStackViewV3, pub block: *const DfBlockView }
+pub struct DfEntityTypeDescriptorV1 { pub save_id: DfStringView, pub network_id: DfStringView, pub min: DfVec3, pub max: DfVec3 }
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct DfEntitySpawnViewV2 { pub kind: u32, pub flags: u32, pub options: DfEntitySpawnOptions, pub owner: DfEntityId, pub damage: f64, pub fuse_milliseconds: u64, pub experience: i32, pub potion: u32, pub punch_level: i32, pub piercing_level: i32, pub text: DfStringView, pub custom_type: DfStringView, pub item: *const DfItemStackViewV3, pub block: *const DfBlockView }
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct DfEntityState { pub position: DfVec3, pub rotation: DfRotation, pub velocity: DfVec3, pub capabilities: u32, pub world: DfWorldId, pub entity_type: DfStringBuffer, pub name_tag: DfStringBuffer }
@@ -404,7 +408,7 @@ pub type DfHostWorldTimeGetFn = unsafe extern "C" fn(context: u64, invocation: D
 pub type DfHostWorldTimeSetFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, world: DfWorldId, time: i64) -> DfStatus;
 pub type DfHostWorldSpawnGetFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, world: DfWorldId, position: *mut DfBlockPos) -> DfStatus;
 pub type DfHostWorldSpawnSetFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, world: DfWorldId, position: DfBlockPos) -> DfStatus;
-pub type DfHostWorldEntitySpawnFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, world: DfWorldId, entity: *const DfEntitySpawnViewV1, output: *mut DfEntityId) -> DfStatus;
+pub type DfHostWorldEntitySpawnFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, world: DfWorldId, entity: *const DfEntitySpawnViewV2, output: *mut DfEntityId) -> DfStatus;
 pub type DfHostWorldEntitiesFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, world: DfWorldId, output: *mut DfEntityIdBuffer) -> DfStatus;
 pub type DfHostWorldPlayersFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, world: DfWorldId, output: *mut DfPlayerIdBuffer) -> DfStatus;
 pub type DfHostEntityStateFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, entity: DfEntityId, state: *mut DfEntityState) -> DfStatus;
@@ -417,7 +421,7 @@ pub type DfHostWorldSoundPlayFn = unsafe extern "C" fn(context: u64, invocation:
 pub type DfHostPlayerSoundPlayFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, player: DfPlayerId, sound: *const DfSoundViewV1) -> DfStatus;
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
-pub struct DfHostApiV13 { pub abi_version: u32, pub struct_size: u32, pub context: u64, pub player_text: Option<DfHostPlayerTextFn>, pub player_title: Option<DfHostPlayerTitleFn>, pub player_transform: Option<DfHostPlayerTransformFn>, pub player_rotation: Option<DfHostPlayerRotationFn>, pub player_state_set: Option<DfHostPlayerStateSetFn>, pub player_state_get: Option<DfHostPlayerStateGetFn>, pub player_effect: Option<DfHostPlayerEffectFn>, pub player_entity_visibility: Option<DfHostPlayerEntityVisibilityFn>, pub player_skin_open: Option<DfHostPlayerSkinOpenFn>, pub player_skin_animation_info: Option<DfHostPlayerSkinAnimationInfoFn>, pub player_skin_read: Option<DfHostPlayerSkinReadFn>, pub player_skin_close: Option<DfHostPlayerSkinCloseFn>, pub player_skin_set: Option<DfHostPlayerSkinSetFn>, pub inventory_size: Option<DfHostInventorySizeFn>, pub inventory_item_open: Option<DfHostInventoryItemOpenFn>, pub player_held_item_open: Option<DfHostPlayerHeldItemOpenFn>, pub item_stack_read: Option<DfHostItemStackReadFn>, pub item_stack_close: Option<DfHostItemStackCloseFn>, pub inventory_item_set: Option<DfHostInventoryItemSetFn>, pub inventory_item_add: Option<DfHostInventoryItemAddFn>, pub inventory_clear_slot: Option<DfHostInventoryClearSlotFn>, pub inventory_clear: Option<DfHostInventoryClearFn>, pub player_held_items_set: Option<DfHostPlayerHeldItemsSetFn>, pub player_held_slot_set: Option<DfHostPlayerHeldSlotSetFn>, pub player_scoreboard: Option<DfHostPlayerScoreboardFn>, pub player_scoreboard_remove: Option<DfHostPlayerScoreboardRemoveFn>, pub player_form_send: Option<DfHostPlayerFormSendFn>, pub player_form_close: Option<DfHostPlayerFormCloseFn>, pub world_lookup: Option<DfHostWorldLookupFn>, pub world_open: Option<DfHostWorldOpenFn>, pub world_name: Option<DfHostWorldNameFn>, pub world_unload: Option<DfHostWorldUnloadFn>, pub world_save: Option<DfHostWorldSaveFn>, pub world_block_get: Option<DfHostWorldBlockGetFn>, pub world_block_set: Option<DfHostWorldBlockSetFn>, pub world_time_get: Option<DfHostWorldTimeGetFn>, pub world_time_set: Option<DfHostWorldTimeSetFn>, pub world_spawn_get: Option<DfHostWorldSpawnGetFn>, pub world_spawn_set: Option<DfHostWorldSpawnSetFn>, pub world_entity_spawn: Option<DfHostWorldEntitySpawnFn>, pub world_entities: Option<DfHostWorldEntitiesFn>, pub world_players: Option<DfHostWorldPlayersFn>, pub entity_state: Option<DfHostEntityStateFn>, pub entity_teleport: Option<DfHostEntityTeleportFn>, pub entity_velocity_set: Option<DfHostEntityVelocitySetFn>, pub entity_name_tag_set: Option<DfHostEntityNameTagSetFn>, pub entity_despawn: Option<DfHostEntityDespawnFn>, pub world_particle_add: Option<DfHostWorldParticleAddFn>, pub world_sound_play: Option<DfHostWorldSoundPlayFn>, pub player_sound_play: Option<DfHostPlayerSoundPlayFn>, pub player_heal: Option<DfHostPlayerHealFn>, pub player_hurt: Option<DfHostPlayerHurtFn>, pub skin_snapshot_info: Option<DfHostSkinSnapshotInfoFn>, pub skin_snapshot_set: Option<DfHostSkinSnapshotSetFn> }
+pub struct DfHostApiV14 { pub abi_version: u32, pub struct_size: u32, pub context: u64, pub player_text: Option<DfHostPlayerTextFn>, pub player_title: Option<DfHostPlayerTitleFn>, pub player_transform: Option<DfHostPlayerTransformFn>, pub player_rotation: Option<DfHostPlayerRotationFn>, pub player_state_set: Option<DfHostPlayerStateSetFn>, pub player_state_get: Option<DfHostPlayerStateGetFn>, pub player_effect: Option<DfHostPlayerEffectFn>, pub player_entity_visibility: Option<DfHostPlayerEntityVisibilityFn>, pub player_skin_open: Option<DfHostPlayerSkinOpenFn>, pub player_skin_animation_info: Option<DfHostPlayerSkinAnimationInfoFn>, pub player_skin_read: Option<DfHostPlayerSkinReadFn>, pub player_skin_close: Option<DfHostPlayerSkinCloseFn>, pub player_skin_set: Option<DfHostPlayerSkinSetFn>, pub inventory_size: Option<DfHostInventorySizeFn>, pub inventory_item_open: Option<DfHostInventoryItemOpenFn>, pub player_held_item_open: Option<DfHostPlayerHeldItemOpenFn>, pub item_stack_read: Option<DfHostItemStackReadFn>, pub item_stack_close: Option<DfHostItemStackCloseFn>, pub inventory_item_set: Option<DfHostInventoryItemSetFn>, pub inventory_item_add: Option<DfHostInventoryItemAddFn>, pub inventory_clear_slot: Option<DfHostInventoryClearSlotFn>, pub inventory_clear: Option<DfHostInventoryClearFn>, pub player_held_items_set: Option<DfHostPlayerHeldItemsSetFn>, pub player_held_slot_set: Option<DfHostPlayerHeldSlotSetFn>, pub player_scoreboard: Option<DfHostPlayerScoreboardFn>, pub player_scoreboard_remove: Option<DfHostPlayerScoreboardRemoveFn>, pub player_form_send: Option<DfHostPlayerFormSendFn>, pub player_form_close: Option<DfHostPlayerFormCloseFn>, pub world_lookup: Option<DfHostWorldLookupFn>, pub world_open: Option<DfHostWorldOpenFn>, pub world_name: Option<DfHostWorldNameFn>, pub world_unload: Option<DfHostWorldUnloadFn>, pub world_save: Option<DfHostWorldSaveFn>, pub world_block_get: Option<DfHostWorldBlockGetFn>, pub world_block_set: Option<DfHostWorldBlockSetFn>, pub world_time_get: Option<DfHostWorldTimeGetFn>, pub world_time_set: Option<DfHostWorldTimeSetFn>, pub world_spawn_get: Option<DfHostWorldSpawnGetFn>, pub world_spawn_set: Option<DfHostWorldSpawnSetFn>, pub world_entity_spawn: Option<DfHostWorldEntitySpawnFn>, pub world_entities: Option<DfHostWorldEntitiesFn>, pub world_players: Option<DfHostWorldPlayersFn>, pub entity_state: Option<DfHostEntityStateFn>, pub entity_teleport: Option<DfHostEntityTeleportFn>, pub entity_velocity_set: Option<DfHostEntityVelocitySetFn>, pub entity_name_tag_set: Option<DfHostEntityNameTagSetFn>, pub entity_despawn: Option<DfHostEntityDespawnFn>, pub world_particle_add: Option<DfHostWorldParticleAddFn>, pub world_sound_play: Option<DfHostWorldSoundPlayFn>, pub player_sound_play: Option<DfHostPlayerSoundPlayFn>, pub player_heal: Option<DfHostPlayerHealFn>, pub player_hurt: Option<DfHostPlayerHurtFn>, pub skin_snapshot_info: Option<DfHostSkinSnapshotInfoFn>, pub skin_snapshot_set: Option<DfHostSkinSnapshotSetFn> }
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct DfCommandParameter { pub kind: u32, pub optional: u8, pub name: DfStringView, pub values: *const DfStringView, pub value_count: u64 }
@@ -992,20 +996,22 @@ pub struct DfPlayerSkinChangeState {
 pub type DfPluginCreateFn = unsafe extern "C" fn() -> *mut c_void;
 pub type DfPluginLifecycleFn = unsafe extern "C" fn(instance: *mut c_void) -> DfStatus;
 pub type DfPluginCommandsFn = unsafe extern "C" fn(instance: *mut c_void, count: *mut u64) -> *const DfCommandDescriptor;
+pub type DfPluginEntityTypesFn = unsafe extern "C" fn(instance: *mut c_void, count: *mut u64) -> *const DfEntityTypeDescriptorV1;
 pub type DfHandleCommandFn = unsafe extern "C" fn(instance: *mut c_void, command: u64, input: *const DfCommandInput, state: *mut DfCommandState) -> DfStatus;
 pub type DfCommandEnumOptionsFn = unsafe extern "C" fn(instance: *mut c_void, command: u64, overload: u64, parameter: u64, context: *const DfCommandEnumContext, output: *mut DfStringBuffer) -> DfStatus;
-pub type DfPluginSetHostFn = unsafe extern "C" fn(instance: *mut c_void, host: *const DfHostApiV13) -> DfStatus;
+pub type DfPluginSetHostFn = unsafe extern "C" fn(instance: *mut c_void, host: *const DfHostApiV14) -> DfStatus;
 pub type DfPluginDestroyFn = unsafe extern "C" fn(instance: *mut c_void);
 pub type DfHandleEventFn = unsafe extern "C" fn(instance: *mut c_void, event_id: DfEventId, input: *const c_void, state: *mut c_void) -> DfStatus;
 
 #[repr(C)]
-pub struct DfPluginApiV1 {
+pub struct DfPluginApiV2 {
     pub header: DfAbiHeader,
     pub plugin_id: DfStringView,
     pub create: Option<DfPluginCreateFn>,
     pub enable: Option<DfPluginLifecycleFn>,
     pub disable: Option<DfPluginLifecycleFn>,
     pub commands: Option<DfPluginCommandsFn>,
+    pub entity_types: Option<DfPluginEntityTypesFn>,
     pub handle_command: Option<DfHandleCommandFn>,
     pub command_enum_options: Option<DfCommandEnumOptionsFn>,
     pub set_host: Option<DfPluginSetHostFn>,
@@ -1013,6 +1019,6 @@ pub struct DfPluginApiV1 {
     pub handle_event: Option<DfHandleEventFn>,
 }
 
-pub type DfPluginEntryV1Fn = unsafe extern "C" fn() -> *const DfPluginApiV1;
+pub type DfPluginEntryV2Fn = unsafe extern "C" fn() -> *const DfPluginApiV2;
 
-unsafe impl Sync for DfPluginApiV1 {}
+unsafe impl Sync for DfPluginApiV2 {}

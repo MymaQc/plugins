@@ -257,6 +257,12 @@ func (m *WorldManager) newEntityHandle(tx *world.Tx, value native.EntitySpawn) (
 				}
 			}
 		}
+	case native.EntityCustom:
+		entityType, found := tx.World().EntityRegistry().Lookup(value.Type)
+		foreign, owned := entityType.(*foreignBaseEntityType)
+		if found && owned {
+			handle = opts.New(foreign, foreignBaseEntityConfig{})
+		}
 	default:
 		owner, ok := m.entityHandles.Resolve(value.Owner, tx)
 		if !ok {
@@ -302,9 +308,10 @@ func (m *WorldManager) newEntityHandle(tx *world.Tx, value native.EntitySpawn) (
 }
 
 func validEntitySpawn(value native.EntitySpawn) bool {
-	return value.Kind <= native.EntityLingeringPotion && finiteVec3(value.Position) && finiteVec3(value.Velocity) &&
+	return value.Kind <= native.EntityCustom && finiteVec3(value.Position) && finiteVec3(value.Velocity) &&
 		finiteFloat(value.Rotation.Yaw) && finiteFloat(value.Rotation.Pitch) && finiteFloat(value.Damage) &&
-		value.Experience >= 0 && value.Punch >= 0 && value.Piercing >= 0 && value.Potion <= math.MaxUint8
+		value.Experience >= 0 && value.Punch >= 0 && value.Piercing >= 0 && value.Potion <= math.MaxUint8 &&
+		(value.Kind != native.EntityCustom || value.Type != "")
 }
 
 func finiteVec3(value native.Vec3) bool {

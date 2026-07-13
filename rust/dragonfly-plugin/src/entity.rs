@@ -486,6 +486,84 @@ impl LingeringPotion {
     }
 }
 
+/// Static definition of a plugin-owned base entity type.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Definition {
+    identifier: &'static str,
+    network_identifier: &'static str,
+    bounds: [f64; 6],
+}
+
+impl Definition {
+    #[doc(hidden)]
+    pub const fn new(
+        identifier: &'static str,
+        network_identifier: &'static str,
+        bounds: [f64; 6],
+    ) -> Self {
+        Self {
+            identifier,
+            network_identifier,
+            bounds,
+        }
+    }
+
+    pub const fn identifier(self) -> &'static str {
+        self.identifier
+    }
+
+    pub const fn network_identifier(self) -> &'static str {
+        self.network_identifier
+    }
+
+    /// Returns `[min_x, min_y, min_z, max_x, max_y, max_z]`.
+    pub const fn bounds(self) -> [f64; 6] {
+        self.bounds
+    }
+}
+
+/// Implemented by unit structs annotated with `#[dragonfly::entity]`.
+pub trait CustomType {
+    const DEFINITION: Definition;
+}
+
+#[doc(hidden)]
+#[repr(transparent)]
+pub struct RegisteredType(dragonfly_plugin_sys::DfEntityTypeDescriptorV1);
+
+impl RegisteredType {
+    pub const fn new(definition: Definition) -> Self {
+        let bounds = definition.bounds();
+        Self(dragonfly_plugin_sys::DfEntityTypeDescriptorV1 {
+            save_id: dragonfly_plugin_sys::DfStringView {
+                data: definition.identifier().as_ptr(),
+                len: definition.identifier().len() as u64,
+            },
+            network_id: dragonfly_plugin_sys::DfStringView {
+                data: definition.network_identifier().as_ptr(),
+                len: definition.network_identifier().len() as u64,
+            },
+            min: dragonfly_plugin_sys::DfVec3 {
+                x: bounds[0],
+                y: bounds[1],
+                z: bounds[2],
+            },
+            max: dragonfly_plugin_sys::DfVec3 {
+                x: bounds[3],
+                y: bounds[4],
+                z: bounds[5],
+            },
+        })
+    }
+}
+
+// The descriptor only contains pointers to static UTF-8 strings.
+unsafe impl Sync for RegisteredType {}
+
+#[linkme::distributed_slice]
+#[doc(hidden)]
+pub static REGISTERED_TYPES: [RegisteredType] = [..];
+
 mod private {
     pub trait Sealed {}
 }
@@ -513,6 +591,7 @@ pub(crate) enum SpawnKind {
     BottleOfEnchanting,
     SplashPotion,
     LingeringPotion,
+    Custom,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -547,6 +626,7 @@ pub(crate) enum SpawnPayload {
         owner: Entity,
         potion: Potion,
     },
+    Custom(&'static str),
 }
 
 /// Internal, owned representation passed from a typed descriptor to the SDK's
@@ -562,10 +642,10 @@ impl EncodedSpawnable {
     pub(crate) fn with_raw<R>(
         &self,
         options: &SpawnOptions,
-        callback: impl FnOnce(&dragonfly_plugin_sys::DfEntitySpawnViewV1) -> R,
+        callback: impl FnOnce(&dragonfly_plugin_sys::DfEntitySpawnViewV2) -> R,
     ) -> Option<R> {
         let mut callback = Some(callback);
-        let mut view = dragonfly_plugin_sys::DfEntitySpawnViewV1 {
+        let mut view = dragonfly_plugin_sys::DfEntitySpawnViewV2 {
             kind: 0,
             flags: 0,
             options: dragonfly_plugin_sys::DfEntitySpawnOptions {
@@ -584,6 +664,7 @@ impl EncodedSpawnable {
             text: dragonfly_plugin_sys::DfStringView::default(),
             item: core::ptr::null(),
             block: core::ptr::null(),
+            custom_type: dragonfly_plugin_sys::DfStringView::default(),
         };
         match &self.payload {
             SpawnPayload::Text(text) => {
@@ -697,15 +778,31 @@ impl EncodedSpawnable {
                     callback.take()?,
                 )
             }
+            SpawnPayload::Custom(identifier) => {
+                view.kind = dragonfly_plugin_sys::DF_ENTITY_CUSTOM;
+                view.custom_type = crate::string_view_from_str(identifier);
+                Some(callback.take()?(&view))
+            }
+        }
+    }
+}
+
+impl<T: CustomType> private::Sealed for T {}
+
+impl<T: CustomType> Spawnable for T {
+    fn encode(&self) -> EncodedSpawnable {
+        EncodedSpawnable {
+            kind: SpawnKind::Custom,
+            payload: SpawnPayload::Custom(T::DEFINITION.identifier()),
         }
     }
 }
 
 fn encode_owner_projectile<R>(
-    view: &mut dragonfly_plugin_sys::DfEntitySpawnViewV1,
+    view: &mut dragonfly_plugin_sys::DfEntitySpawnViewV2,
     kind: u32,
     owner: Entity,
-    callback: impl FnOnce(&dragonfly_plugin_sys::DfEntitySpawnViewV1) -> R,
+    callback: impl FnOnce(&dragonfly_plugin_sys::DfEntitySpawnViewV2) -> R,
 ) -> Option<R> {
     view.kind = kind;
     view.owner = owner.raw_id();

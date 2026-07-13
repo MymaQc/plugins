@@ -116,7 +116,13 @@ const (
 	EntityBottleOfEnchanting
 	EntitySplashPotion
 	EntityLingeringPotion
+	EntityCustom
 )
+
+type EntityTypeDefinition struct {
+	SaveID, NetworkID string
+	Min, Max          Vec3
+}
 
 const (
 	EntityArrowCritical uint32 = 1 << iota
@@ -134,7 +140,7 @@ type EntitySpawn struct {
 	Flags                       uint32
 	Position, Velocity          Vec3
 	Rotation                    Rotation
-	NameTag, Text               string
+	NameTag, Text, Type         string
 	Owner                       EntityID
 	Damage                      float64
 	FuseMilliseconds            uint64

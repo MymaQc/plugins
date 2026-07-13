@@ -11,4 +11,5 @@ name = "dragonfly"
 [dependencies]
 dragonfly-plugin-macros = { path = "../dragonfly-plugin-macros" }
 dragonfly-plugin-sys = { path = "../dragonfly-plugin-sys" }
+linkme = "0.3.36"
 serde_json = "1"

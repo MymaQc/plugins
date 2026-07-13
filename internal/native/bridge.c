@@ -44,7 +44,10 @@ _Static_assert(sizeof(DfEffectView) == 32, "DfEffectView ABI layout changed");
 _Static_assert(offsetof(DfEffectView, potency) == 16, "DfEffectView.potency ABI offset changed");
 _Static_assert(offsetof(DfEffectView, mode) == 24, "DfEffectView.mode ABI offset changed");
 _Static_assert(sizeof(DfEntitySpawnOptions) == 80, "DfEntitySpawnOptions ABI layout changed");
-_Static_assert(sizeof(DfEntitySpawnViewV1) == 176, "DfEntitySpawnViewV1 ABI layout changed");
+_Static_assert(sizeof(DfEntityTypeDescriptorV1) == 80, "DfEntityTypeDescriptorV1 ABI layout changed");
+_Static_assert(sizeof(DfEntitySpawnViewV2) == 192, "DfEntitySpawnViewV2 ABI layout changed");
+_Static_assert(sizeof(DfPluginApiV2) == 112, "DfPluginApiV2 ABI layout changed");
+_Static_assert(offsetof(DfPluginApiV2, entity_types) == 64, "DfPluginApiV2.entity_types ABI offset changed");
 _Static_assert(sizeof(DfEntityState) == 128, "DfEntityState ABI layout changed");
 _Static_assert(offsetof(DfEntityState, world) == 72, "DfEntityState.world ABI offset changed");
 _Static_assert(sizeof(DfParticleViewV1) == 40, "DfParticleViewV1 ABI layout changed");
@@ -52,16 +55,16 @@ _Static_assert(offsetof(DfParticleViewV1, block) == 32, "DfParticleViewV1.block 
 _Static_assert(sizeof(DfSoundViewV1) == 40, "DfSoundViewV1 ABI layout changed");
 _Static_assert(offsetof(DfSoundViewV1, scalar) == 16, "DfSoundViewV1.scalar ABI offset changed");
 _Static_assert(offsetof(DfSoundViewV1, item) == 32, "DfSoundViewV1.item ABI offset changed");
-_Static_assert(sizeof(DfHostApiV13) == 448, "DfHostApiV13 ABI layout changed");
-_Static_assert(offsetof(DfHostApiV13, player_skin_open) == 80, "DfHostApiV13.player_skin_open ABI offset changed");
-_Static_assert(offsetof(DfHostApiV13, player_skin_set) == 112, "DfHostApiV13.player_skin_set ABI offset changed");
-_Static_assert(offsetof(DfHostApiV13, inventory_size) == 120, "DfHostApiV13.inventory_size ABI offset changed");
-_Static_assert(offsetof(DfHostApiV13, player_held_slot_set) == 200, "DfHostApiV13.player_held_slot_set ABI offset changed");
-_Static_assert(offsetof(DfHostApiV13, player_scoreboard) == 208, "DfHostApiV13.player_scoreboard ABI offset changed");
-_Static_assert(offsetof(DfHostApiV13, player_heal) == 416, "DfHostApiV13.player_heal ABI offset changed");
-_Static_assert(offsetof(DfHostApiV13, player_hurt) == 424, "DfHostApiV13.player_hurt ABI offset changed");
-_Static_assert(offsetof(DfHostApiV13, skin_snapshot_info) == 432, "DfHostApiV13.skin_snapshot_info ABI offset changed");
-_Static_assert(offsetof(DfHostApiV13, skin_snapshot_set) == 440, "DfHostApiV13.skin_snapshot_set ABI offset changed");
+_Static_assert(sizeof(DfHostApiV14) == 448, "DfHostApiV14 ABI layout changed");
+_Static_assert(offsetof(DfHostApiV14, player_skin_open) == 80, "DfHostApiV14.player_skin_open ABI offset changed");
+_Static_assert(offsetof(DfHostApiV14, player_skin_set) == 112, "DfHostApiV14.player_skin_set ABI offset changed");
+_Static_assert(offsetof(DfHostApiV14, inventory_size) == 120, "DfHostApiV14.inventory_size ABI offset changed");
+_Static_assert(offsetof(DfHostApiV14, player_held_slot_set) == 200, "DfHostApiV14.player_held_slot_set ABI offset changed");
+_Static_assert(offsetof(DfHostApiV14, player_scoreboard) == 208, "DfHostApiV14.player_scoreboard ABI offset changed");
+_Static_assert(offsetof(DfHostApiV14, player_heal) == 416, "DfHostApiV14.player_heal ABI offset changed");
+_Static_assert(offsetof(DfHostApiV14, player_hurt) == 424, "DfHostApiV14.player_hurt ABI offset changed");
+_Static_assert(offsetof(DfHostApiV14, skin_snapshot_info) == 432, "DfHostApiV14.skin_snapshot_info ABI offset changed");
+_Static_assert(offsetof(DfHostApiV14, skin_snapshot_set) == 440, "DfHostApiV14.skin_snapshot_set ABI offset changed");
 #endif
 
 extern DfStatus bg_go_player_text(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfStringView message);
@@ -110,7 +113,7 @@ extern DfStatus bg_go_world_time_get(uint64_t context, DfInvocationId invocation
 extern DfStatus bg_go_world_time_set(uint64_t context, DfInvocationId invocation, DfWorldId world, int64_t time);
 extern DfStatus bg_go_world_spawn_get(uint64_t context, DfInvocationId invocation, DfWorldId world, DfBlockPos *position);
 extern DfStatus bg_go_world_spawn_set(uint64_t context, DfInvocationId invocation, DfWorldId world, DfBlockPos position);
-extern DfStatus bg_go_world_entity_spawn(uint64_t context, DfInvocationId invocation, DfWorldId world, const DfEntitySpawnViewV1 *entity, DfEntityId *output);
+extern DfStatus bg_go_world_entity_spawn(uint64_t context, DfInvocationId invocation, DfWorldId world, const DfEntitySpawnViewV2 *entity, DfEntityId *output);
 extern DfStatus bg_go_world_entities(uint64_t context, DfInvocationId invocation, DfWorldId world, DfEntityIdBuffer *output);
 extern DfStatus bg_go_world_players(uint64_t context, DfInvocationId invocation, DfWorldId world, DfPlayerIdBuffer *output);
 extern DfStatus bg_go_entity_state(uint64_t context, DfInvocationId invocation, DfEntityId entity, DfEntityState *state);
@@ -222,7 +225,7 @@ static DfStatus host_world_time_get(uint64_t context, DfInvocationId invocation,
 static DfStatus host_world_time_set(uint64_t context, DfInvocationId invocation, DfWorldId world, int64_t time) { return bg_go_world_time_set(context, invocation, world, time); }
 static DfStatus host_world_spawn_get(uint64_t context, DfInvocationId invocation, DfWorldId world, DfBlockPos *position) { return bg_go_world_spawn_get(context, invocation, world, position); }
 static DfStatus host_world_spawn_set(uint64_t context, DfInvocationId invocation, DfWorldId world, DfBlockPos position) { return bg_go_world_spawn_set(context, invocation, world, position); }
-static DfStatus host_world_entity_spawn(uint64_t context, DfInvocationId invocation, DfWorldId world, const DfEntitySpawnViewV1 *entity, DfEntityId *output) { return bg_go_world_entity_spawn(context, invocation, world, entity, output); }
+static DfStatus host_world_entity_spawn(uint64_t context, DfInvocationId invocation, DfWorldId world, const DfEntitySpawnViewV2 *entity, DfEntityId *output) { return bg_go_world_entity_spawn(context, invocation, world, entity, output); }
 static DfStatus host_world_entities(uint64_t context, DfInvocationId invocation, DfWorldId world, DfEntityIdBuffer *output) { return bg_go_world_entities(context, invocation, world, output); }
 static DfStatus host_world_players(uint64_t context, DfInvocationId invocation, DfWorldId world, DfPlayerIdBuffer *output) { return bg_go_world_players(context, invocation, world, output); }
 static DfStatus host_entity_state(uint64_t context, DfInvocationId invocation, DfEntityId entity, DfEntityState *state) { return bg_go_entity_state(context, invocation, entity, state); }
@@ -239,6 +242,7 @@ typedef void (*RuntimeDestroyFn)(DfRuntime *);
 typedef DfStatus (*RuntimeEnableFn)(DfRuntime *);
 typedef void (*RuntimeDisableFn)(DfRuntime *);
 typedef uint64_t (*RuntimeCountFn)(const DfRuntime *);
+typedef DfStatus (*RuntimeEntityTypeAtFn)(const DfRuntime *, uint64_t, DfEntityTypeDescriptorV1 *);
 typedef DfStatus (*RuntimeCommandAtFn)(const DfRuntime *, uint64_t, DfCommandDescriptor *);
 typedef DfStatus (*RuntimeCommandFn)(DfRuntime *, uint64_t, const DfCommandInput *, DfCommandState *);
 typedef DfStatus (*RuntimeCommandEnumFn)(DfRuntime *, uint64_t, uint64_t, uint64_t, const DfCommandEnumContext *, DfStringBuffer *);
@@ -247,12 +251,14 @@ typedef DfStatus (*RuntimeEventFn)(DfRuntime *, DfEventId, const void *, void *)
 struct BgRuntimeLibrary {
     void *handle;
     DfRuntime *runtime;
-    DfHostApiV13 host_api;
+    DfHostApiV14 host_api;
     RuntimeDestroyFn destroy;
     RuntimeEnableFn enable;
     RuntimeDisableFn disable;
     RuntimeCountFn plugin_count;
     RuntimeCountFn subscriptions;
+    RuntimeCountFn entity_type_count;
+    RuntimeEntityTypeAtFn entity_type_at;
     RuntimeCountFn command_count;
     RuntimeCommandAtFn command_at;
     RuntimeCommandFn handle_command;
@@ -303,12 +309,14 @@ DfStatus bg_runtime_open(
     RuntimeDisableFn disable = (RuntimeDisableFn) load_symbol(handle, "df_runtime_disable", error, error_capacity);
     RuntimeCountFn plugin_count = (RuntimeCountFn) load_symbol(handle, "df_runtime_plugin_count", error, error_capacity);
     RuntimeCountFn subscriptions = (RuntimeCountFn) load_symbol(handle, "df_runtime_subscriptions", error, error_capacity);
+    RuntimeCountFn entity_type_count = (RuntimeCountFn) load_symbol(handle, "df_runtime_entity_type_count", error, error_capacity);
+    RuntimeEntityTypeAtFn entity_type_at = (RuntimeEntityTypeAtFn) load_symbol(handle, "df_runtime_entity_type_at", error, error_capacity);
     RuntimeCountFn command_count = (RuntimeCountFn) load_symbol(handle, "df_runtime_command_count", error, error_capacity);
     RuntimeCommandAtFn command_at = (RuntimeCommandAtFn) load_symbol(handle, "df_runtime_command_at", error, error_capacity);
     RuntimeCommandFn handle_command = (RuntimeCommandFn) load_symbol(handle, "df_runtime_handle_command", error, error_capacity);
     RuntimeCommandEnumFn command_enum_options = (RuntimeCommandEnumFn) load_symbol(handle, "df_runtime_command_enum_options", error, error_capacity);
     RuntimeEventFn handle_event = (RuntimeEventFn) load_symbol(handle, "df_runtime_handle_event", error, error_capacity);
-    if (create == NULL || destroy == NULL || enable == NULL || disable == NULL || plugin_count == NULL || subscriptions == NULL || command_count == NULL || command_at == NULL || handle_command == NULL || command_enum_options == NULL || handle_event == NULL) {
+    if (create == NULL || destroy == NULL || enable == NULL || disable == NULL || plugin_count == NULL || subscriptions == NULL || entity_type_count == NULL || entity_type_at == NULL || command_count == NULL || command_at == NULL || handle_command == NULL || command_enum_options == NULL || handle_event == NULL) {
         dlclose(handle);
         return DF_STATUS_ERROR;
     }
@@ -320,9 +328,9 @@ DfStatus bg_runtime_open(
         return DF_STATUS_ERROR;
     }
 
-    library->host_api = (DfHostApiV13) {
+    library->host_api = (DfHostApiV14) {
         .abi_version = DF_HOST_ABI_VERSION,
-        .struct_size = sizeof(DfHostApiV13),
+        .struct_size = sizeof(DfHostApiV14),
         .context = host_context,
         .player_text = host_player_text,
         .player_title = host_player_title,
@@ -398,6 +406,8 @@ DfStatus bg_runtime_open(
     library->disable = disable;
     library->plugin_count = plugin_count;
     library->subscriptions = subscriptions;
+    library->entity_type_count = entity_type_count;
+    library->entity_type_at = entity_type_at;
     library->command_count = command_count;
     library->command_at = command_at;
     library->handle_command = handle_command;
@@ -432,6 +442,21 @@ uint64_t bg_runtime_plugin_count(const BgRuntimeLibrary *library) {
 
 uint64_t bg_runtime_subscriptions(const BgRuntimeLibrary *library) {
     return library == NULL ? 0 : library->subscriptions(library->runtime);
+}
+
+uint64_t bg_runtime_entity_type_count(const BgRuntimeLibrary *library) {
+    return library == NULL ? 0 : library->entity_type_count(library->runtime);
+}
+
+DfStatus bg_runtime_entity_type_at(
+    const BgRuntimeLibrary *library,
+    uint64_t index,
+    DfEntityTypeDescriptorV1 *out
+) {
+    if (library == NULL || out == NULL) {
+        return DF_STATUS_ERROR;
+    }
+    return library->entity_type_at(library->runtime, index, out);
 }
 
 uint64_t bg_runtime_command_count(const BgRuntimeLibrary *library) {

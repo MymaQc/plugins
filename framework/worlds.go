@@ -104,6 +104,12 @@ func (m *WorldManager) Create(name WorldID, config world.Config) (*world.World, 
 	if err := validateCustomWorldID(name); err != nil {
 		return nil, err
 	}
+	m.mu.RLock()
+	entities, ready := m.entityTypes, m.registriesReady
+	m.mu.RUnlock()
+	if ready && len(config.Entities.Types()) == 0 {
+		config.Entities = entities
+	}
 	w := config.New()
 	if _, err := m.register(name, w, false); err != nil {
 		_ = w.Close()

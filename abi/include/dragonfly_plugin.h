@@ -8,8 +8,8 @@
 extern "C" {
 #endif
 
-#define DF_ABI_VERSION 1u
-#define DF_HOST_ABI_VERSION 13u
+#define DF_ABI_VERSION 2u
+#define DF_HOST_ABI_VERSION 14u
 #define DF_STATUS_OK 0
 #define DF_STATUS_ERROR 1
 
@@ -86,6 +86,7 @@ typedef struct { DfStringView name; uint32_t kind; uint8_t data; } DfHealingSour
 #define DF_ENTITY_BOTTLE_OF_ENCHANTING 10u
 #define DF_ENTITY_SPLASH_POTION 11u
 #define DF_ENTITY_LINGERING_POTION 12u
+#define DF_ENTITY_CUSTOM 13u
 #define DF_ENTITY_ARROW_CRITICAL 1u
 #define DF_ENTITY_ARROW_DISABLE_PICKUP 2u
 #define DF_ENTITY_ARROW_OBTAIN_ON_PICKUP 4u
@@ -97,7 +98,8 @@ typedef struct { DfStringView name; uint32_t kind; uint8_t data; } DfHealingSour
 typedef struct { DfEntityId *data; uint64_t len; uint64_t capacity; } DfEntityIdBuffer;
 typedef struct { DfPlayerId *data; uint64_t len; uint64_t capacity; } DfPlayerIdBuffer;
 typedef struct { DfVec3 position; DfRotation rotation; DfVec3 velocity; DfStringView name_tag; } DfEntitySpawnOptions;
-typedef struct { uint32_t kind; uint32_t flags; DfEntitySpawnOptions options; DfEntityId owner; double damage; uint64_t fuse_milliseconds; int32_t experience; uint32_t potion; int32_t punch_level; int32_t piercing_level; DfStringView text; const DfItemStackViewV3 *item; const DfBlockView *block; } DfEntitySpawnViewV1;
+typedef struct { DfStringView save_id; DfStringView network_id; DfVec3 min; DfVec3 max; } DfEntityTypeDescriptorV1;
+typedef struct { uint32_t kind; uint32_t flags; DfEntitySpawnOptions options; DfEntityId owner; double damage; uint64_t fuse_milliseconds; int32_t experience; uint32_t potion; int32_t punch_level; int32_t piercing_level; DfStringView text; DfStringView custom_type; const DfItemStackViewV3 *item; const DfBlockView *block; } DfEntitySpawnViewV2;
 typedef struct { DfVec3 position; DfRotation rotation; DfVec3 velocity; uint32_t capabilities; DfWorldId world; DfStringBuffer entity_type; DfStringBuffer name_tag; } DfEntityState;
 #define DF_PARTICLE_FLAME 0u
 #define DF_PARTICLE_DUST 1u
@@ -326,7 +328,7 @@ typedef DfStatus (*DfHostWorldTimeGetFn)(uint64_t context, DfInvocationId invoca
 typedef DfStatus (*DfHostWorldTimeSetFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, int64_t time);
 typedef DfStatus (*DfHostWorldSpawnGetFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, DfBlockPos *position);
 typedef DfStatus (*DfHostWorldSpawnSetFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, DfBlockPos position);
-typedef DfStatus (*DfHostWorldEntitySpawnFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, const DfEntitySpawnViewV1 *entity, DfEntityId *output);
+typedef DfStatus (*DfHostWorldEntitySpawnFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, const DfEntitySpawnViewV2 *entity, DfEntityId *output);
 typedef DfStatus (*DfHostWorldEntitiesFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, DfEntityIdBuffer *output);
 typedef DfStatus (*DfHostWorldPlayersFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, DfPlayerIdBuffer *output);
 typedef DfStatus (*DfHostEntityStateFn)(uint64_t context, DfInvocationId invocation, DfEntityId entity, DfEntityState *state);
@@ -395,7 +397,7 @@ typedef struct {
     DfHostPlayerHurtFn player_hurt;
     DfHostSkinSnapshotInfoFn skin_snapshot_info;
     DfHostSkinSnapshotSetFn skin_snapshot_set;
-} DfHostApiV13;
+} DfHostApiV14;
 #define DF_COMMAND_PARAMETER_SUBCOMMAND 1u
 #define DF_COMMAND_PARAMETER_ENUM 2u
 #define DF_COMMAND_PARAMETER_STRING 3u
@@ -858,9 +860,10 @@ typedef DfStatus (*DfHandleEventFn)(void *instance, DfEventId event_id, const vo
 typedef void *(*DfPluginCreateFn)(void);
 typedef DfStatus (*DfPluginLifecycleFn)(void *instance);
 typedef const DfCommandDescriptor *(*DfPluginCommandsFn)(void *instance, uint64_t *count);
+typedef const DfEntityTypeDescriptorV1 *(*DfPluginEntityTypesFn)(void *instance, uint64_t *count);
 typedef DfStatus (*DfHandleCommandFn)(void *instance, uint64_t command, const DfCommandInput *input, DfCommandState *state);
 typedef DfStatus (*DfCommandEnumOptionsFn)(void *instance, uint64_t command, uint64_t overload, uint64_t parameter, const DfCommandEnumContext *context, DfStringBuffer *output);
-typedef DfStatus (*DfPluginSetHostFn)(void *instance, const DfHostApiV13 *host);
+typedef DfStatus (*DfPluginSetHostFn)(void *instance, const DfHostApiV14 *host);
 typedef void (*DfPluginDestroyFn)(void *instance);
 
 typedef struct {
@@ -870,17 +873,18 @@ typedef struct {
     DfPluginLifecycleFn enable;
     DfPluginLifecycleFn disable;
     DfPluginCommandsFn commands;
+    DfPluginEntityTypesFn entity_types;
     DfHandleCommandFn handle_command;
     DfCommandEnumOptionsFn command_enum_options;
     DfPluginSetHostFn set_host;
     DfPluginDestroyFn destroy;
     DfHandleEventFn handle_event;
-} DfPluginApiV1;
+} DfPluginApiV2;
 
-typedef const DfPluginApiV1 *(*DfPluginEntryV1Fn)(void);
+typedef const DfPluginApiV2 *(*DfPluginEntryV2Fn)(void);
 
 typedef struct DfRuntime DfRuntime;
-typedef struct { DfStringView plugin_directory; const DfHostApiV13 *host; } DfRuntimeConfig;
+typedef struct { DfStringView plugin_directory; const DfHostApiV14 *host; } DfRuntimeConfig;
 
 DfStatus df_runtime_create(const DfRuntimeConfig *config, DfRuntime **out, uint8_t *error, uint64_t error_capacity);
 DfStatus df_runtime_enable(DfRuntime *runtime);
@@ -888,6 +892,8 @@ void df_runtime_disable(DfRuntime *runtime);
 void df_runtime_destroy(DfRuntime *runtime);
 uint64_t df_runtime_plugin_count(const DfRuntime *runtime);
 uint64_t df_runtime_subscriptions(const DfRuntime *runtime);
+uint64_t df_runtime_entity_type_count(const DfRuntime *runtime);
+DfStatus df_runtime_entity_type_at(const DfRuntime *runtime, uint64_t index, DfEntityTypeDescriptorV1 *out);
 uint64_t df_runtime_command_count(const DfRuntime *runtime);
 DfStatus df_runtime_command_at(const DfRuntime *runtime, uint64_t index, DfCommandDescriptor *out);
 DfStatus df_runtime_handle_command(DfRuntime *runtime, uint64_t index, const DfCommandInput *input, DfCommandState *state);

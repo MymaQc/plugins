@@ -12,11 +12,15 @@ import "C"
 import (
 	"errors"
 	"fmt"
+	"math"
 	"runtime"
 	"strings"
 	"time"
+	"unicode/utf8"
 	"unsafe"
 )
+
+const maxEntityTypes = 1024
 
 const (
 	PlayerMoveSubscription            uint64 = 1
@@ -462,6 +466,44 @@ func (r *Runtime) Subscriptions() uint64 {
 		return 0
 	}
 	return uint64(C.bg_runtime_subscriptions(r.ptr))
+}
+
+func (r *Runtime) EntityTypes() ([]EntityTypeDefinition, error) {
+	if r == nil || r.ptr == nil {
+		return nil, errors.New("native runtime is closed")
+	}
+	count := uint64(C.bg_runtime_entity_type_count(r.ptr))
+	if count > maxEntityTypes {
+		return nil, fmt.Errorf("native runtime returned too many entity types: %d", count)
+	}
+	types := make([]EntityTypeDefinition, 0, count)
+	for index := uint64(0); index < count; index++ {
+		var descriptor C.DfEntityTypeDescriptorV1
+		if status := C.bg_runtime_entity_type_at(r.ptr, C.uint64_t(index), &descriptor); status != C.DF_STATUS_OK {
+			return nil, fmt.Errorf("read native entity type %d: status %d", index, int32(status))
+		}
+		definition := EntityTypeDefinition{
+			SaveID: stringView(descriptor.save_id), NetworkID: stringView(descriptor.network_id),
+			Min: nativeEntityVec3(descriptor.min), Max: nativeEntityVec3(descriptor.max),
+		}
+		if len(definition.SaveID) == 0 || len(definition.SaveID) > maxEntityTypeBytes || !utf8.ValidString(definition.SaveID) ||
+			len(definition.NetworkID) == 0 || len(definition.NetworkID) > maxEntityTypeBytes || !utf8.ValidString(definition.NetworkID) ||
+			!validEntityBounds(definition.Min, definition.Max) {
+			return nil, fmt.Errorf("invalid native entity type %d", index)
+		}
+		types = append(types, definition)
+	}
+	return types, nil
+}
+
+func validEntityBounds(minimum, maximum Vec3) bool {
+	values := [...]float64{minimum.X, minimum.Y, minimum.Z, maximum.X, maximum.Y, maximum.Z}
+	for _, value := range values {
+		if math.IsNaN(value) || math.IsInf(value, 0) {
+			return false
+		}
+	}
+	return minimum.X <= maximum.X && minimum.Y <= maximum.Y && minimum.Z <= maximum.Z
 }
 
 func (r *Runtime) Commands() ([]Command, error) {

@@ -9,6 +9,8 @@ import (
 
 	"github.com/bedrock-gophers/plugins/internal/host"
 	"github.com/bedrock-gophers/plugins/internal/native"
+	"github.com/df-mc/dragonfly/server"
+	"github.com/df-mc/dragonfly/server/world"
 )
 
 // RunFile loads configuration and runs the owned Dragonfly server until ctx is cancelled.
@@ -43,32 +45,61 @@ func Run(ctx context.Context, config Config, log *slog.Logger) error {
 		log = slog.Default()
 	}
 	players := host.NewPlayers()
-	dragonflyConfig, err := config.Dragonfly.Config(log)
-	if err != nil {
-		return fmt.Errorf("configure Dragonfly: %w", err)
-	}
-	srv := dragonflyConfig.New()
 	worlds, err := NewPersistentWorldManager(config.Worlds.Directory, log, players)
 	if err != nil {
-		_ = srv.Close()
 		return err
 	}
-	var pluginRuntime *native.Runtime
+	pluginRuntime, err := native.OpenWithHost(config.Plugins.RuntimeLibrary, config.Plugins.Directory, struct {
+		*host.Players
+		*WorldManager
+	}{players, worlds})
+	if err != nil {
+		return err
+	}
+	entityTypes, err := pluginRuntime.EntityTypes()
+	if err != nil {
+		pluginRuntime.Close()
+		return err
+	}
+	dragonflyConfig, err := config.Dragonfly.Config(log)
+	if err != nil {
+		pluginRuntime.Close()
+		closeDragonflyProviders(dragonflyConfig, log)
+		return fmt.Errorf("configure Dragonfly: %w", err)
+	}
+	dragonflyConfig.Entities, err = buildEntityRegistry(dragonflyConfig.Entities, entityTypes)
+	if err != nil {
+		pluginRuntime.Close()
+		closeDragonflyProviders(dragonflyConfig, log)
+		return fmt.Errorf("configure plugin entities: %w", err)
+	}
+	var srv *server.Server
 	enabled := false
+	started := false
 	defer func() {
 		if enabled {
 			pluginRuntime.Disable()
 		}
+		if started {
+			if err := srv.Close(); err != nil {
+				log.Error("close Dragonfly server", "error", err)
+			}
+		} else if srv != nil {
+			for _, managed := range []*world.World{srv.End(), srv.Nether(), srv.World()} {
+				if err := managed.Close(); err != nil {
+					log.Error("close unstarted Dragonfly world", "error", err)
+				}
+			}
+			if err := dragonflyConfig.PlayerProvider.Close(); err != nil {
+				log.Error("close unstarted player provider", "error", err)
+			}
+		}
 		if err := worlds.CloseCustom(); err != nil {
 			log.Error("close custom worlds", "error", err)
 		}
-		if err := srv.Close(); err != nil {
-			log.Error("close Dragonfly server", "error", err)
-		}
-		if pluginRuntime != nil {
-			pluginRuntime.Close()
-		}
+		pluginRuntime.Close()
 	}()
+	srv = dragonflyConfig.New()
 	if err := worlds.RegisterCore(OverworldID, srv.World()); err != nil {
 		return err
 	}
@@ -76,13 +107,6 @@ func Run(ctx context.Context, config Config, log *slog.Logger) error {
 		return err
 	}
 	if err := worlds.RegisterCore(EndID, srv.End()); err != nil {
-		return err
-	}
-	pluginRuntime, err = native.OpenWithHost(config.Plugins.RuntimeLibrary, config.Plugins.Directory, struct {
-		*host.Players
-		*WorldManager
-	}{players, worlds})
-	if err != nil {
 		return err
 	}
 	if err := pluginRuntime.Enable(); err != nil {
@@ -93,6 +117,7 @@ func Run(ctx context.Context, config Config, log *slog.Logger) error {
 		return err
 	}
 	srv.Listen()
+	started = true
 
 	stopped := make(chan struct{})
 	defer close(stopped)
@@ -116,4 +141,17 @@ func Run(ctx context.Context, config Config, log *slog.Logger) error {
 		}
 	}
 	return nil
+}
+
+func closeDragonflyProviders(config server.Config, log *slog.Logger) {
+	if config.PlayerProvider != nil {
+		if err := config.PlayerProvider.Close(); err != nil {
+			log.Error("close unused player provider", "error", err)
+		}
+	}
+	if config.WorldProvider != nil {
+		if err := config.WorldProvider.Close(); err != nil {
+			log.Error("close unused world provider", "error", err)
+		}
+	}
 }

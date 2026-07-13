@@ -1,10 +1,223 @@
 use proc_macro::TokenStream;
-use quote::quote;
+use quote::{format_ident, quote};
 use std::collections::BTreeMap;
 use syn::{
-    Attribute, Data, DeriveInput, Fields, FnArg, GenericArgument, ImplItem, ItemImpl, LitStr, Meta,
-    Pat, PathArguments, Type, parse_macro_input,
+    Attribute, Data, DeriveInput, Expr, ExprArray, Fields, FnArg, GenericArgument, Ident, ImplItem,
+    ItemImpl, ItemStruct, LitStr, Meta, Pat, PathArguments, Token, Type, parse::Parse,
+    parse::ParseStream, parse_macro_input,
 };
+
+struct EntityArgs {
+    identifier: Option<LitStr>,
+    network: Option<LitStr>,
+    bounds: Option<ExprArray>,
+    width: Option<Expr>,
+    height: Option<Expr>,
+}
+
+impl Parse for EntityArgs {
+    fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
+        let mut identifier: Option<LitStr> = None;
+        let mut network: Option<LitStr> = None;
+        let mut bounds: Option<ExprArray> = None;
+        let mut width: Option<Expr> = None;
+        let mut height: Option<Expr> = None;
+        while !input.is_empty() {
+            let key: Ident = input.parse()?;
+            input.parse::<Token![=]>()?;
+            match key.to_string().as_str() {
+                "id" => {
+                    if identifier.is_some() {
+                        return Err(syn::Error::new(key.span(), "duplicate `id`"));
+                    }
+                    identifier = Some(input.parse()?);
+                }
+                "network" => {
+                    if network.is_some() {
+                        return Err(syn::Error::new(key.span(), "duplicate `network`"));
+                    }
+                    network = Some(input.parse()?);
+                }
+                "bbox" => {
+                    if bounds.is_some() {
+                        return Err(syn::Error::new(key.span(), "duplicate `bbox`"));
+                    }
+                    bounds = Some(input.parse()?);
+                }
+                "width" => {
+                    if width.is_some() {
+                        return Err(syn::Error::new(key.span(), "duplicate `width`"));
+                    }
+                    width = Some(input.parse()?);
+                }
+                "height" => {
+                    if height.is_some() {
+                        return Err(syn::Error::new(key.span(), "duplicate `height`"));
+                    }
+                    height = Some(input.parse()?);
+                }
+                _ => {
+                    return Err(syn::Error::new(
+                        key.span(),
+                        "expected `id`, `network`, `bbox`, `width`, or `height`",
+                    ));
+                }
+            }
+            if !input.is_empty() {
+                input.parse::<Token![,]>()?;
+            }
+        }
+        if bounds
+            .as_ref()
+            .is_some_and(|bounds| bounds.elems.len() != 6)
+        {
+            return Err(syn::Error::new_spanned(
+                bounds.as_ref().unwrap(),
+                "`bbox` must contain exactly six numbers",
+            ));
+        }
+        if bounds.is_some() && (width.is_some() || height.is_some()) {
+            return Err(input.error("use either `bbox` or `width` and `height`, not both"));
+        }
+        if bounds.is_none() && (width.is_none() || height.is_none()) {
+            return Err(input.error("missing `width` and `height` (or explicit `bbox`)"));
+        }
+        Ok(Self {
+            identifier,
+            network,
+            bounds,
+            width,
+            height,
+        })
+    }
+}
+
+fn snake_case_identifier(name: &Ident) -> String {
+    let chars: Vec<char> = name.to_string().chars().collect();
+    let mut output = String::with_capacity(chars.len() + 4);
+    for (index, character) in chars.iter().copied().enumerate() {
+        if character.is_ascii_uppercase() {
+            let previous_is_lower = index > 0 && chars[index - 1].is_ascii_lowercase();
+            let next_is_lower = chars
+                .get(index + 1)
+                .is_some_and(|next| next.is_ascii_lowercase());
+            if index > 0 && (previous_is_lower || next_is_lower) {
+                output.push('_');
+            }
+            output.push(character.to_ascii_lowercase());
+        } else {
+            output.push(character);
+        }
+    }
+    output
+}
+
+#[cfg(test)]
+mod entity_tests {
+    use super::*;
+
+    #[test]
+    fn infers_snake_case_identifiers() {
+        for (input, want) in [
+            ("Marker", "marker"),
+            ("TrainingDummy", "training_dummy"),
+            ("HTTPServer", "http_server"),
+        ] {
+            let identifier: Ident = syn::parse_str(input).unwrap();
+            assert_eq!(snake_case_identifier(&identifier), want);
+        }
+    }
+
+    #[test]
+    fn accepts_dimensions_or_explicit_bounds() {
+        assert!(
+            syn::parse_str::<EntityArgs>(r#"network = "minecraft:pig", width = 0.6, height = 1.8"#)
+                .is_ok()
+        );
+        assert!(
+            syn::parse_str::<EntityArgs>(
+                r#"id = "example:test", bbox = [-0.3, 0.0, -0.3, 0.3, 1.8, 0.3]"#
+            )
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn rejects_incomplete_or_conflicting_bounds() {
+        assert!(syn::parse_str::<EntityArgs>("width = 0.6").is_err());
+        assert!(
+            syn::parse_str::<EntityArgs>(
+                "width = 0.6, height = 1.8, bbox = [0.0, 0.0, 0.0, 1.0, 1.0, 1.0]"
+            )
+            .is_err()
+        );
+    }
+}
+
+#[proc_macro_attribute]
+pub fn entity(arguments: TokenStream, item: TokenStream) -> TokenStream {
+    let arguments = parse_macro_input!(arguments as EntityArgs);
+    let entity = parse_macro_input!(item as ItemStruct);
+    if !entity.generics.params.is_empty() {
+        return syn::Error::new_spanned(&entity.generics, "entity types cannot be generic")
+            .to_compile_error()
+            .into();
+    }
+    if !matches!(entity.fields, Fields::Unit) {
+        return syn::Error::new_spanned(&entity.fields, "entity types must be unit structs")
+            .to_compile_error()
+            .into();
+    }
+    let name = &entity.ident;
+    let registration = format_ident!("__DRAGONFLY_ENTITY_TYPE_{}", name);
+    let inferred = LitStr::new(&snake_case_identifier(name), name.span());
+    let identifier = arguments
+        .identifier
+        .map(|identifier| quote!(#identifier))
+        .unwrap_or_else(|| quote!(concat!(env!("CARGO_PKG_NAME"), ":", #inferred)));
+    let network = arguments
+        .network
+        .map(|network| quote!(#network))
+        .unwrap_or_else(|| identifier.clone());
+    let bounds = if let Some(bounds) = arguments.bounds {
+        let values: Vec<&Expr> = bounds.elems.iter().collect();
+        quote!([#(#values),*])
+    } else {
+        let width = arguments.width.unwrap();
+        let height = arguments.height.unwrap();
+        quote!([
+            -(#width as f64) / 2.0,
+            0.0,
+            -(#width as f64) / 2.0,
+            (#width as f64) / 2.0,
+            #height as f64,
+            (#width as f64) / 2.0,
+        ])
+    };
+    quote! {
+        #entity
+
+        impl ::dragonfly_plugin::entity::CustomType for #name {
+            const DEFINITION: ::dragonfly_plugin::entity::Definition =
+                ::dragonfly_plugin::entity::Definition::new(
+                    #identifier,
+                    #network,
+                    #bounds,
+                );
+        }
+
+        #[::dragonfly_plugin::__private::linkme::distributed_slice(
+            ::dragonfly_plugin::__private::REGISTERED_TYPES
+        )]
+        #[linkme(crate = ::dragonfly_plugin::__private::linkme)]
+        #[allow(non_upper_case_globals)]
+        static #registration: ::dragonfly_plugin::__private::RegisteredType =
+            ::dragonfly_plugin::__private::RegisteredType::new(
+                <#name as ::dragonfly_plugin::entity::CustomType>::DEFINITION,
+            );
+    }
+    .into()
+}
 
 fn command_method_path(attributes: &[Attribute]) -> syn::Result<Option<String>> {
     let Some(attribute) = attributes
@@ -963,14 +1176,14 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
 
             unsafe extern "C" fn set_host(
                 instance: *mut ::dragonfly_plugin::__private::c_void,
-                host: *const ::dragonfly_plugin::__private::sys::DfHostApiV13,
+                host: *const ::dragonfly_plugin::__private::sys::DfHostApiV14,
             ) -> ::dragonfly_plugin::__private::sys::DfStatus {
                 if instance.is_null() || host.is_null() {
                     return ::dragonfly_plugin::__private::sys::DF_STATUS_ERROR;
                 }
                 let host_header = unsafe { &*host };
                 if host_header.abi_version != ::dragonfly_plugin::__private::sys::DF_HOST_ABI_VERSION
-                    || host_header.struct_size < ::core::mem::size_of::<::dragonfly_plugin::__private::sys::DfHostApiV13>() as u32
+                    || host_header.struct_size < ::core::mem::size_of::<::dragonfly_plugin::__private::sys::DfHostApiV14>() as u32
                 {
                     return ::dragonfly_plugin::__private::sys::DF_STATUS_ERROR;
                 }
@@ -1006,6 +1219,19 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
                         ::core::ptr::null()
                     }
                 }
+            }
+
+            unsafe extern "C" fn entity_types(
+                instance: *mut ::dragonfly_plugin::__private::c_void,
+                count: *mut u64,
+            ) -> *const ::dragonfly_plugin::__private::sys::DfEntityTypeDescriptorV1 {
+                if instance.is_null() || count.is_null() {
+                    return ::core::ptr::null();
+                }
+                unsafe {
+                    *count = ::dragonfly_plugin::__private::REGISTERED_TYPES.len() as u64;
+                }
+                ::dragonfly_plugin::__private::REGISTERED_TYPES.as_ptr().cast()
             }
 
             unsafe extern "C" fn handle_command(
@@ -1367,11 +1593,11 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
                 result.unwrap_or(sys::DF_STATUS_ERROR)
             }
 
-            static API: ::dragonfly_plugin::__private::sys::DfPluginApiV1 =
-                ::dragonfly_plugin::__private::sys::DfPluginApiV1 {
+            static API: ::dragonfly_plugin::__private::sys::DfPluginApiV2 =
+                ::dragonfly_plugin::__private::sys::DfPluginApiV2 {
                     header: ::dragonfly_plugin::__private::sys::DfAbiHeader {
                         abi_version: ::dragonfly_plugin::__private::sys::DF_ABI_VERSION,
-                        struct_size: ::core::mem::size_of::<::dragonfly_plugin::__private::sys::DfPluginApiV1>() as u32,
+                        struct_size: ::core::mem::size_of::<::dragonfly_plugin::__private::sys::DfPluginApiV2>() as u32,
                         subscriptions: #subscriptions,
                     },
                     plugin_id: ::dragonfly_plugin::__private::sys::DfStringView {
@@ -1382,6 +1608,7 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
                     enable: Some(enable),
                     disable: Some(disable),
                     commands: Some(commands),
+                    entity_types: Some(entity_types),
                     handle_command: Some(handle_command),
                     command_enum_options: Some(command_enum_options),
                     set_host: Some(set_host),
@@ -1390,7 +1617,7 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
                 };
 
             #[unsafe(no_mangle)]
-            pub extern "C" fn df_plugin_entry_v1() -> *const ::dragonfly_plugin::__private::sys::DfPluginApiV1 {
+            pub extern "C" fn df_plugin_entry_v2() -> *const ::dragonfly_plugin::__private::sys::DfPluginApiV2 {
                 &API
             }
         }

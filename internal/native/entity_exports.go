@@ -18,20 +18,22 @@ const (
 )
 
 //export bg_go_world_entity_spawn
-func bg_go_world_entity_spawn(context C.uint64_t, invocation C.DfInvocationId, worldID C.DfWorldId, view *C.DfEntitySpawnViewV1, output *C.DfEntityId) C.DfStatus {
+func bg_go_world_entity_spawn(context C.uint64_t, invocation C.DfInvocationId, worldID C.DfWorldId, view *C.DfEntitySpawnViewV2, output *C.DfEntityId) C.DfStatus {
 	host, ok := resolveHost(uint64(context))
 	if !ok || view == nil || output == nil {
 		return C.DF_STATUS_ERROR
 	}
 	nameTag, validNameTag := copyWorldBytes(view.options.name_tag, maxEntityTagBytes)
 	text, validText := copyWorldBytes(view.text, maxEntityTextBytes)
-	if !validNameTag || !validText || !utf8.Valid(nameTag) || !utf8.Valid(text) {
+	customType, validCustomType := copyWorldBytes(view.custom_type, maxEntityTypeBytes)
+	if !validNameTag || !validText || !validCustomType || !utf8.Valid(nameTag) || !utf8.Valid(text) || !utf8.Valid(customType) ||
+		(EntityKind(view.kind) == EntityCustom && len(customType) == 0) || EntityKind(view.kind) > EntityCustom {
 		return C.DF_STATUS_ERROR
 	}
 	value := EntitySpawn{
 		Kind: EntityKind(view.kind), Flags: uint32(view.flags), Position: nativeEntityVec3(view.options.position),
 		Rotation: Rotation{Yaw: float64(view.options.rotation.yaw), Pitch: float64(view.options.rotation.pitch)},
-		Velocity: nativeEntityVec3(view.options.velocity), NameTag: string(nameTag), Text: string(text),
+		Velocity: nativeEntityVec3(view.options.velocity), NameTag: string(nameTag), Text: string(text), Type: string(customType),
 		Owner: entityID(view.owner), Damage: float64(view.damage), FuseMilliseconds: uint64(view.fuse_milliseconds),
 		Experience: int32(view.experience), Potion: uint32(view.potion), Punch: int32(view.punch_level), Piercing: int32(view.piercing_level),
 	}

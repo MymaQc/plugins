@@ -1,6 +1,6 @@
 # Native Plugin Architecture Plan
 
-Status: Active implementation; managed worlds, blocks, typed particles, and typed sounds complete
+Status: Active implementation; managed worlds, blocks, typed particles/sounds, and persistent custom base entities complete
 
 Initial language: Rust
 
@@ -159,10 +159,14 @@ typedef struct {
         const void *input,
         void *output
     );
+    const DfEntityTypeDescriptorV1 *(*entity_types)(
+        void *instance,
+        uint64_t *count
+    );
     void (*destroy)(void *instance);
-} DfPluginApiV1;
+} DfPluginApiV2;
 
-const DfPluginApiV1 *df_plugin_entry_v1(void);
+const DfPluginApiV2 *df_plugin_entry_v2(void);
 ```
 
 Generated Rust dispatch converts `event_id` and pointers into typed SDK calls. Plugin authors never match raw IDs or dereference pointers.
@@ -480,13 +484,30 @@ Current host actions include:
 
 Every synchronous player callback registers one invocation ID for its exact transaction. Same-world block operations use that `world.Tx` directly. Calls with no invocation are off-owner: writes enqueue through `World.Do` and reads use `world.Call`. Cross-world writes from callbacks enqueue, while cross-world synchronous block reads are rejected because reciprocal owner calls can deadlock. Save/unload are rejected from callbacks and run only off-owner. Transaction values never cross or survive the ABI; the asynchronous task API will provide callback-safe cross-world reads and lifecycle operations.
 
-The host ABI is currently v13. WIP releases intentionally make breaking ABI changes instead of retaining compatibility shims; runtime and plugins must be compiled from the same revision.
+The host ABI is currently v14 and the plugin ABI is v2. WIP releases intentionally make breaking ABI changes instead of retaining compatibility shims; runtime and plugins must be compiled from the same revision.
 
 ## Entities
 
 Go stores `*world.EntityHandle`, never transaction-scoped `world.Entity` values. IDs contain Dragonfly UUID plus monotonic generation; player and entity views of the same player share one identity. World handlers lazily track provider-loaded entities and expire closed handles without invalidating portal transfers.
 
 Rust spawn descriptors are sealed and typed: `Text`, `Lightning`, `TNT`, `ExperienceOrb`, `DroppedItem`, `FallingBlock`, `Arrow`, `Egg`, `Snowball`, `EnderPearl`, `BottleOfEnchanting`, `SplashPotion`, and `LingeringPotion`. One flat ABI descriptor feeds Dragonfly constructors and registry factories, so adding language SDKs does not require one adapter per concrete type.
+
+Plugin-owned base entity types use automatic static registration:
+
+```rust
+#[dragonfly::entity(
+    network = "minecraft:armor_stand",
+    width = 0.5,
+    height = 1.975,
+)]
+struct Marker;
+```
+
+The save ID defaults to `<cargo-package>:<snake_case_type>`. An explicit `id = "namespace:name"` pins persistence across package/type renames, and an explicit six-value `bbox` replaces `width`/`height` for asymmetric shapes. The macro contributes a link-time descriptor; plugins do not maintain registration arrays or call a bootstrap function. The runtime validates, deduplicates, and sorts copied descriptors before Go merges them into Dragonfly's configured entity registry before `server.Config.New`. The merge preserves all vanilla types and factory callbacks and rejects collisions.
+
+The Go base proxy implements only `world.Entity`, name tag, and teleport capabilities. It does not accidentally satisfy `TickerEntity`, `entity.Living`, or velocity interfaces. Dragonfly owns its `EntityHandle`, common `EntityData`, world membership, viewer updates, NBT save identity, and provider reload. This first family is intentionally stateless beyond common Dragonfly data. Plugin-owned state codecs plus ticking and living proxy families remain pending; base despawn closes in Dragonfly's required remove-then-handle-close order.
+
+Shutdown disables command/event callbacks, closes Dragonfly sessions and core worlds, then closes custom worlds, and unloads the native runtime last. Custom worlds must not disappear while connected players can still reference them, and descriptor/code pointers must remain valid until every entity provider has finished encoding.
 
 Common entity state is capability-based. Every managed entity exposes its `World`; position and rotation exist on every `world.Entity`, while velocity, teleport, and name tag are optional capabilities. Rust getters return `Option`, while unsupported/stale setters silently no-op and never expose host transport errors. Dragonfly v0.11 has no exported generic rotation setter, so only spawn-time rotation and rotation reads are supported. Reflection or unsafe access to private `entity.Ent` state is forbidden.
 
@@ -584,6 +605,7 @@ Initial ABI foundation includes:
 - Owned item stacks with names, lore, typed NBT values, enchantments, and potions.
 - Main, armour, and offhand inventory handles with item snapshots and mutation.
 - Stable entity handles, typed built-in/projectile spawning, state capabilities, and despawn.
+- Automatically registered persistent plugin-owned base entities with typed Rust spawning.
 - Cancellable attack-entity event with stable target attribution.
 - Cancellable item-use-on-entity event with stable target attribution.
 - Typed built-in world particles with block, colour, face, note, and offset parameters.

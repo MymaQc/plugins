@@ -21,6 +21,12 @@ DfStatus bg_runtime_enable(BgRuntimeLibrary *library);
 void bg_runtime_disable(BgRuntimeLibrary *library);
 uint64_t bg_runtime_plugin_count(const BgRuntimeLibrary *library);
 uint64_t bg_runtime_subscriptions(const BgRuntimeLibrary *library);
+uint64_t bg_runtime_entity_type_count(const BgRuntimeLibrary *library);
+DfStatus bg_runtime_entity_type_at(
+    const BgRuntimeLibrary *library,
+    uint64_t index,
+    DfEntityTypeDescriptorV1 *out
+);
 uint64_t bg_runtime_command_count(const BgRuntimeLibrary *library);
 DfStatus bg_runtime_command_at(
     const BgRuntimeLibrary *library,

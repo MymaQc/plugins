@@ -31,27 +31,28 @@ use dragonfly_plugin_sys::{
     DF_SUBSCRIPTION_PLAYER_SKIN_CHANGE, DF_SUBSCRIPTION_PLAYER_SLEEP,
     DF_SUBSCRIPTION_PLAYER_START_BREAK, DF_SUBSCRIPTION_PLAYER_TELEPORT,
     DF_SUBSCRIPTION_PLAYER_TOGGLE_SNEAK, DF_SUBSCRIPTION_PLAYER_TOGGLE_SPRINT, DfCommandDescriptor,
-    DfCommandInput, DfCommandState, DfHostApiV13, DfItemStackSnapshot, DfPlayerAttackEntityInput,
-    DfPlayerAttackEntityState, DfPlayerBlockBreakInput, DfPlayerBlockBreakState,
-    DfPlayerBlockPickInput, DfPlayerBlockPickState, DfPlayerBlockPlaceInput,
-    DfPlayerBlockPlaceState, DfPlayerChangeWorldInput, DfPlayerChangeWorldState, DfPlayerChatInput,
-    DfPlayerChatState, DfPlayerDeathInput, DfPlayerDeathState, DfPlayerExperienceGainInput,
-    DfPlayerExperienceGainState, DfPlayerFireExtinguishInput, DfPlayerFireExtinguishState,
-    DfPlayerFoodLossInput, DfPlayerFoodLossState, DfPlayerHealInput, DfPlayerHealState,
-    DfPlayerHeldSlotChangeInput, DfPlayerHeldSlotChangeState, DfPlayerHurtInput, DfPlayerHurtState,
-    DfPlayerItemConsumeInput, DfPlayerItemConsumeState, DfPlayerItemDamageInput,
-    DfPlayerItemDamageState, DfPlayerItemDropInput, DfPlayerItemDropState,
-    DfPlayerItemReleaseInput, DfPlayerItemReleaseState, DfPlayerItemUseInput,
-    DfPlayerItemUseOnBlockInput, DfPlayerItemUseOnBlockState, DfPlayerItemUseOnEntityInput,
-    DfPlayerItemUseOnEntityState, DfPlayerItemUseState, DfPlayerJoinInput, DfPlayerJoinState,
-    DfPlayerJumpInput, DfPlayerJumpState, DfPlayerLecternPageTurnInput,
-    DfPlayerLecternPageTurnState, DfPlayerMoveInput, DfPlayerMoveState, DfPlayerPunchAirInput,
-    DfPlayerPunchAirState, DfPlayerQuitInput, DfPlayerQuitState, DfPlayerRespawnInput,
-    DfPlayerRespawnState, DfPlayerSignEditInput, DfPlayerSignEditState, DfPlayerSkinChangeInput,
-    DfPlayerSkinChangeState, DfPlayerSleepInput, DfPlayerSleepState, DfPlayerStartBreakInput,
-    DfPlayerStartBreakState, DfPlayerTeleportInput, DfPlayerTeleportState,
-    DfPlayerToggleSneakInput, DfPlayerToggleSneakState, DfPlayerToggleSprintInput,
-    DfPlayerToggleSprintState, DfPluginApiV1, DfPluginEntryV1Fn, DfStatus, DfStringView,
+    DfCommandInput, DfCommandState, DfEntityTypeDescriptorV1, DfHostApiV14, DfItemStackSnapshot,
+    DfPlayerAttackEntityInput, DfPlayerAttackEntityState, DfPlayerBlockBreakInput,
+    DfPlayerBlockBreakState, DfPlayerBlockPickInput, DfPlayerBlockPickState,
+    DfPlayerBlockPlaceInput, DfPlayerBlockPlaceState, DfPlayerChangeWorldInput,
+    DfPlayerChangeWorldState, DfPlayerChatInput, DfPlayerChatState, DfPlayerDeathInput,
+    DfPlayerDeathState, DfPlayerExperienceGainInput, DfPlayerExperienceGainState,
+    DfPlayerFireExtinguishInput, DfPlayerFireExtinguishState, DfPlayerFoodLossInput,
+    DfPlayerFoodLossState, DfPlayerHealInput, DfPlayerHealState, DfPlayerHeldSlotChangeInput,
+    DfPlayerHeldSlotChangeState, DfPlayerHurtInput, DfPlayerHurtState, DfPlayerItemConsumeInput,
+    DfPlayerItemConsumeState, DfPlayerItemDamageInput, DfPlayerItemDamageState,
+    DfPlayerItemDropInput, DfPlayerItemDropState, DfPlayerItemReleaseInput,
+    DfPlayerItemReleaseState, DfPlayerItemUseInput, DfPlayerItemUseOnBlockInput,
+    DfPlayerItemUseOnBlockState, DfPlayerItemUseOnEntityInput, DfPlayerItemUseOnEntityState,
+    DfPlayerItemUseState, DfPlayerJoinInput, DfPlayerJoinState, DfPlayerJumpInput,
+    DfPlayerJumpState, DfPlayerLecternPageTurnInput, DfPlayerLecternPageTurnState,
+    DfPlayerMoveInput, DfPlayerMoveState, DfPlayerPunchAirInput, DfPlayerPunchAirState,
+    DfPlayerQuitInput, DfPlayerQuitState, DfPlayerRespawnInput, DfPlayerRespawnState,
+    DfPlayerSignEditInput, DfPlayerSignEditState, DfPlayerSkinChangeInput, DfPlayerSkinChangeState,
+    DfPlayerSleepInput, DfPlayerSleepState, DfPlayerStartBreakInput, DfPlayerStartBreakState,
+    DfPlayerTeleportInput, DfPlayerTeleportState, DfPlayerToggleSneakInput,
+    DfPlayerToggleSneakState, DfPlayerToggleSprintInput, DfPlayerToggleSprintState, DfPluginApiV2,
+    DfPluginEntryV2Fn, DfStatus, DfStringView,
 };
 use libloading::{Library, Symbol};
 use std::ffi::{OsStr, c_void};
@@ -61,14 +62,18 @@ use std::path::{Path, PathBuf};
 use std::ptr;
 use std::slice;
 
+const MAX_ABI_SLICE_ITEMS: u64 = 1024;
+const MAX_ENTITY_TYPES: u64 = MAX_ABI_SLICE_ITEMS;
+
 #[repr(C)]
 pub struct DfRuntimeConfig {
     pub plugin_directory: DfStringView,
-    pub host: *const DfHostApiV13,
+    pub host: *const DfHostApiV14,
 }
 
 pub struct DfRuntime {
     plugins: Vec<LoadedPlugin>,
+    entity_types: Vec<DfEntityTypeDescriptorV1>,
     commands: Vec<RuntimeCommand>,
     subscriptions: u64,
 }
@@ -80,7 +85,7 @@ struct RuntimeCommand {
 }
 
 struct LoadedPlugin {
-    api: &'static DfPluginApiV1,
+    api: &'static DfPluginApiV2,
     instance: *mut c_void,
     id: String,
     enabled: bool,
@@ -101,11 +106,12 @@ impl Drop for LoadedPlugin {
 }
 
 impl DfRuntime {
-    fn load(plugin_directory: &Path, host: *const DfHostApiV13) -> Result<Self, String> {
+    fn load(plugin_directory: &Path, host: *const DfHostApiV14) -> Result<Self, String> {
         let mut paths = native_libraries(plugin_directory)?;
         paths.sort();
 
         let mut plugins = Vec::with_capacity(paths.len());
+        let mut entity_types: Vec<DfEntityTypeDescriptorV1> = Vec::new();
         let mut subscriptions = 0;
         for path in paths {
             // SAFETY: symbols and returned API are validated before use. Library stays owned by LoadedPlugin.
@@ -116,11 +122,42 @@ impl DfRuntime {
             {
                 return Err(format!("duplicate plugin ID {:?}", plugin.id));
             }
+            if let Some(read) = plugin.api.entity_types {
+                let mut count = 0;
+                let descriptors = unsafe { read(plugin.instance, &mut count) };
+                if count > MAX_ENTITY_TYPES || (count != 0 && descriptors.is_null()) {
+                    return Err(format!(
+                        "plugin {:?} returned invalid entity types",
+                        plugin.id
+                    ));
+                }
+                let descriptors = unsafe { abi_slice(descriptors, count) }.map_err(|()| {
+                    format!("plugin {:?} returned too many entity types", plugin.id)
+                })?;
+                for descriptor in descriptors.iter().copied() {
+                    valid_entity_type_descriptor(&descriptor)?;
+                    let save_id = unsafe { string_view(descriptor.save_id) }?;
+                    if entity_types.iter().any(|existing| {
+                        unsafe { string_view(existing.save_id) }.is_ok_and(|id| id == save_id)
+                    }) {
+                        return Err(format!("duplicate custom entity type {save_id:?}"));
+                    }
+                    entity_types.push(descriptor);
+                }
+            }
             subscriptions |= plugin.api.header.subscriptions;
             plugins.push(plugin);
         }
+        entity_types.sort_by(|left, right| {
+            // SAFETY: every descriptor was validated above and plugin libraries remain loaded.
+            let left = unsafe { string_view(left.save_id) }.unwrap_or_default();
+            // SAFETY: every descriptor was validated above and plugin libraries remain loaded.
+            let right = unsafe { string_view(right.save_id) }.unwrap_or_default();
+            left.cmp(right)
+        });
         Ok(Self {
             plugins,
+            entity_types,
             commands: Vec::new(),
             subscriptions,
         })
@@ -1353,6 +1390,23 @@ impl DfRuntime {
     }
 }
 
+fn valid_entity_type_descriptor(descriptor: &DfEntityTypeDescriptorV1) -> Result<(), String> {
+    let save_id = unsafe { string_view(descriptor.save_id) }?;
+    let network_id = unsafe { string_view(descriptor.network_id) }?;
+    if save_id.is_empty() || save_id.len() > 256 || network_id.is_empty() || network_id.len() > 256
+    {
+        return Err("invalid custom entity identifier".to_owned());
+    }
+    let min = [descriptor.min.x, descriptor.min.y, descriptor.min.z];
+    let max = [descriptor.max.x, descriptor.max.y, descriptor.max.z];
+    if min.into_iter().chain(max).any(|value| !value.is_finite())
+        || min.into_iter().zip(max).any(|(min, max)| min > max)
+    {
+        return Err(format!("invalid bounds for custom entity {save_id:?}"));
+    }
+    Ok(())
+}
+
 impl Drop for DfRuntime {
     fn drop(&mut self) {
         self.disable();
@@ -1428,12 +1482,12 @@ impl LoadedPlugin {
         self.enabled = false;
     }
 
-    unsafe fn open(path: &Path, host: *const DfHostApiV13) -> Result<Self, String> {
+    unsafe fn open(path: &Path, host: *const DfHostApiV14) -> Result<Self, String> {
         // SAFETY: loading native plugins is the purpose of this trusted plugin runtime.
         let library = unsafe { Library::new(path) }
             .map_err(|err| format!("load {}: {err}", path.display()))?;
-        // SAFETY: symbol name and function signature are fixed by ABI v1.
-        let entry: Symbol<DfPluginEntryV1Fn> = unsafe { library.get(b"df_plugin_entry_v1\0") }
+        // SAFETY: symbol name and function signature are fixed by ABI v2.
+        let entry: Symbol<DfPluginEntryV2Fn> = unsafe { library.get(b"df_plugin_entry_v2\0") }
             .map_err(|err| format!("load entry from {}: {err}", path.display()))?;
         // SAFETY: entry has no arguments and returns a static API descriptor.
         let api_ptr = unsafe { entry() };
@@ -1448,7 +1502,7 @@ impl LoadedPlugin {
                 DF_ABI_VERSION
             ));
         }
-        if api.header.struct_size < size_of::<DfPluginApiV1>() as u32 {
+        if api.header.struct_size < size_of::<DfPluginApiV2>() as u32 {
             return Err(format!(
                 "{} returned a truncated plugin API",
                 path.display()
@@ -1591,7 +1645,7 @@ unsafe fn abi_slice<'a, T>(data: *const T, len: u64) -> Result<&'a [T], ()> {
     if len == 0 {
         return Ok(&[]);
     }
-    if data.is_null() || len > 1024 {
+    if data.is_null() || len > MAX_ABI_SLICE_ITEMS {
         return Err(());
     }
     Ok(unsafe { slice::from_raw_parts(data, len as usize) })
@@ -1684,7 +1738,7 @@ pub unsafe extern "C" fn df_runtime_create(
             return Err("null host API".to_owned());
         };
         if host_api.abi_version != DF_HOST_ABI_VERSION
-            || host_api.struct_size < size_of::<DfHostApiV13>() as u32
+            || host_api.struct_size < size_of::<DfHostApiV14>() as u32
         {
             return Err("incompatible host API".to_owned());
         }
@@ -1761,6 +1815,35 @@ pub unsafe extern "C" fn df_runtime_plugin_count(runtime: *const DfRuntime) -> u
 pub unsafe extern "C" fn df_runtime_subscriptions(runtime: *const DfRuntime) -> u64 {
     // SAFETY: null is handled; non-null pointer is owned by caller.
     unsafe { runtime.as_ref() }.map_or(0, |runtime| runtime.subscriptions)
+}
+
+#[unsafe(no_mangle)]
+/// Returns the number of custom entity types declared by loaded plugins.
+///
+/// # Safety
+/// `runtime` must be null or point to a live runtime for this call.
+pub unsafe extern "C" fn df_runtime_entity_type_count(runtime: *const DfRuntime) -> u64 {
+    unsafe { runtime.as_ref() }.map_or(0, |runtime| runtime.entity_types.len() as u64)
+}
+
+#[unsafe(no_mangle)]
+/// Copies a custom entity type descriptor by global runtime index.
+///
+/// # Safety
+/// `runtime` and `out` must point to live ABI-compatible values for this call.
+pub unsafe extern "C" fn df_runtime_entity_type_at(
+    runtime: *const DfRuntime,
+    index: u64,
+    out: *mut DfEntityTypeDescriptorV1,
+) -> DfStatus {
+    let (Some(runtime), Some(out)) = (unsafe { runtime.as_ref() }, unsafe { out.as_mut() }) else {
+        return DF_STATUS_ERROR;
+    };
+    let Some(descriptor) = runtime.entity_types.get(index as usize) else {
+        return DF_STATUS_ERROR;
+    };
+    *out = *descriptor;
+    DF_STATUS_OK
 }
 
 #[unsafe(no_mangle)]
@@ -2665,9 +2748,9 @@ mod tests {
             std::env::temp_dir().join(format!("dragonfly-runtime-{}", std::process::id()));
         let _ = fs::remove_dir_all(&directory);
         fs::create_dir_all(&directory).unwrap();
-        let host = DfHostApiV13 {
+        let host = DfHostApiV14 {
             abi_version: DF_HOST_ABI_VERSION,
-            struct_size: size_of::<DfHostApiV13>() as u32,
+            struct_size: size_of::<DfHostApiV14>() as u32,
             context: 0,
             player_text: None,
             player_title: None,
@@ -2741,6 +2824,7 @@ mod tests {
     fn generic_dispatch_accepts_item_use_on_entity() {
         let mut runtime = DfRuntime {
             plugins: Vec::new(),
+            entity_types: Vec::new(),
             commands: Vec::new(),
             subscriptions: 0,
         };
@@ -2771,6 +2855,7 @@ mod tests {
     fn generic_dispatch_validates_change_world_handles() {
         let mut runtime = DfRuntime {
             plugins: Vec::new(),
+            entity_types: Vec::new(),
             commands: Vec::new(),
             subscriptions: 0,
         };
@@ -2820,6 +2905,7 @@ mod tests {
     fn generic_dispatch_validates_respawn_state() {
         let mut runtime = DfRuntime {
             plugins: Vec::new(),
+            entity_types: Vec::new(),
             commands: Vec::new(),
             subscriptions: 0,
         };
@@ -2869,6 +2955,7 @@ mod tests {
     fn generic_dispatch_validates_skin_change_state() {
         let mut runtime = DfRuntime {
             plugins: Vec::new(),
+            entity_types: Vec::new(),
             commands: Vec::new(),
             subscriptions: 0,
         };
@@ -2977,5 +3064,62 @@ mod tests {
             len: oversized.len() as u64,
         };
         assert!(!unsafe { valid_healing_source(&source) });
+    }
+
+    #[test]
+    fn validates_entity_type_descriptors() {
+        let save_id = b"example:marker";
+        let network_id = b"minecraft:armor_stand";
+        let mut descriptor = DfEntityTypeDescriptorV1 {
+            save_id: DfStringView {
+                data: save_id.as_ptr(),
+                len: save_id.len() as u64,
+            },
+            network_id: DfStringView {
+                data: network_id.as_ptr(),
+                len: network_id.len() as u64,
+            },
+            min: DfVec3 {
+                x: -0.25,
+                y: 0.0,
+                z: -0.25,
+            },
+            max: DfVec3 {
+                x: 0.25,
+                y: 1.975,
+                z: 0.25,
+            },
+        };
+        assert!(valid_entity_type_descriptor(&descriptor).is_ok());
+
+        descriptor.max.y = f64::NAN;
+        assert!(valid_entity_type_descriptor(&descriptor).is_err());
+        descriptor.max.y = 1.975;
+        descriptor.min.x = 1.0;
+        assert!(valid_entity_type_descriptor(&descriptor).is_err());
+        descriptor.min.x = -0.25;
+
+        let invalid_utf8 = [0xff];
+        descriptor.save_id = DfStringView {
+            data: invalid_utf8.as_ptr(),
+            len: invalid_utf8.len() as u64,
+        };
+        assert!(valid_entity_type_descriptor(&descriptor).is_err());
+        descriptor.save_id = DfStringView::default();
+        assert!(valid_entity_type_descriptor(&descriptor).is_err());
+    }
+
+    #[test]
+    fn abi_slice_limit_matches_entity_type_limit() {
+        let values = vec![0u8; MAX_ENTITY_TYPES as usize];
+        assert_eq!(
+            unsafe { abi_slice(values.as_ptr(), MAX_ENTITY_TYPES) }
+                .unwrap()
+                .len(),
+            MAX_ENTITY_TYPES as usize
+        );
+        assert!(unsafe { abi_slice(values.as_ptr(), MAX_ENTITY_TYPES + 1) }.is_err());
+        assert!(unsafe { abi_slice::<u8>(ptr::null(), 1) }.is_err());
+        assert!(unsafe { abi_slice::<u8>(ptr::null(), 0) }.is_ok());
     }
 }

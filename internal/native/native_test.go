@@ -49,6 +49,26 @@ func openTestRuntime(t testing.TB) *Runtime {
 	return runtime
 }
 
+func TestRuntimeReadsStaticallyRegisteredEntityTypes(t *testing.T) {
+	library, plugins := nativeArtifacts(t)
+	runtime, err := Open(library, plugins)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(runtime.Close)
+	types, err := runtime.EntityTypes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := EntityTypeDefinition{
+		SaveID: "entity-command-plugin:marker", NetworkID: "minecraft:armor_stand",
+		Min: Vec3{X: -0.25, Z: -0.25}, Max: Vec3{X: 0.25, Y: 1.975, Z: 0.25},
+	}
+	if !reflect.DeepEqual(types, []EntityTypeDefinition{want}) {
+		t.Fatalf("EntityTypes() = %#v, want %#v", types, []EntityTypeDefinition{want})
+	}
+}
+
 type recordingHost struct {
 	noopHost
 	player            PlayerID

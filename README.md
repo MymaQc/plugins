@@ -2,7 +2,7 @@
 
 Native multi-language plugin runtime for [df-mc/dragonfly](https://github.com/df-mc/dragonfly). Rust is the first supported plugin language.
 
-Current status: native runtime foundation plus player actions, typed items, inventories, scoreboards, asynchronous forms, managed worlds, stable entity handles, built-in entity/projectile spawning, typed world particles and sounds, and entity attack/use events. Generated events, lifecycle hooks, Dragonfly commands, bounded snapshots, and host actions travel through Go, the native Rust runtime, and dynamically loaded Rust plugins.
+Current status: native runtime foundation plus player actions, typed items, inventories, scoreboards, asynchronous forms, managed worlds, stable entity handles, built-in entity/projectile spawning, persistent plugin-owned base entities, typed world particles and sounds, and entity attack/use events. Generated events, lifecycle hooks, Dragonfly commands, bounded snapshots, and host actions travel through Go, the native Rust runtime, and dynamically loaded Rust plugins.
 
 Rust mirrors Dragonfly's `Messagef` convenience with Rust formatting arguments:
 
@@ -55,16 +55,26 @@ Entities use generation-tagged `world.EntityHandle` identities. Typed descriptor
 ```rust
 use dragonfly::{Vec3, World, entity, item};
 
+#[dragonfly::entity(
+    network = "minecraft:armor_stand",
+    width = 0.5,
+    height = 1.975,
+)]
+struct Marker;
+
 if let Some(world) = World::overworld() {
     let options = entity::SpawnOptions::new(Vec3 { x: 0.0, y: 65.0, z: 0.0 });
     let text = world.spawn_entity(entity::Text::new("Hello"), options.clone());
     let sword = item::new(item::Sword::new(item::ToolTier::Diamond), 1);
-    let dropped = world.spawn_entity(entity::DroppedItem::new(sword), options);
+    let dropped = world.spawn_entity(entity::DroppedItem::new(sword), options.clone());
+    let marker = world.spawn_entity(Marker, options);
     if let Some(text) = text {
         text.set_name_tag("Updated");
     }
 }
 ```
+
+`#[dragonfly::entity]` registers the type before Dragonfly constructs any world. Its save ID defaults to `<cargo-package>:<snake_case_type>`; use `id = "namespace:name"` when that persisted identity must survive crate or type renames. `width`/`height` creates a centered box, while `bbox = [min_x, min_y, min_z, max_x, max_y, max_z]` supports unusual shapes. The current base family persists position, rotation, name tag, and identity through Dragonfly providers. It deliberately does not pretend to be ticking, living, or velocity-capable; those proxy families and plugin-owned state codecs remain separate parity work.
 
 `World::entities()` and `World::players()` resolve within the current transaction. `Entity` exposes its managed world, type, position, rotation, optional velocity/name tag, teleport, velocity/name-tag mutation, and despawn. Dragonfly v0.11 has no exported generic rotation setter, so rotation mutation is deliberately absent rather than implemented with reflection. Projectiles use typed owner handles (`Arrow`, `Snowball`, `Egg`, `EnderPearl`, bottles, and potions). Dragonfly has no global pre-impact projectile hook; a correct cancellable projectile-hit event needs an upstream hook and is not faked by rebuilding private projectile behaviour.
 
@@ -251,7 +261,7 @@ See [native plugin architecture](docs/plans/rust-plugin-architecture.md).
 - [Scoreboard](examples/plugins/scoreboard): sends and removes a sidebar scoreboard.
 - [Forms](examples/plugins/forms): demonstrates menu, modal, and typed custom-form responses.
 - [World command](examples/plugins/world-command): demonstrates world lookup/open, blocks, time, and spawn.
-- [Entity command](examples/plugins/entity-command): demonstrates typed entity/projectile spawning, handles, and world lists.
+- [Entity command](examples/plugins/entity-command): demonstrates typed built-in/projectile spawning, automatically registered persistent base entities, handles, and world lists.
 - [Particle command](examples/plugins/particle-command): demonstrates every typed built-in particle family.
 - [Sound command](examples/plugins/sound-command): demonstrates private player playback and typed world sounds.
 

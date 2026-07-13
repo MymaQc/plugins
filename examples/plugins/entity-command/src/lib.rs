@@ -2,6 +2,9 @@ use std::time::Duration;
 
 use dragonfly::{Context, Player, Plugin, Vec3, World, block, entity, item, plugin};
 
+#[dragonfly::entity(network = "minecraft:armor_stand", width = 0.5, height = 1.975)]
+struct Marker;
+
 #[derive(Default)]
 struct EntityCommand;
 
@@ -11,13 +14,18 @@ impl Plugin for EntityCommand {
     #[command]
     fn root(&self, context: &mut Context<'_, Player>) {
         context.source().message(
-            "Use /entity text, /entity lightning, /entity tnt, /entity snowball, /entity sword, /entity sand, or /entity list.",
+            "Use /entity text, /entity marker, /entity lightning, /entity tnt, /entity snowball, /entity sword, /entity sand, or /entity list.",
         );
     }
 
     #[subcommand("text")]
     fn text(&self, context: &mut Context<'_, Player>) {
         self.spawn(context, entity::Text::new("Native Rust entity"));
+    }
+
+    #[subcommand("marker")]
+    fn marker(&self, context: &mut Context<'_, Player>) {
+        self.spawn(context, Marker);
     }
 
     #[subcommand("lightning")]

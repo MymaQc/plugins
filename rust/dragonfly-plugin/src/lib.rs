@@ -19,12 +19,14 @@ pub mod world;
 pub use entity::{Entity, EntityId};
 pub use world::{Dimension, World};
 
-pub use dragonfly_plugin_macros::{Command, CommandEnum, plugin};
+pub use dragonfly_plugin_macros::{Command, CommandEnum, entity, plugin};
 
 #[doc(hidden)]
 pub mod __private {
+    pub use crate::entity::{REGISTERED_TYPES, RegisteredType};
     pub use core::ffi::c_void;
     pub use dragonfly_plugin_sys as sys;
+    pub use linkme;
 }
 
 #[allow(non_snake_case)]
@@ -65,7 +67,7 @@ pub mod Event {
     pub use super::PlayerToggleSprintEventData as PlayerToggleSprint;
 }
 
-static HOST_API: AtomicPtr<dragonfly_plugin_sys::DfHostApiV13> =
+static HOST_API: AtomicPtr<dragonfly_plugin_sys::DfHostApiV14> =
     AtomicPtr::new(core::ptr::null_mut());
 
 std::thread_local! {
@@ -114,7 +116,7 @@ impl Drop for SkinSnapshot {
 #[doc(hidden)]
 /// # Safety
 /// `host` must remain valid while plugin callbacks may execute.
-pub unsafe fn install_host(host: *const dragonfly_plugin_sys::DfHostApiV13) {
+pub unsafe fn install_host(host: *const dragonfly_plugin_sys::DfHostApiV14) {
     HOST_API.store(host.cast_mut(), Ordering::Release);
 }
 
@@ -1433,7 +1435,7 @@ fn with_skin_view<R>(
 }
 
 fn read_skin_snapshot(
-    host: &dragonfly_plugin_sys::DfHostApiV13,
+    host: &dragonfly_plugin_sys::DfHostApiV14,
     invocation: dragonfly_plugin_sys::DfInvocationId,
     snapshot: u64,
     info: dragonfly_plugin_sys::DfSkinInfo,
@@ -2163,13 +2165,13 @@ fn slice_pointer<T>(value: &[T]) -> *const T {
     }
 }
 
-fn host_api() -> Option<&'static dragonfly_plugin_sys::DfHostApiV13> {
+fn host_api() -> Option<&'static dragonfly_plugin_sys::DfHostApiV14> {
     unsafe { HOST_API.load(Ordering::Acquire).as_ref() }
 }
 
 fn read_item_stack(
     open: impl FnOnce(
-        &dragonfly_plugin_sys::DfHostApiV13,
+        &dragonfly_plugin_sys::DfHostApiV14,
         *mut u64,
         *mut dragonfly_plugin_sys::DfItemStackInfo,
     ) -> Option<dragonfly_plugin_sys::DfStatus>,
@@ -2191,7 +2193,7 @@ fn read_item_stack(
 }
 
 fn read_item_stack_snapshot(
-    host: &dragonfly_plugin_sys::DfHostApiV13,
+    host: &dragonfly_plugin_sys::DfHostApiV14,
     invocation: dragonfly_plugin_sys::DfInvocationId,
     snapshot_id: u64,
     info: dragonfly_plugin_sys::DfItemStackInfo,
