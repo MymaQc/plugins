@@ -23,6 +23,10 @@ impl World {
         if raw == 0 { None } else { Some(Self { raw }) }
     }
 
+    pub(crate) const fn from_valid_raw(raw: u64) -> Self {
+        Self { raw }
+    }
+
     pub fn get(name: &str) -> Option<Self> {
         let host = crate::host_api()?;
         let lookup = host.world_lookup?;

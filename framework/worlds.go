@@ -175,8 +175,8 @@ func (m *WorldManager) register(name WorldID, w *world.World, core bool) (native
 	if core && !m.registriesReady {
 		m.blocks, m.entityTypes, m.registriesReady = w.BlockRegistry(), w.EntityRegistry(), true
 	}
-	w.Handle(host.NewWorldHandler(m.entityHandles))
 	entry := &managedWorld{id: m.next, name: name, world: w, core: core}
+	w.Handle(host.NewWorldHandler(m.entityHandles, m.players, entry.id))
 	m.worlds[name], m.handles[entry.id], m.byWorld[w] = entry, entry, entry
 	return entry.id, nil
 }
@@ -217,6 +217,14 @@ func (m *WorldManager) handleByWorld(w *world.World) (native.WorldID, bool) {
 		return 0, false
 	}
 	return entry.id, true
+}
+
+// WorldHandle resolves a managed Dragonfly world to its stable native handle.
+func (m *WorldManager) WorldHandle(w *world.World) (native.WorldID, bool) {
+	if w == nil {
+		return 0, false
+	}
+	return m.handleByWorld(w)
 }
 
 func liveWorld(entry *managedWorld, ok bool) (*managedWorld, bool) {

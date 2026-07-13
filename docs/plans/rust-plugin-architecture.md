@@ -491,6 +491,8 @@ Projectile factories preserve Dragonfly owner resolution and built-in behavior. 
 
 `Event::PlayerItemUseOnEntity` is bridged before Dragonfly checks whether the held item implements `item.UsableOnEntity`. It exposes the player and stable target entity and remains cancellable/default-allowed, including when the player holds no item or the item has no entity-use behavior.
 
+`Event::PlayerChangeWorld` mirrors Dragonfly's post-transfer callback. Dragonfly emits it on the player's first tick in the destination, not while initially joining and not for a same-world re-add. The callback is immutable and exposes `player()`, `before() -> Option<World>`, and `after() -> World`. Its invocation owns the destination transaction. The host records the source's stable world handle when the player departs, so `before()` remains exact even if that now-empty world unloads before the destination tick. Synchronous source-world reads remain unavailable from the destination callback; destination operations reuse the active transaction and cross-world writes follow the normal queued path.
+
 ## Particles and sounds
 
 `particle::Particle` is sealed and implemented by typed descriptors for all Dragonfly v0.11 built-ins. The flat `DfParticleViewV1` carries only the union of concrete fields: colour, block, face/area/instrument data, note pitch, and dragon-egg offset. Go reconstructs the exact `world/particle` type and calls `Tx.AddParticle`; same-world callbacks reuse their transaction and cross-world calls enqueue through `World.Do`. Dragonfly has no particle registry or identifier strings, so the SDK does not invent a second naming system.

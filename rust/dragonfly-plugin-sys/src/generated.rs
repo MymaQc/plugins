@@ -899,6 +899,22 @@ pub struct DfPlayerItemUseOnEntityState {
     pub cancelled: u8,
 }
 
+pub const DF_EVENT_PLAYER_CHANGE_WORLD: DfEventId = 32;
+pub const DF_SUBSCRIPTION_PLAYER_CHANGE_WORLD: u64 = 1u64 << 31;
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfPlayerChangeWorldInput {
+    pub invocation: DfInvocationId,
+    pub player: DfPlayerId,
+    pub before: DfWorldId,
+    pub after: DfWorldId,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfPlayerChangeWorldState {
+    pub _reserved: u8,
+}
+
 pub type DfPluginCreateFn = unsafe extern "C" fn() -> *mut c_void;
 pub type DfPluginLifecycleFn = unsafe extern "C" fn(instance: *mut c_void) -> DfStatus;
 pub type DfPluginCommandsFn = unsafe extern "C" fn(instance: *mut c_void, count: *mut u64) -> *const DfCommandDescriptor;

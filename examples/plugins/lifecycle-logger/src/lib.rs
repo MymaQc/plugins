@@ -165,4 +165,13 @@ impl Plugin for LifecycleLogger {
     fn on_item_use_on_entity(&self, event: &mut Event::PlayerItemUseOnEntity<'_>) {
         eprintln!("used item on {:?}", event.target().id());
     }
+
+    fn on_change_world(&self, event: &Event::PlayerChangeWorld<'_>) {
+        eprintln!(
+            "player {:?} changed world from {:?} to {:?}",
+            event.player().id(),
+            event.before(),
+            event.after()
+        );
+    }
 }

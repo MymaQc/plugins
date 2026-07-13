@@ -41,6 +41,10 @@ type runtimeStub struct {
 	attackOutput        native.PlayerAttackEntityOutput
 	itemUseEntityInput  native.PlayerItemUseOnEntityInput
 	itemUseEntityCancel bool
+	changeWorldInput    native.PlayerChangeWorldInput
+	changeWorldTx       *world.World
+	changeWorldCalls    int
+	players             *Players
 }
 
 type testDamageSource struct{}
@@ -153,6 +157,82 @@ func (r *runtimeStub) HandlePlayerItemUseOnEntity(_ native.InvocationID, input n
 	r.itemUseEntityInput = input
 	return cancelled || r.itemUseEntityCancel, nil
 }
+func (r *runtimeStub) HandlePlayerChangeWorld(invocation native.InvocationID, input native.PlayerChangeWorldInput) error {
+	r.changeWorldCalls++
+	r.changeWorldInput = input
+	if r.players != nil {
+		if tx, ok := r.players.InvocationTx(invocation); ok {
+			r.changeWorldTx = tx.World()
+		}
+	}
+	return nil
+}
+
+func TestPlayerHandlerChangeWorldFiresOnFirstDestinationTick(t *testing.T) {
+	before := world.Config{Synchronous: true}.New()
+	after := world.Config{Synchronous: true}.New()
+	t.Cleanup(func() {
+		_ = before.Close()
+		_ = after.Close()
+	})
+	players := NewPlayers()
+	runtime := &runtimeStub{subscriptions: native.PlayerChangeWorldSubscription, players: players}
+	resolver := worldResolverStub{before: 11, after: 12}
+	before.Handle(NewWorldHandler(players.EntityRegistry(), players, 11))
+	after.Handle(NewWorldHandler(players.EntityRegistry(), players, 12))
+	handler := NewPlayerHandler(runtime, nil, players, resolver)
+	id := uuid.MustParse("05ed0094-34ea-442d-8292-a337bd677bef")
+	handle := world.EntitySpawnOpts{ID: id, Position: mgl64.Vec3{1, 2, 3}}.New(
+		player.Type,
+		player.Config{UUID: id, Name: "Traveller", Position: mgl64.Vec3{1, 2, 3}},
+	)
+	var transferred *world.EntityHandle
+	if err := before.Do(func(tx *world.Tx) {
+		connected := tx.AddEntity(handle).(*player.Player)
+		players.Register(connected, 94)
+		connected.Handle(handler)
+		connected.Tick(tx, 1)
+		if runtime.changeWorldCalls != 0 {
+			t.Fatalf("initial tick emitted %d change-world calls", runtime.changeWorldCalls)
+		}
+		sameWorld := tx.RemoveEntity(connected)
+		if sameWorld == nil {
+			t.Fatal("same-world remove returned no handle")
+		}
+		connected = tx.AddEntity(sameWorld).(*player.Player)
+		connected.Tick(tx, 2)
+		if runtime.changeWorldCalls != 0 {
+			t.Fatalf("same-world re-add emitted %d change-world calls", runtime.changeWorldCalls)
+		}
+		transferred = tx.RemoveEntity(connected)
+		if transferred == nil {
+			t.Fatal("remove player returned no handle")
+		}
+	}).Wait(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := after.Do(func(tx *world.Tx) {
+		connected := tx.AddEntity(transferred).(*player.Player)
+		connected.Tick(tx, 3)
+		if runtime.changeWorldCalls != 1 || runtime.changeWorldInput.Before == nil ||
+			*runtime.changeWorldInput.Before != 11 || runtime.changeWorldInput.After != 12 {
+			t.Fatalf("destination change-world result: calls=%d input=%#v", runtime.changeWorldCalls, runtime.changeWorldInput)
+		}
+		connected.Tick(tx, 4)
+		if runtime.changeWorldCalls != 1 {
+			t.Fatalf("second destination tick emitted %d calls", runtime.changeWorldCalls)
+		}
+	}).Wait(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+type worldResolverStub map[*world.World]native.WorldID
+
+func (r worldResolverStub) WorldHandle(w *world.World) (native.WorldID, bool) {
+	id, ok := r[w]
+	return id, ok
+}
 
 func (r *runtimeStub) Subscriptions() uint64 { return r.subscriptions }
 func (r *runtimeStub) HandlePlayerMove(_ native.InvocationID, input native.PlayerMoveInput, _ bool) (bool, error) {
@@ -189,7 +269,7 @@ func TestPlayerHandlerMove(t *testing.T) {
 	withPlayer(t, func(p *player.Player) {
 		players := NewPlayers()
 		players.Register(p, 7)
-		handler := NewPlayerHandler(runtime, nil, players)
+		handler := NewPlayerHandler(runtime, nil, players, nil)
 		p.Handle(handler)
 		p.Move(mgl64.Vec3{3, 3, 3}, 90, 10)
 		if p.Position() != (mgl64.Vec3{1, 2, 3}) {
@@ -211,7 +291,7 @@ func TestPlayerHandlerAttackEntityUsesStableTargetID(t *testing.T) {
 	withPlayerTx(t, func(tx *world.Tx, p *player.Player) {
 		players := NewPlayers()
 		playerID := players.Register(p, 91)
-		handler := NewPlayerHandler(runtime, nil, players)
+		handler := NewPlayerHandler(runtime, nil, players, nil)
 		p.Handle(handler)
 		target := tx.AddEntity(entity.NewText("target", p.Position().Add(mgl64.Vec3{1, 0, 0})))
 		if p.AttackEntity(target) {
@@ -232,7 +312,7 @@ func TestPlayerHandlerItemUseOnEntityUsesStableTargetID(t *testing.T) {
 	withPlayerTx(t, func(tx *world.Tx, p *player.Player) {
 		players := NewPlayers()
 		playerID := players.Register(p, 92)
-		handler := NewPlayerHandler(runtime, nil, players)
+		handler := NewPlayerHandler(runtime, nil, players, nil)
 		p.Handle(handler)
 		target := tx.AddEntity(entity.NewText("target", p.Position().Add(mgl64.Vec3{1, 0, 0})))
 		if p.UseItemOnEntity(target) {
@@ -245,6 +325,48 @@ func TestPlayerHandlerItemUseOnEntityUsesStableTargetID(t *testing.T) {
 	})
 }
 
+func TestPlayerHandlerChangeWorldUsesManagedHandlesAndNewWorldTransaction(t *testing.T) {
+	before := world.Config{Synchronous: true}.New()
+	after := world.Config{Synchronous: true}.New()
+	t.Cleanup(func() {
+		_ = before.Close()
+		_ = after.Close()
+	})
+	players := NewPlayers()
+	runtime := &runtimeStub{subscriptions: native.PlayerChangeWorldSubscription, players: players}
+	resolver := worldResolverStub{before: 11, after: 12}
+	id := uuid.MustParse("d06ad8ec-a3c0-4c91-95e0-dbd3643778d5")
+	handle := world.EntitySpawnOpts{ID: id, Position: mgl64.Vec3{1, 2, 3}}.New(
+		player.Type,
+		player.Config{UUID: id, Name: "Traveller", Position: mgl64.Vec3{1, 2, 3}},
+	)
+	if err := after.Do(func(tx *world.Tx) {
+		p := tx.AddEntity(handle).(*player.Player)
+		playerID := players.Register(p, 93)
+		handler := NewPlayerHandler(runtime, nil, players, resolver)
+		handler.HandleChangeWorld(p, before, after)
+		if runtime.changeWorldInput.Player != playerID || runtime.changeWorldInput.Before == nil ||
+			*runtime.changeWorldInput.Before != 11 || runtime.changeWorldInput.After != 12 {
+			t.Fatalf("change-world input = %#v", runtime.changeWorldInput)
+		}
+		if runtime.changeWorldTx != after {
+			t.Fatalf("invocation world = %p, want %p", runtime.changeWorldTx, after)
+		}
+		players.recordWorldDeparture(p, 11)
+		delete(resolver, before)
+		handler.HandleChangeWorld(p, before, after)
+		if runtime.changeWorldInput.Before == nil || *runtime.changeWorldInput.Before != 11 {
+			t.Fatalf("unloaded source handle = %#v", runtime.changeWorldInput.Before)
+		}
+		handler.HandleChangeWorld(p, nil, after)
+		if runtime.changeWorldInput.Before != nil || runtime.changeWorldInput.After != 12 {
+			t.Fatalf("initial change-world input = %#v", runtime.changeWorldInput)
+		}
+	}).Wait(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestPlayerHandlerChat(t *testing.T) {
 	replacement := "filtered"
 	runtime := &runtimeStub{
@@ -254,7 +376,7 @@ func TestPlayerHandlerChat(t *testing.T) {
 	withPlayer(t, func(p *player.Player) {
 		players := NewPlayers()
 		players.Register(p, 9)
-		handler := NewPlayerHandler(runtime, nil, players)
+		handler := NewPlayerHandler(runtime, nil, players, nil)
 		p.Handle(handler)
 		p.Chat("original")
 		if runtime.chatInput.Message != "original" || runtime.chatInput.Player.Generation != 9 {
@@ -271,7 +393,7 @@ func TestPlayerHandlerJoinAndQuit(t *testing.T) {
 	withPlayer(t, func(p *player.Player) {
 		players := NewPlayers()
 		players.Register(p, 11)
-		handler := NewPlayerHandler(runtime, nil, players)
+		handler := NewPlayerHandler(runtime, nil, players, nil)
 		if !handler.Join(p) {
 			t.Fatal("join was not cancelled")
 		}
@@ -298,7 +420,7 @@ func TestPlayerHandlerHurtAndHeal(t *testing.T) {
 	withPlayer(t, func(p *player.Player) {
 		players := NewPlayers()
 		players.Register(p, 13)
-		handler := NewPlayerHandler(runtime, nil, players)
+		handler := NewPlayerHandler(runtime, nil, players, nil)
 		p.Hurt(5, testDamageSource{})
 		p.Handle(handler)
 		before := p.Health()
@@ -333,7 +455,7 @@ func TestPlayerHandlerBlockBreakAndPlace(t *testing.T) {
 	withPlayerTx(t, func(tx *world.Tx, p *player.Player) {
 		players := NewPlayers()
 		players.Register(p, 14)
-		handler := NewPlayerHandler(runtime, nil, players)
+		handler := NewPlayerHandler(runtime, nil, players, nil)
 		breakPos, placePos := cube.Pos{1, 2, 4}, cube.Pos{1, 2, 5}
 		tx.SetBlock(breakPos, block.Stone{}, nil)
 		p.Handle(handler)
@@ -357,7 +479,7 @@ func TestPlayerHandlerFoodLossAndDeath(t *testing.T) {
 	withPlayerTx(t, func(tx *world.Tx, p *player.Player) {
 		players := NewPlayers()
 		players.Register(p, 15)
-		handler := NewPlayerHandler(runtime, nil, players)
+		handler := NewPlayerHandler(runtime, nil, players, nil)
 		tx.World().SetDifficulty(world.DifficultyHard)
 		p.SetFood(10)
 		p.Saturate(0, -20)

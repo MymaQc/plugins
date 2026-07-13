@@ -24,6 +24,7 @@ type Players struct {
 	entries        map[*world.EntityHandle]*playerEntry
 	byID           map[native.PlayerID]*playerEntry
 	entities       *Entities
+	departedWorlds map[*world.EntityHandle]native.WorldID
 	invocations    map[native.InvocationID]*world.Tx
 	nextInvocation native.InvocationID
 }
@@ -37,10 +38,11 @@ type playerEntry struct {
 
 func NewPlayers() *Players {
 	return &Players{
-		entries:     map[*world.EntityHandle]*playerEntry{},
-		byID:        map[native.PlayerID]*playerEntry{},
-		entities:    NewEntities(),
-		invocations: map[native.InvocationID]*world.Tx{},
+		entries:        map[*world.EntityHandle]*playerEntry{},
+		byID:           map[native.PlayerID]*playerEntry{},
+		entities:       NewEntities(),
+		departedWorlds: map[*world.EntityHandle]native.WorldID{},
+		invocations:    map[native.InvocationID]*world.Tx{},
 	}
 }
 
@@ -67,11 +69,43 @@ func (p *Players) Unregister(player *player.Player) {
 		delete(p.byID, entry.id)
 		delete(p.entries, player.H())
 	}
+	delete(p.departedWorlds, player.H())
 	p.mu.Unlock()
 	if registered {
 		p.entities.unregisterHandle(player.H())
 		native.CancelPlayerForms(id)
 	}
+}
+
+// recordWorldDeparture retains the source world handle until Dragonfly emits
+// HandleChangeWorld on the player's first tick in the destination world.
+func (p *Players) recordWorldDeparture(connected *player.Player, id native.WorldID) {
+	if p == nil || connected == nil || id == 0 {
+		return
+	}
+	p.mu.Lock()
+	p.departedWorlds[connected.H()] = id
+	p.mu.Unlock()
+}
+
+func (p *Players) takeWorldDeparture(connected *player.Player) (native.WorldID, bool) {
+	if p == nil || connected == nil {
+		return 0, false
+	}
+	p.mu.Lock()
+	id, ok := p.departedWorlds[connected.H()]
+	delete(p.departedWorlds, connected.H())
+	p.mu.Unlock()
+	return id, ok
+}
+
+func (p *Players) forgetWorldDeparture(handle *world.EntityHandle) {
+	if p == nil || handle == nil {
+		return
+	}
+	p.mu.Lock()
+	delete(p.departedWorlds, handle)
+	p.mu.Unlock()
 }
 
 // EntityRegistry returns the generic entity registry shared by player IDs.

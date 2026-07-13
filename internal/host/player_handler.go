@@ -47,6 +47,11 @@ type playerRuntime interface {
 	HandlePlayerItemDrop(native.InvocationID, native.PlayerID, native.ItemStack, bool) (bool, error)
 	HandlePlayerAttackEntity(native.InvocationID, native.PlayerAttackEntityInput, float64, float64, bool, bool) (native.PlayerAttackEntityOutput, error)
 	HandlePlayerItemUseOnEntity(native.InvocationID, native.PlayerItemUseOnEntityInput, bool) (bool, error)
+	HandlePlayerChangeWorld(native.InvocationID, native.PlayerChangeWorldInput) error
+}
+
+type playerWorldResolver interface {
+	WorldHandle(*world.World) (native.WorldID, bool)
 }
 
 func (h *PlayerHandler) HandleJump(p *player.Player) {
@@ -154,15 +159,43 @@ type PlayerHandler struct {
 	runtime playerRuntime
 	log     *slog.Logger
 	players *Players
+	worlds  playerWorldResolver
 }
 
 var _ player.Handler = (*PlayerHandler)(nil)
 
-func NewPlayerHandler(runtime playerRuntime, log *slog.Logger, players *Players) *PlayerHandler {
+func NewPlayerHandler(runtime playerRuntime, log *slog.Logger, players *Players, worlds playerWorldResolver) *PlayerHandler {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &PlayerHandler{runtime: runtime, log: log, players: players}
+	return &PlayerHandler{runtime: runtime, log: log, players: players, worlds: worlds}
+}
+
+func (h *PlayerHandler) HandleChangeWorld(p *player.Player, before, after *world.World) {
+	if h.runtime.Subscriptions()&native.PlayerChangeWorldSubscription == 0 || h.worlds == nil || after == nil {
+		return
+	}
+	afterID, ok := h.worlds.WorldHandle(after)
+	if !ok {
+		return
+	}
+	input := native.PlayerChangeWorldInput{Player: h.playerID(p), After: afterID}
+	departedID, departed := h.players.takeWorldDeparture(p)
+	if before != nil {
+		beforeID, ok := h.worlds.WorldHandle(before)
+		if ok {
+			input.Before = &beforeID
+		} else if departed {
+			input.Before = &departedID
+		} else {
+			return
+		}
+	}
+	invocation, leave := h.players.BeginInvocation(p.Tx())
+	defer leave()
+	if err := h.runtime.HandlePlayerChangeWorld(invocation, input); err != nil {
+		h.log.Error("native plugin change-world handler failed", "player", p.Name(), "error", err)
+	}
 }
 
 func (h *PlayerHandler) HandleAttackEntity(ctx *player.Context, target world.Entity, force, height *float64, critical *bool) {

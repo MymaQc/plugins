@@ -292,7 +292,7 @@ func readEvents(dir string) ([]event, error) {
 
 func validateFields(eventName string, fields []field) error {
 	valid := map[string]bool{
-		"bool": true, "player_id": true, "entity_id": true, "rotation": true, "string_buffer": true,
+		"bool": true, "player_id": true, "entity_id": true, "world_id": true, "rotation": true, "string_buffer": true,
 		"string_view": true, "vec3": true, "f64": true, "u64": true, "i32": true,
 		"block_pos": true, "item_stack": true, "damage_source": true, "healing_source": true,
 	}
@@ -1205,7 +1205,7 @@ func generateRustItems(items itemSchema) []byte {
 
 func cType(t string) string {
 	return map[string]string{
-		"bool": "uint8_t", "player_id": "DfPlayerId", "entity_id": "DfEntityId", "rotation": "DfRotation",
+		"bool": "uint8_t", "player_id": "DfPlayerId", "entity_id": "DfEntityId", "world_id": "DfWorldId", "rotation": "DfRotation",
 		"string_buffer": "DfStringBuffer", "string_view": "DfStringView", "vec3": "DfVec3",
 		"f64": "double", "u64": "uint64_t",
 		"i32": "int32_t", "block_pos": "DfBlockPos", "item_stack": "DfItemStackSnapshot",
@@ -1215,7 +1215,7 @@ func cType(t string) string {
 
 func rustType(t string) string {
 	return map[string]string{
-		"bool": "u8", "player_id": "DfPlayerId", "entity_id": "DfEntityId", "rotation": "DfRotation",
+		"bool": "u8", "player_id": "DfPlayerId", "entity_id": "DfEntityId", "world_id": "DfWorldId", "rotation": "DfRotation",
 		"string_buffer": "DfStringBuffer", "string_view": "DfStringView", "vec3": "DfVec3",
 		"f64": "f64", "u64": "u64",
 		"i32": "i32", "block_pos": "DfBlockPos", "item_stack": "DfItemStackSnapshot",

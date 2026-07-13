@@ -129,7 +129,7 @@ impl Plugin for MovementGuard {
 Events continue by default. Cancellation is monotonic; no `allow()` API exists.
 Plugin identity defaults to Cargo's package name; handler code does not repeat it.
 
-Event types live only under `Event::Player*`. Damage and healing sources are typed values: hurt/death expose `damage_source()`, while heal exposes `healing_source()`.
+Event types live only under `Event::Player*`. Damage and healing sources are typed values: hurt/death expose `damage_source()`, while heal exposes `healing_source()`. `Event::PlayerChangeWorld` is emitted after transfer on the first destination tick and exposes `before() -> Option<World>` plus `after() -> World`.
 
 Items are owned Rust values. Inventory handles stay attached to the generation-tagged player:
 
@@ -191,7 +191,7 @@ See [native plugin architecture](docs/plans/rust-plugin-architecture.md).
 
 - [Movement guard](examples/plugins/movement-guard): cancels movement below Y=0.
 - [Chat filter](examples/plugins/chat-filter): replaces text and cancels a blocked message.
-- [Lifecycle logger](examples/plugins/lifecycle-logger): demonstrates enable and disable hooks.
+- [Lifecycle logger](examples/plugins/lifecycle-logger): demonstrates enable/disable hooks and the complete bridged player-event set.
 - [Hello command](examples/plugins/hello-command): demonstrates Dragonfly subcommands and enum parameters.
 - [Items command](examples/plugins/items-command): demonstrates typed items and inventory reads/writes.
 - [Scoreboard](examples/plugins/scoreboard): sends and removes a sidebar scoreboard.

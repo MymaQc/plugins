@@ -30,6 +30,7 @@ pub mod Event {
     pub use super::PlayerBlockBreakEventData as PlayerBlockBreak;
     pub use super::PlayerBlockPickEventData as PlayerBlockPick;
     pub use super::PlayerBlockPlaceEventData as PlayerBlockPlace;
+    pub use super::PlayerChangeWorldEventData as PlayerChangeWorld;
     pub use super::PlayerChatEventData as PlayerChat;
     pub use super::PlayerDeathEventData as PlayerDeath;
     pub use super::PlayerExperienceGainEventData as PlayerExperienceGain;
@@ -3285,6 +3286,32 @@ impl<'a> PlayerItemUseOnEntityEventData<'a> {
     }
 }
 
+pub struct PlayerChangeWorldEventData<'a> {
+    input: &'a dragonfly_plugin_sys::DfPlayerChangeWorldInput,
+}
+
+impl<'a> PlayerChangeWorldEventData<'a> {
+    /// # Safety
+    /// The reference must belong to an active change-world callback whose
+    /// world handles were validated by the runtime.
+    #[doc(hidden)]
+    pub unsafe fn from_raw(input: &'a dragonfly_plugin_sys::DfPlayerChangeWorldInput) -> Self {
+        Self { input }
+    }
+
+    pub fn player(&self) -> Player {
+        Player::from_id(self.input.player)
+    }
+
+    pub fn before(&self) -> Option<World> {
+        (self.input.before.value != 0).then(|| World::from_valid_raw(self.input.before.value))
+    }
+
+    pub fn after(&self) -> World {
+        World::from_valid_raw(self.input.after.value)
+    }
+}
+
 pub trait Plugin: Default + Send + Sync + 'static {
     fn on_enable(&self) {}
     fn on_disable(&self) {}
@@ -3319,6 +3346,7 @@ pub trait Plugin: Default + Send + Sync + 'static {
     fn on_item_drop(&self, _event: &mut Event::PlayerItemDrop<'_>) {}
     fn on_attack_entity(&self, _event: &mut Event::PlayerAttackEntity<'_>) {}
     fn on_item_use_on_entity(&self, _event: &mut Event::PlayerItemUseOnEntity<'_>) {}
+    fn on_change_world(&self, _event: &Event::PlayerChangeWorld<'_>) {}
     fn commands(&self) -> &'static [Command] {
         &[]
     }
@@ -3463,6 +3491,28 @@ mod tests {
         assert!(!event.cancelled());
         event.cancel();
         assert!(event.cancelled());
+    }
+
+    #[test]
+    fn change_world_exposes_optional_before_without_panicking() {
+        let mut input = dragonfly_plugin_sys::DfPlayerChangeWorldInput {
+            invocation: 17,
+            player: dragonfly_plugin_sys::DfPlayerId {
+                bytes: [7; 16],
+                generation: 19,
+            },
+            before: dragonfly_plugin_sys::DfWorldId { value: 0 },
+            after: dragonfly_plugin_sys::DfWorldId { value: 23 },
+        };
+        let event = unsafe { PlayerChangeWorldEventData::from_raw(&input) };
+        assert_eq!(event.player().id().generation(), 19);
+        assert_eq!(event.before(), None);
+        assert_eq!(event.after().raw_id().value, 23);
+
+        input.before.value = 29;
+        let event = unsafe { PlayerChangeWorldEventData::from_raw(&input) };
+        assert_eq!(event.before().map(|world| world.raw_id().value), Some(29));
+        assert_eq!(event.after().raw_id().value, 23);
     }
 
     #[test]

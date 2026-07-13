@@ -1507,6 +1507,25 @@ func TestPlayerItemUseOnEntityRoundTrip(t *testing.T) {
 	}
 }
 
+func TestPlayerChangeWorldRoundTrip(t *testing.T) {
+	runtime := openTestRuntime(t)
+	if runtime.Subscriptions()&PlayerChangeWorldSubscription == 0 {
+		t.Fatal("change-world subscription missing")
+	}
+	player := PlayerID{UUID: [16]byte{1, 2, 3}, Generation: 41}
+	before, after := WorldID(52), WorldID(53)
+	if err := runtime.HandlePlayerChangeWorld(73, PlayerChangeWorldInput{
+		Player: player, Before: &before, After: after,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := runtime.HandlePlayerChangeWorld(73, PlayerChangeWorldInput{
+		Player: player, After: after,
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestCancellationIsMonotonic(t *testing.T) {
 	runtime := openTestRuntime(t)
 	cancelled, err := runtime.HandlePlayerMove(0, PlayerMoveInput{NewPosition: Vec3{Y: 64}}, true)

@@ -109,7 +109,7 @@ func Run(ctx context.Context, config Config, log *slog.Logger) error {
 	var generation atomic.Uint64
 	for p := range srv.Accept() {
 		players.Register(p, generation.Add(1))
-		handler := host.NewPlayerHandler(pluginRuntime, log, players)
+		handler := host.NewPlayerHandler(pluginRuntime, log, players, worlds)
 		p.Handle(handler)
 		if handler.Join(p) {
 			p.Disconnect("Connection rejected by a plugin.")

@@ -776,6 +776,19 @@ typedef struct {
     uint8_t cancelled;
 } DfPlayerItemUseOnEntityState;
 
+#define DF_EVENT_PLAYER_CHANGE_WORLD 32u
+
+typedef struct {
+    DfInvocationId invocation;
+    DfPlayerId player;
+    DfWorldId before;
+    DfWorldId after;
+} DfPlayerChangeWorldInput;
+
+typedef struct {
+    uint8_t _reserved;
+} DfPlayerChangeWorldState;
+
 typedef DfStatus (*DfHandleEventFn)(void *instance, DfEventId event_id, const void *input, void *state);
 typedef void *(*DfPluginCreateFn)(void);
 typedef DfStatus (*DfPluginLifecycleFn)(void *instance);

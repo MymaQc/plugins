@@ -238,3 +238,10 @@ events:
       - { name: target, type: entity_id }
     state:
       - { name: cancelled, type: bool }
+  - name: change_world
+    id: 32
+    input:
+      - { name: player, type: player_id }
+      - { name: before, type: world_id }
+      - { name: after, type: world_id }
+    state: []
