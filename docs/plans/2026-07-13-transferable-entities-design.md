@@ -1,6 +1,6 @@
 # Transferable entities design
 
-Status: Draft approved in conversation; awaiting written-spec review
+Status: Approved
 
 ## Goal
 
