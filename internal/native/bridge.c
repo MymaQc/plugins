@@ -1,9 +1,28 @@
 #include "bridge.h"
 
 #include <dlfcn.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#if UINTPTR_MAX == UINT64_MAX
+_Static_assert(sizeof(DfSkinAnimationInfo) == 40, "DfSkinAnimationInfo ABI layout changed");
+_Static_assert(offsetof(DfSkinAnimationInfo, frame_count) == 16, "DfSkinAnimationInfo.frame_count ABI offset changed");
+_Static_assert(offsetof(DfSkinAnimationInfo, pixels_len) == 32, "DfSkinAnimationInfo.pixels_len ABI offset changed");
+_Static_assert(sizeof(DfSkinInfo) == 88, "DfSkinInfo ABI layout changed");
+_Static_assert(offsetof(DfSkinInfo, play_fab_id_len) == 16, "DfSkinInfo.play_fab_id_len ABI offset changed");
+_Static_assert(offsetof(DfSkinInfo, cape_pixels_len) == 72, "DfSkinInfo.cape_pixels_len ABI offset changed");
+_Static_assert(sizeof(DfSkinData) == 184, "DfSkinData ABI layout changed");
+_Static_assert(offsetof(DfSkinData, animation_pixels) == 168, "DfSkinData.animation_pixels ABI offset changed");
+_Static_assert(sizeof(DfSkinAnimationView) == 48, "DfSkinAnimationView ABI layout changed");
+_Static_assert(offsetof(DfSkinAnimationView, pixels) == 32, "DfSkinAnimationView.pixels ABI offset changed");
+_Static_assert(sizeof(DfSkinView) == 152, "DfSkinView ABI layout changed");
+_Static_assert(offsetof(DfSkinView, animations) == 136, "DfSkinView.animations ABI offset changed");
+_Static_assert(sizeof(DfHostApiV2) == 120, "DfHostApiV2 ABI layout changed");
+_Static_assert(offsetof(DfHostApiV2, player_skin_open) == 80, "DfHostApiV2.player_skin_open ABI offset changed");
+_Static_assert(offsetof(DfHostApiV2, player_skin_set) == 112, "DfHostApiV2.player_skin_set ABI offset changed");
+#endif
 
 extern DfStatus bg_go_player_text(uint64_t context, DfPlayerId player, uint32_t kind, DfStringView message);
 extern DfStatus bg_go_player_title(uint64_t context, DfPlayerId player, DfTitleView title);
@@ -13,6 +32,11 @@ extern DfStatus bg_go_player_state_set(uint64_t context, DfPlayerId player, uint
 extern DfStatus bg_go_player_state_get(uint64_t context, DfPlayerId player, uint32_t kind, DfPlayerStateValue *value);
 extern DfStatus bg_go_player_effect(uint64_t context, DfPlayerId player, uint32_t operation, DfEffectView effect);
 extern DfStatus bg_go_player_entity_visibility(uint64_t context, DfPlayerId player, DfEntityId entity, uint8_t visible);
+extern DfStatus bg_go_player_skin_open(uint64_t context, DfPlayerId player, uint64_t *snapshot, DfSkinInfo *info);
+extern DfStatus bg_go_player_skin_animation_info(uint64_t context, uint64_t snapshot, uint64_t index, DfSkinAnimationInfo *info);
+extern DfStatus bg_go_player_skin_read(uint64_t context, uint64_t snapshot, DfSkinData *data);
+extern void bg_go_player_skin_close(uint64_t context, uint64_t snapshot);
+extern DfStatus bg_go_player_skin_set(uint64_t context, DfPlayerId player, const DfSkinView *skin);
 
 static DfStatus host_player_text(uint64_t context, DfPlayerId player, uint32_t kind, DfStringView message) {
     return bg_go_player_text(context, player, kind, message);
@@ -46,6 +70,26 @@ static DfStatus host_player_entity_visibility(uint64_t context, DfPlayerId playe
     return bg_go_player_entity_visibility(context, player, entity, visible);
 }
 
+static DfStatus host_player_skin_open(uint64_t context, DfPlayerId player, uint64_t *snapshot, DfSkinInfo *info) {
+    return bg_go_player_skin_open(context, player, snapshot, info);
+}
+
+static DfStatus host_player_skin_animation_info(uint64_t context, uint64_t snapshot, uint64_t index, DfSkinAnimationInfo *info) {
+    return bg_go_player_skin_animation_info(context, snapshot, index, info);
+}
+
+static DfStatus host_player_skin_read(uint64_t context, uint64_t snapshot, DfSkinData *data) {
+    return bg_go_player_skin_read(context, snapshot, data);
+}
+
+static void host_player_skin_close(uint64_t context, uint64_t snapshot) {
+    bg_go_player_skin_close(context, snapshot);
+}
+
+static DfStatus host_player_skin_set(uint64_t context, DfPlayerId player, const DfSkinView *skin) {
+    return bg_go_player_skin_set(context, player, skin);
+}
+
 typedef DfStatus (*RuntimeCreateFn)(const DfRuntimeConfig *, DfRuntime **, uint8_t *, uint64_t);
 typedef void (*RuntimeDestroyFn)(DfRuntime *);
 typedef DfStatus (*RuntimeEnableFn)(DfRuntime *);
@@ -59,7 +103,7 @@ typedef DfStatus (*RuntimeEventFn)(DfRuntime *, DfEventId, const void *, void *)
 struct BgRuntimeLibrary {
     void *handle;
     DfRuntime *runtime;
-    DfHostApiV1 host_api;
+    DfHostApiV2 host_api;
     RuntimeDestroyFn destroy;
     RuntimeEnableFn enable;
     RuntimeDisableFn disable;
@@ -132,9 +176,9 @@ DfStatus bg_runtime_open(
         return DF_STATUS_ERROR;
     }
 
-    library->host_api = (DfHostApiV1) {
-        .abi_version = DF_ABI_VERSION,
-        .struct_size = sizeof(DfHostApiV1),
+    library->host_api = (DfHostApiV2) {
+        .abi_version = DF_HOST_ABI_VERSION,
+        .struct_size = sizeof(DfHostApiV2),
         .context = host_context,
         .player_text = host_player_text,
         .player_title = host_player_title,
@@ -144,6 +188,11 @@ DfStatus bg_runtime_open(
         .player_state_get = host_player_state_get,
         .player_effect = host_player_effect,
         .player_entity_visibility = host_player_entity_visibility,
+        .player_skin_open = host_player_skin_open,
+        .player_skin_animation_info = host_player_skin_animation_info,
+        .player_skin_read = host_player_skin_read,
+        .player_skin_close = host_player_skin_close,
+        .player_skin_set = host_player_skin_set,
     };
     DfRuntimeConfig config = {
         .plugin_directory = {

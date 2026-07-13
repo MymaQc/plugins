@@ -3,6 +3,7 @@ package native
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"slices"
 	"testing"
@@ -62,6 +63,8 @@ type recordingHost struct {
 	effects    []PlayerEffect
 	entities   []EntityID
 	visible    []bool
+	skin       PlayerSkin
+	setSkins   []PlayerSkin
 }
 
 func (h *recordingHost) SendPlayerText(player PlayerID, kind PlayerTextKind, message string) bool {
@@ -108,6 +111,15 @@ func (h *recordingHost) ChangePlayerEffect(_ PlayerID, operation PlayerEffectOpe
 func (h *recordingHost) SetPlayerEntityVisible(_ PlayerID, entity EntityID, visible bool) bool {
 	h.entities = append(h.entities, entity)
 	h.visible = append(h.visible, visible)
+	return true
+}
+
+func (h *recordingHost) PlayerSkin(PlayerID) (PlayerSkin, bool) {
+	return h.skin, true
+}
+
+func (h *recordingHost) SetPlayerSkin(_ PlayerID, skin PlayerSkin) bool {
+	h.setSkins = append(h.setSkins, skin)
 	return true
 }
 
@@ -377,6 +389,46 @@ func TestPlayerEntityVisibilityHostCalls(t *testing.T) {
 	want := EntityID{UUID: target.UUID, Generation: target.Generation}
 	if len(host.entities) != 2 || host.entities[0] != want || host.entities[1] != want || !slices.Equal(host.visible, []bool{false, true}) {
 		t.Fatalf("entities=%+v visible=%v", host.entities, host.visible)
+	}
+}
+
+func TestPlayerSkinRoundTrip(t *testing.T) {
+	library, plugins := nativeArtifacts(t)
+	want := PlayerSkin{
+		Width: 64, Height: 64, Persona: true,
+		PlayFabID: "playfab-id", FullID: "full-skin-id",
+		Pixels:       []byte{0, 1, 2, 127, 128, 254, 255},
+		ModelDefault: "geometry.humanoid.custom", ModelAnimatedFace: "geometry.animated_face",
+		Model:     []byte(`{"geometry":{"description":{"identifier":"geometry.test"}}}`),
+		CapeWidth: 64, CapeHeight: 32, CapePixels: []byte{9, 8, 7, 0, 255},
+		Animations: []SkinAnimation{
+			{Width: 32, Height: 32, Type: 0, FrameCount: 7, Expression: -3, Pixels: []byte{1, 3, 5, 7}},
+			{Width: 128, Height: 128, Type: 2, FrameCount: 1 << 33, Expression: 1 << 34, Pixels: []byte{2, 4, 6, 8}},
+		},
+	}
+	host := &recordingHost{skin: want}
+	runtime, err := OpenWithHost(library, plugins, host)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(runtime.Close)
+	if err := runtime.Enable(); err != nil {
+		t.Fatal(err)
+	}
+	commands, err := runtime.Commands()
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := PlayerID{Generation: 14}
+	output, err := runtime.HandleCommand(commands[0].Index, CommandInput{
+		Source: "TestPlayer", SourceKind: CommandSourcePlayer, SourcePlayer: &id,
+		OnlinePlayers: []CommandPlayer{{Player: id, Name: "TestPlayer"}}, Arguments: "skin-copy",
+	})
+	if err != nil || output.Failed {
+		t.Fatalf("output=%+v error=%v", output, err)
+	}
+	if len(host.setSkins) != 1 || !reflect.DeepEqual(host.setSkins[0], want) {
+		t.Fatalf("round-tripped skin = %#v, want %#v", host.setSkins, want)
 	}
 }
 

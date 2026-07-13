@@ -238,4 +238,11 @@ impl Plugin for HelloCommand {
         context.source().show_entity(target.entity());
         context.reply("Entity shown.");
     }
+
+    #[subcommand("skin-copy")]
+    fn skin_copy(&self, context: &mut Context<'_, Player>) {
+        let skin = context.source().skin();
+        context.source().set_skin(&skin);
+        context.reply("Skin copied.");
+    }
 }

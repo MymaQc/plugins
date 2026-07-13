@@ -2,6 +2,7 @@ package host
 
 import (
 	"math"
+	"reflect"
 	"testing"
 	"time"
 
@@ -117,4 +118,91 @@ func TestPlayersReadsAndChangesState(t *testing.T) {
 			t.Fatal("effect still present")
 		}
 	})
+}
+
+func TestPlayersSkinRoundTrip(t *testing.T) {
+	withPlayer(t, func(player *player.Player) {
+		players := NewPlayers()
+		id := players.Register(player, 1)
+		want := native.PlayerSkin{
+			Width: 64, Height: 32,
+			Persona: true, PlayFabID: "playfab-id", FullID: "full-id",
+			Pixels:            patternedBytes(64 * 32 * 4),
+			ModelDefault:      "geometry.humanoid.custom",
+			ModelAnimatedFace: "geometry.face.custom",
+			Model:             []byte(`{"format_version":"1.12.0"}`),
+			CapeWidth:         32, CapeHeight: 64, CapePixels: patternedBytes(32 * 64 * 4),
+			Animations: []native.SkinAnimation{
+				{
+					Width: 32, Height: 32, Type: 1, FrameCount: 2, Expression: 3,
+					Pixels: patternedBytes(32 * 32 * 4),
+				},
+				{
+					Width: 16, Height: 16, Type: 0, FrameCount: 1, Expression: -2,
+					Pixels: patternedBytes(16 * 16 * 4),
+				},
+			},
+		}
+		if !players.SetPlayerSkin(id, want) {
+			t.Fatal("set skin failed")
+		}
+		got, ok := players.PlayerSkin(id)
+		if !ok {
+			t.Fatal("get skin failed")
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("skin mismatch\ngot:  %+v\nwant: %+v", got, want)
+		}
+		want.Pixels[0] ^= 0xff
+		want.CapePixels[0] ^= 0xff
+		want.Animations[0].Pixels[0] ^= 0xff
+		gotAgain, ok := players.PlayerSkin(id)
+		if !ok || !reflect.DeepEqual(gotAgain, got) {
+			t.Fatal("host retained caller-owned skin buffers")
+		}
+		got.Pixels[0] ^= 0xff
+		got.CapePixels[0] ^= 0xff
+		got.Animations[0].Pixels[0] ^= 0xff
+		gotAgain, ok = players.PlayerSkin(id)
+		if !ok || reflect.DeepEqual(gotAgain, got) {
+			t.Fatal("host returned player-owned skin buffers")
+		}
+	})
+}
+
+func TestPlayersRejectsInvalidSkinData(t *testing.T) {
+	withPlayer(t, func(player *player.Player) {
+		players := NewPlayers()
+		id := players.Register(player, 1)
+		original, ok := players.PlayerSkin(id)
+		if !ok {
+			t.Fatal("get original skin failed")
+		}
+		invalid := []native.PlayerSkin{
+			{Width: maxSkinDimension + 1, Height: 1, Pixels: make([]byte, 4)},
+			{Width: 64, Height: 64, Pixels: make([]byte, 4)},
+			{Width: 64, Height: 64, Pixels: make([]byte, 64*64*4), CapeWidth: 1},
+			{Width: 64, Height: 64, Pixels: make([]byte, 64*64*4), PlayFabID: string(make([]byte, maxSkinIDBytes+1))},
+			{Width: 64, Height: 64, Pixels: make([]byte, 64*64*4), Animations: make([]native.SkinAnimation, maxSkinAnimations+1)},
+			{Width: 64, Height: 64, Pixels: make([]byte, 64*64*4), Animations: []native.SkinAnimation{{Width: 1, Height: 1, Type: 3, FrameCount: 1, Pixels: make([]byte, 4)}}},
+			{Width: 64, Height: 64, Pixels: make([]byte, 64*64*4), Animations: []native.SkinAnimation{{Width: 1, Height: 1, FrameCount: 0, Pixels: make([]byte, 4)}}},
+		}
+		for i, value := range invalid {
+			if players.SetPlayerSkin(id, value) {
+				t.Fatalf("invalid skin %d accepted", i)
+			}
+		}
+		got, ok := players.PlayerSkin(id)
+		if !ok || !reflect.DeepEqual(got, original) {
+			t.Fatal("rejected skin changed player skin")
+		}
+	})
+}
+
+func patternedBytes(size int) []byte {
+	data := make([]byte, size)
+	for i := range data {
+		data[i] = byte(i * 31)
+	}
+	return data
 }

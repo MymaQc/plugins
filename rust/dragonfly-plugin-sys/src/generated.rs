@@ -3,6 +3,7 @@
 use core::ffi::c_void;
 
 pub const DF_ABI_VERSION: u32 = 1;
+pub const DF_HOST_ABI_VERSION: u32 = 2;
 pub const DF_STATUS_OK: DfStatus = 0;
 pub const DF_STATUS_ERROR: DfStatus = 1;
 pub type DfStatus = i32;
@@ -164,6 +165,21 @@ pub const DF_PLAYER_EFFECT_REMOVE: u32 = 1;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DfEffectView { pub effect_type: u32, pub level: i32, pub duration_milliseconds: u64, pub ambient: u8, pub infinite: u8, pub particles_hidden: u8 }
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfSkinAnimationInfo { pub width: u32, pub height: u32, pub animation_type: u32, pub frame_count: i64, pub expression: i64, pub pixels_len: u64 }
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfSkinInfo { pub width: u32, pub height: u32, pub persona: u8, pub play_fab_id_len: u64, pub full_id_len: u64, pub pixels_len: u64, pub model_default_len: u64, pub model_animated_face_len: u64, pub model_len: u64, pub cape_width: u32, pub cape_height: u32, pub cape_pixels_len: u64, pub animation_count: u64 }
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct DfSkinData { pub play_fab_id: DfStringBuffer, pub full_id: DfStringBuffer, pub pixels: DfStringBuffer, pub model_default: DfStringBuffer, pub model_animated_face: DfStringBuffer, pub model: DfStringBuffer, pub cape_pixels: DfStringBuffer, pub animation_pixels: *mut DfStringBuffer, pub animation_capacity: u64 }
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct DfSkinAnimationView { pub width: u32, pub height: u32, pub animation_type: u32, pub frame_count: i64, pub expression: i64, pub pixels: DfStringView }
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct DfSkinView { pub width: u32, pub height: u32, pub persona: u8, pub play_fab_id: DfStringView, pub full_id: DfStringView, pub pixels: DfStringView, pub model_default: DfStringView, pub model_animated_face: DfStringView, pub model: DfStringView, pub cape_width: u32, pub cape_height: u32, pub cape_pixels: DfStringView, pub animations: *const DfSkinAnimationView, pub animation_count: u64 }
 pub type DfHostPlayerTextFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, kind: u32, message: DfStringView) -> DfStatus;
 pub type DfHostPlayerTitleFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, title: DfTitleView) -> DfStatus;
 pub type DfHostPlayerTransformFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, kind: u32, vector: DfVec3, yaw: f64, pitch: f64) -> DfStatus;
@@ -172,9 +188,14 @@ pub type DfHostPlayerStateSetFn = unsafe extern "C" fn(context: u64, player: DfP
 pub type DfHostPlayerStateGetFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, kind: u32, value: *mut DfPlayerStateValue) -> DfStatus;
 pub type DfHostPlayerEffectFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, operation: u32, effect: DfEffectView) -> DfStatus;
 pub type DfHostPlayerEntityVisibilityFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, entity: DfEntityId, visible: u8) -> DfStatus;
+pub type DfHostPlayerSkinOpenFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, snapshot: *mut u64, info: *mut DfSkinInfo) -> DfStatus;
+pub type DfHostPlayerSkinAnimationInfoFn = unsafe extern "C" fn(context: u64, snapshot: u64, index: u64, info: *mut DfSkinAnimationInfo) -> DfStatus;
+pub type DfHostPlayerSkinReadFn = unsafe extern "C" fn(context: u64, snapshot: u64, data: *mut DfSkinData) -> DfStatus;
+pub type DfHostPlayerSkinCloseFn = unsafe extern "C" fn(context: u64, snapshot: u64);
+pub type DfHostPlayerSkinSetFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, skin: *const DfSkinView) -> DfStatus;
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
-pub struct DfHostApiV1 { pub abi_version: u32, pub struct_size: u32, pub context: u64, pub player_text: Option<DfHostPlayerTextFn>, pub player_title: Option<DfHostPlayerTitleFn>, pub player_transform: Option<DfHostPlayerTransformFn>, pub player_rotation: Option<DfHostPlayerRotationFn>, pub player_state_set: Option<DfHostPlayerStateSetFn>, pub player_state_get: Option<DfHostPlayerStateGetFn>, pub player_effect: Option<DfHostPlayerEffectFn>, pub player_entity_visibility: Option<DfHostPlayerEntityVisibilityFn> }
+pub struct DfHostApiV2 { pub abi_version: u32, pub struct_size: u32, pub context: u64, pub player_text: Option<DfHostPlayerTextFn>, pub player_title: Option<DfHostPlayerTitleFn>, pub player_transform: Option<DfHostPlayerTransformFn>, pub player_rotation: Option<DfHostPlayerRotationFn>, pub player_state_set: Option<DfHostPlayerStateSetFn>, pub player_state_get: Option<DfHostPlayerStateGetFn>, pub player_effect: Option<DfHostPlayerEffectFn>, pub player_entity_visibility: Option<DfHostPlayerEntityVisibilityFn>, pub player_skin_open: Option<DfHostPlayerSkinOpenFn>, pub player_skin_animation_info: Option<DfHostPlayerSkinAnimationInfoFn>, pub player_skin_read: Option<DfHostPlayerSkinReadFn>, pub player_skin_close: Option<DfHostPlayerSkinCloseFn>, pub player_skin_set: Option<DfHostPlayerSkinSetFn> }
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct DfCommandParameter { pub kind: u32, pub optional: u8, pub name: DfStringView, pub values: *const DfStringView, pub value_count: u64 }
@@ -643,7 +664,7 @@ pub type DfPluginLifecycleFn = unsafe extern "C" fn(instance: *mut c_void) -> Df
 pub type DfPluginCommandsFn = unsafe extern "C" fn(instance: *mut c_void, count: *mut u64) -> *const DfCommandDescriptor;
 pub type DfHandleCommandFn = unsafe extern "C" fn(instance: *mut c_void, command: u64, input: *const DfCommandInput, state: *mut DfCommandState) -> DfStatus;
 pub type DfCommandEnumOptionsFn = unsafe extern "C" fn(instance: *mut c_void, command: u64, overload: u64, parameter: u64, context: *const DfCommandEnumContext, output: *mut DfStringBuffer) -> DfStatus;
-pub type DfPluginSetHostFn = unsafe extern "C" fn(instance: *mut c_void, host: *const DfHostApiV1) -> DfStatus;
+pub type DfPluginSetHostFn = unsafe extern "C" fn(instance: *mut c_void, host: *const DfHostApiV2) -> DfStatus;
 pub type DfPluginDestroyFn = unsafe extern "C" fn(instance: *mut c_void);
 pub type DfHandleEventFn = unsafe extern "C" fn(instance: *mut c_void, event_id: DfEventId, input: *const c_void, state: *mut c_void) -> DfStatus;
 

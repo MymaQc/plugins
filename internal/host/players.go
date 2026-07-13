@@ -9,6 +9,7 @@ import (
 	"github.com/bedrock-gophers/plugins/internal/native"
 	"github.com/df-mc/dragonfly/server/entity/effect"
 	"github.com/df-mc/dragonfly/server/player"
+	"github.com/df-mc/dragonfly/server/player/skin"
 	"github.com/df-mc/dragonfly/server/player/title"
 	"github.com/go-gl/mathgl/mgl64"
 )
@@ -236,6 +237,161 @@ func (p *Players) SetPlayerEntityVisible(viewerID native.PlayerID, entityID nati
 		viewer.HideEntity(entity)
 	}
 	return true
+}
+
+const (
+	maxSkinDimension  = 4096
+	maxSkinAnimations = 64
+	maxSkinDataBytes  = 64 << 20
+	maxSkinIDBytes    = 4096
+)
+
+func (p *Players) PlayerSkin(id native.PlayerID) (native.PlayerSkin, bool) {
+	connected, ok := p.ResolveID(id)
+	if !ok {
+		return native.PlayerSkin{}, false
+	}
+	return playerSkinToNative(connected.Skin())
+}
+
+func (p *Players) SetPlayerSkin(id native.PlayerID, value native.PlayerSkin) bool {
+	connected, ok := p.ResolveID(id)
+	if !ok {
+		return false
+	}
+	converted, ok := playerSkinFromNative(value)
+	if !ok {
+		return false
+	}
+	connected.SetSkin(converted)
+	return true
+}
+
+func playerSkinToNative(value skin.Skin) (native.PlayerSkin, bool) {
+	bounds := value.Bounds()
+	width, height := bounds.Dx(), bounds.Dy()
+	capeBounds := value.Cape.Bounds()
+	if !validSkinDimensions(width, height, value.Pix, true) ||
+		!validSkinDimensions(capeBounds.Dx(), capeBounds.Dy(), value.Cape.Pix, true) ||
+		len(value.Animations) > maxSkinAnimations ||
+		!validSkinStrings(value.PlayFabID, value.FullID, value.ModelConfig.Default, value.ModelConfig.AnimatedFace) {
+		return native.PlayerSkin{}, false
+	}
+	total := uint64(len(value.Pix)) + uint64(len(value.Model)) + uint64(len(value.Cape.Pix)) +
+		uint64(len(value.PlayFabID)) + uint64(len(value.FullID)) +
+		uint64(len(value.ModelConfig.Default)) + uint64(len(value.ModelConfig.AnimatedFace))
+	for _, animation := range value.Animations {
+		animationBounds := animation.Bounds()
+		if !validSkinDimensions(animationBounds.Dx(), animationBounds.Dy(), animation.Pix, false) ||
+			animation.FrameCount <= 0 ||
+			animation.Type() < skin.AnimationHead || animation.Type() > skin.AnimationBody128x128 {
+			return native.PlayerSkin{}, false
+		}
+		total += uint64(len(animation.Pix))
+		if total > maxSkinDataBytes {
+			return native.PlayerSkin{}, false
+		}
+	}
+	if total > maxSkinDataBytes {
+		return native.PlayerSkin{}, false
+	}
+	animations := make([]native.SkinAnimation, len(value.Animations))
+	for i, animation := range value.Animations {
+		animationBounds := animation.Bounds()
+		animations[i] = native.SkinAnimation{
+			Width:      uint32(animationBounds.Dx()),
+			Height:     uint32(animationBounds.Dy()),
+			Type:       uint32(animation.Type()),
+			FrameCount: int64(animation.FrameCount),
+			Expression: int64(animation.AnimationExpression),
+			Pixels:     slices.Clone(animation.Pix),
+		}
+	}
+	return native.PlayerSkin{
+		Width:             uint32(width),
+		Height:            uint32(height),
+		Persona:           value.Persona,
+		PlayFabID:         value.PlayFabID,
+		FullID:            value.FullID,
+		Pixels:            slices.Clone(value.Pix),
+		ModelDefault:      value.ModelConfig.Default,
+		ModelAnimatedFace: value.ModelConfig.AnimatedFace,
+		Model:             slices.Clone(value.Model),
+		CapeWidth:         uint32(capeBounds.Dx()),
+		CapeHeight:        uint32(capeBounds.Dy()),
+		CapePixels:        slices.Clone(value.Cape.Pix),
+		Animations:        animations,
+	}, true
+}
+
+func playerSkinFromNative(value native.PlayerSkin) (skin.Skin, bool) {
+	if !validNativeSkinDimensions(value.Width, value.Height, value.Pixels, true) ||
+		!validNativeSkinDimensions(value.CapeWidth, value.CapeHeight, value.CapePixels, true) ||
+		len(value.Animations) > maxSkinAnimations ||
+		!validSkinStrings(value.PlayFabID, value.FullID, value.ModelDefault, value.ModelAnimatedFace) {
+		return skin.Skin{}, false
+	}
+	total := uint64(len(value.Pixels)) + uint64(len(value.Model)) + uint64(len(value.CapePixels)) +
+		uint64(len(value.PlayFabID)) + uint64(len(value.FullID)) +
+		uint64(len(value.ModelDefault)) + uint64(len(value.ModelAnimatedFace))
+	for _, animation := range value.Animations {
+		if !validNativeSkinDimensions(animation.Width, animation.Height, animation.Pixels, false) ||
+			animation.Type > uint32(skin.AnimationBody128x128) || animation.FrameCount <= 0 ||
+			animation.FrameCount > int64(math.MaxInt) ||
+			animation.Expression < int64(math.MinInt) || animation.Expression > int64(math.MaxInt) {
+			return skin.Skin{}, false
+		}
+		total += uint64(len(animation.Pixels))
+		if total > maxSkinDataBytes {
+			return skin.Skin{}, false
+		}
+	}
+	if total > maxSkinDataBytes {
+		return skin.Skin{}, false
+	}
+	converted := skin.New(int(value.Width), int(value.Height))
+	converted.Persona = value.Persona
+	converted.PlayFabID = value.PlayFabID
+	converted.FullID = value.FullID
+	copy(converted.Pix, value.Pixels)
+	converted.ModelConfig = skin.ModelConfig{Default: value.ModelDefault, AnimatedFace: value.ModelAnimatedFace}
+	converted.Model = slices.Clone(value.Model)
+	converted.Cape = skin.NewCape(int(value.CapeWidth), int(value.CapeHeight))
+	copy(converted.Cape.Pix, value.CapePixels)
+	converted.Animations = make([]skin.Animation, len(value.Animations))
+	for i, animation := range value.Animations {
+		convertedAnimation := skin.NewAnimation(int(animation.Width), int(animation.Height), int(animation.Expression), skin.AnimationType(animation.Type))
+		copy(convertedAnimation.Pix, animation.Pixels)
+		convertedAnimation.FrameCount = int(animation.FrameCount)
+		converted.Animations[i] = convertedAnimation
+	}
+	return converted, true
+}
+
+func validSkinStrings(values ...string) bool {
+	for _, value := range values {
+		if len(value) > maxSkinIDBytes {
+			return false
+		}
+	}
+	return true
+}
+
+func validNativeSkinDimensions(width, height uint32, pixels []byte, empty bool) bool {
+	if width > maxSkinDimension || height > maxSkinDimension {
+		return false
+	}
+	return validSkinDimensions(int(width), int(height), pixels, empty)
+}
+
+func validSkinDimensions(width, height int, pixels []byte, empty bool) bool {
+	if width < 0 || height < 0 || width > maxSkinDimension || height > maxSkinDimension {
+		return false
+	}
+	if width == 0 || height == 0 {
+		return empty && width == 0 && height == 0 && len(pixels) == 0
+	}
+	return uint64(width)*uint64(height)*4 == uint64(len(pixels))
 }
 
 type pluginHealingSource struct{}
