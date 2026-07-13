@@ -477,10 +477,11 @@ Current host actions include:
 - Open, save, and unload managed worlds.
 - Spawn/list built-in entities and projectiles.
 - Read and mutate common entity capabilities through stable handles.
+- Add/remove typed lasting, ambient, infinite, and instant player effects.
 
 Every synchronous player callback registers one invocation ID for its exact transaction. Same-world block operations use that `world.Tx` directly. Calls with no invocation are off-owner: writes enqueue through `World.Do` and reads use `world.Call`. Cross-world writes from callbacks enqueue, while cross-world synchronous block reads are rejected because reciprocal owner calls can deadlock. Save/unload are rejected from callbacks and run only off-owner. Transaction values never cross or survive the ABI; the asynchronous task API will provide callback-safe cross-world reads and lifecycle operations.
 
-The host ABI is currently v10. WIP releases intentionally make breaking ABI changes instead of retaining compatibility shims; runtime and plugins must be compiled from the same revision.
+The host ABI is currently v12. WIP releases intentionally make breaking ABI changes instead of retaining compatibility shims; runtime and plugins must be compiled from the same revision.
 
 ## Entities
 
@@ -511,6 +512,8 @@ Projectile factories preserve Dragonfly owner resolution and built-in behavior. 
 `sound::Sound` is sealed and covers all Dragonfly v0.11 concrete sound types. Parameterised descriptors carry typed blocks, items, instruments, discs, horns, liquids, stages, or scalar state through `DfSoundViewV1`; Go reconstructs the exact `world/sound` value. `World::play_sound` calls `Tx.PlaySound`, preserving Dragonfly's cancellable world sound handler and viewer broadcast. `Player::play_sound` uses Dragonfly's private-to-player playback at the player's eye position. Both APIs share the same descriptor types.
 
 Dragonfly v0.11 does not expose `Player.StopSound`: the packet writer and player session are private. Exact stop-one/stop-all support needs an upstream public API and will not use reflection, `linkname`, or a fake `MusicDiscEnd` substitution.
+
+Player effects mirror Dragonfly's type split. Rust uses `effect::new(effect::Speed, level, duration)`, `effect::ambient`, `effect::infinite`, and `effect::instant_with_potency(effect::InstantHealth, level, potency)`. Generated zero-sized built-ins implement either `effect::LastingType` or `effect::InstantType`, so invalid combinations do not compile. `RegisteredLasting` and `RegisteredInstant` carry custom effect IDs already registered in Dragonfly and the Go host verifies the declared kind before applying them. The ABI preserves signed protocol IDs, exact instant potency, and particle visibility. Invalid levels are rejected before Dragonfly's `EffectManager` can panic. Saturation is correctly classified as lasting in Dragonfly v0.11.
 
 ## Items and inventories
 

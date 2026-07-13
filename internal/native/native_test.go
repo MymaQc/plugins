@@ -626,7 +626,7 @@ func TestPlayerEffectHostCalls(t *testing.T) {
 		t.Fatal(err)
 	}
 	id := PlayerID{Generation: 9}
-	for _, arguments := range []string{"speed 2 30", "clear-speed"} {
+	for _, arguments := range []string{"speed 2 30", "instant-health 1 0.5", "clear-speed"} {
 		output, err := runtime.HandleCommand(commandNamed(t, commands, "player").Index, CommandInput{
 			Source: "TestPlayer", SourceKind: CommandSourcePlayer, SourcePlayer: &id,
 			OnlinePlayers: []CommandPlayer{{Player: id, Name: "TestPlayer"}}, Arguments: arguments,
@@ -635,11 +635,14 @@ func TestPlayerEffectHostCalls(t *testing.T) {
 			t.Fatalf("%s: output=%+v error=%v", arguments, output, err)
 		}
 	}
-	if !slices.Equal(host.effectOps, []PlayerEffectOperation{PlayerEffectAdd, PlayerEffectRemove}) {
+	if !slices.Equal(host.effectOps, []PlayerEffectOperation{PlayerEffectAdd, PlayerEffectAdd, PlayerEffectRemove}) {
 		t.Fatalf("operations = %v", host.effectOps)
 	}
-	if host.effects[0].Type != EffectSpeed || host.effects[0].Level != 2 || host.effects[0].Duration != 30*time.Second {
+	if host.effects[0].Type != EffectSpeed || host.effects[0].Level != 2 || host.effects[0].Duration != 30*time.Second || host.effects[0].Potency != 1 || host.effects[0].Mode != PlayerEffectTimed {
 		t.Fatalf("effect = %+v", host.effects[0])
+	}
+	if host.effects[1].Type != EffectInstantHealth || host.effects[1].Level != 1 || host.effects[1].Potency != 0.5 || host.effects[1].Mode != PlayerEffectInstant {
+		t.Fatalf("instant effect = %+v", host.effects[1])
 	}
 }
 

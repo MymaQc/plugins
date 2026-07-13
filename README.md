@@ -145,6 +145,28 @@ fn combat(player: Player, attacker: Entity) {
 
 Transport failures remain private. `heal` returns actual health gained. `hurt` returns Dragonfly's final reduced damage and vulnerability result.
 
+Effects keep Dragonfly's lasting/instant type split and constructor shape:
+
+```rust
+use dragonfly::{Player, effect};
+
+fn apply_effects(player: Player) {
+    player.add_effect(effect::new(
+        effect::Speed,
+        2,
+        std::time::Duration::from_secs(30),
+    ));
+    player.add_effect(effect::instant_with_potency(
+        effect::InstantHealth,
+        1,
+        0.5,
+    ));
+    player.remove_effect(effect::Speed);
+}
+```
+
+`effect::RegisteredLasting` and `effect::RegisteredInstant` reference custom IDs already registered in Dragonfly. The host checks their actual Go kind. Invalid levels or mismatched kinds silently no-op instead of exposing transport errors or panicking the server.
+
 Items are owned Rust values. Inventory handles stay attached to the generation-tagged player:
 
 ```rust

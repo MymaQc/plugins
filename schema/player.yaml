@@ -193,7 +193,7 @@ effects:
   - { name: wither, id: 20, kind: lasting }
   - { name: health_boost, id: 21, kind: lasting }
   - { name: absorption, id: 22, kind: lasting }
-  - { name: saturation, id: 23, kind: instant }
+  - { name: saturation, id: 23, kind: lasting }
   - { name: levitation, id: 24, kind: lasting }
   - { name: fatal_poison, id: 25, kind: lasting }
   - { name: conduit_power, id: 26, kind: lasting }

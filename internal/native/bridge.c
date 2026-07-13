@@ -37,6 +37,9 @@ _Static_assert(offsetof(DfDamageSourceView, block) == 72, "DfDamageSourceView.bl
 _Static_assert(sizeof(DfHealingSourceView) == 24, "DfHealingSourceView ABI layout changed");
 _Static_assert(sizeof(DfPlayerHealResult) == 8, "DfPlayerHealResult ABI layout changed");
 _Static_assert(sizeof(DfPlayerHurtResult) == 16, "DfPlayerHurtResult ABI layout changed");
+_Static_assert(sizeof(DfEffectView) == 32, "DfEffectView ABI layout changed");
+_Static_assert(offsetof(DfEffectView, potency) == 16, "DfEffectView.potency ABI offset changed");
+_Static_assert(offsetof(DfEffectView, mode) == 24, "DfEffectView.mode ABI offset changed");
 _Static_assert(sizeof(DfEntitySpawnOptions) == 80, "DfEntitySpawnOptions ABI layout changed");
 _Static_assert(sizeof(DfEntitySpawnViewV1) == 176, "DfEntitySpawnViewV1 ABI layout changed");
 _Static_assert(sizeof(DfEntityState) == 128, "DfEntityState ABI layout changed");
@@ -46,14 +49,14 @@ _Static_assert(offsetof(DfParticleViewV1, block) == 32, "DfParticleViewV1.block 
 _Static_assert(sizeof(DfSoundViewV1) == 40, "DfSoundViewV1 ABI layout changed");
 _Static_assert(offsetof(DfSoundViewV1, scalar) == 16, "DfSoundViewV1.scalar ABI offset changed");
 _Static_assert(offsetof(DfSoundViewV1, item) == 32, "DfSoundViewV1.item ABI offset changed");
-_Static_assert(sizeof(DfHostApiV11) == 432, "DfHostApiV11 ABI layout changed");
-_Static_assert(offsetof(DfHostApiV11, player_skin_open) == 80, "DfHostApiV11.player_skin_open ABI offset changed");
-_Static_assert(offsetof(DfHostApiV11, player_skin_set) == 112, "DfHostApiV11.player_skin_set ABI offset changed");
-_Static_assert(offsetof(DfHostApiV11, inventory_size) == 120, "DfHostApiV11.inventory_size ABI offset changed");
-_Static_assert(offsetof(DfHostApiV11, player_held_slot_set) == 200, "DfHostApiV11.player_held_slot_set ABI offset changed");
-_Static_assert(offsetof(DfHostApiV11, player_scoreboard) == 208, "DfHostApiV11.player_scoreboard ABI offset changed");
-_Static_assert(offsetof(DfHostApiV11, player_heal) == 416, "DfHostApiV11.player_heal ABI offset changed");
-_Static_assert(offsetof(DfHostApiV11, player_hurt) == 424, "DfHostApiV11.player_hurt ABI offset changed");
+_Static_assert(sizeof(DfHostApiV12) == 432, "DfHostApiV12 ABI layout changed");
+_Static_assert(offsetof(DfHostApiV12, player_skin_open) == 80, "DfHostApiV12.player_skin_open ABI offset changed");
+_Static_assert(offsetof(DfHostApiV12, player_skin_set) == 112, "DfHostApiV12.player_skin_set ABI offset changed");
+_Static_assert(offsetof(DfHostApiV12, inventory_size) == 120, "DfHostApiV12.inventory_size ABI offset changed");
+_Static_assert(offsetof(DfHostApiV12, player_held_slot_set) == 200, "DfHostApiV12.player_held_slot_set ABI offset changed");
+_Static_assert(offsetof(DfHostApiV12, player_scoreboard) == 208, "DfHostApiV12.player_scoreboard ABI offset changed");
+_Static_assert(offsetof(DfHostApiV12, player_heal) == 416, "DfHostApiV12.player_heal ABI offset changed");
+_Static_assert(offsetof(DfHostApiV12, player_hurt) == 424, "DfHostApiV12.player_hurt ABI offset changed");
 #endif
 
 extern DfStatus bg_go_player_text(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfStringView message);
@@ -229,7 +232,7 @@ typedef DfStatus (*RuntimeEventFn)(DfRuntime *, DfEventId, const void *, void *)
 struct BgRuntimeLibrary {
     void *handle;
     DfRuntime *runtime;
-    DfHostApiV11 host_api;
+    DfHostApiV12 host_api;
     RuntimeDestroyFn destroy;
     RuntimeEnableFn enable;
     RuntimeDisableFn disable;
@@ -302,9 +305,9 @@ DfStatus bg_runtime_open(
         return DF_STATUS_ERROR;
     }
 
-    library->host_api = (DfHostApiV11) {
+    library->host_api = (DfHostApiV12) {
         .abi_version = DF_HOST_ABI_VERSION,
-        .struct_size = sizeof(DfHostApiV11),
+        .struct_size = sizeof(DfHostApiV12),
         .context = host_context,
         .player_text = host_player_text,
         .player_title = host_player_title,

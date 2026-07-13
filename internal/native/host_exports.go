@@ -7,6 +7,7 @@ import "C"
 
 import (
 	"encoding/json"
+	"math"
 	"time"
 	"unicode/utf8"
 	"unsafe"
@@ -297,14 +298,42 @@ func copyDamageSourceView(view *C.DfDamageSourceView) (DamageSource, bool) {
 //export bg_go_player_effect
 func bg_go_player_effect(context C.uint64_t, invocation C.DfInvocationId, player C.DfPlayerId, operation C.uint32_t, value C.DfEffectView) C.DfStatus {
 	host, ok := resolveHost(uint64(context))
-	if !ok || !host.ChangePlayerEffect(InvocationID(invocation), playerID(player), PlayerEffectOperation(operation), PlayerEffect{
-		Type: EffectType(value.effect_type), Level: int32(value.level),
-		Duration: milliseconds(value.duration_milliseconds), Ambient: value.ambient != 0,
-		Infinite: value.infinite != 0, ParticlesHidden: value.particles_hidden != 0,
-	}) {
+	effect, valid := copyPlayerEffect(PlayerEffectOperation(operation), value)
+	if !ok || !valid || !host.ChangePlayerEffect(InvocationID(invocation), playerID(player), PlayerEffectOperation(operation), effect) {
 		return C.DF_STATUS_ERROR
 	}
 	return C.DF_STATUS_OK
+}
+
+func copyPlayerEffect(operation PlayerEffectOperation, value C.DfEffectView) (PlayerEffect, bool) {
+	const maximumMilliseconds = uint64((1<<63 - 1) / int64(time.Millisecond))
+	if operation > PlayerEffectRemove || value.particles_hidden > 1 || uint32(value.mode) > uint32(PlayerEffectInstant) ||
+		uint64(value.duration_milliseconds) > maximumMilliseconds || math.IsNaN(float64(value.potency)) ||
+		math.IsInf(float64(value.potency), 0) || value.potency < 0 {
+		return PlayerEffect{}, false
+	}
+	effect := PlayerEffect{
+		Type: EffectType(value.effect_type), Level: int32(value.level),
+		Duration: milliseconds(value.duration_milliseconds), Potency: float64(value.potency),
+		Mode: PlayerEffectMode(value.mode), ParticlesHidden: value.particles_hidden != 0,
+	}
+	if operation == PlayerEffectRemove {
+		return effect, effect.Level == 0 && effect.Duration == 0 && effect.Potency == 1 &&
+			effect.Mode == PlayerEffectTimed && !effect.ParticlesHidden
+	}
+	if effect.Level <= 0 {
+		return PlayerEffect{}, false
+	}
+	switch effect.Mode {
+	case PlayerEffectTimed, PlayerEffectAmbient:
+		return effect, effect.Potency == 1
+	case PlayerEffectInfinite:
+		return effect, effect.Duration == 0 && effect.Potency == 1
+	case PlayerEffectInstant:
+		return effect, effect.Duration == 0
+	default:
+		return PlayerEffect{}, false
+	}
 }
 
 //export bg_go_player_entity_visibility

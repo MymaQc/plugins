@@ -1,6 +1,6 @@
 use dragonfly::{
-    CommandEnum, Context, Effect, EffectType, GameMode, Player, Plugin, Rotation, Varargs, Vec3,
-    block, damage, healing, plugin, sound,
+    CommandEnum, Context, GameMode, Player, Plugin, Rotation, Varargs, Vec3, block, damage, effect,
+    healing, plugin, sound,
 };
 
 #[derive(CommandEnum)]
@@ -159,14 +159,24 @@ impl Plugin for PlayerCommand {
         let duration = std::time::Duration::from_secs(seconds.max(0) as u64);
         context
             .source()
-            .add_effect(Effect::new(EffectType::Speed, level, duration));
+            .add_effect(effect::new(effect::Speed, level, duration));
         context.reply("Speed effect added.");
     }
 
     #[subcommand("clear-speed")]
     fn clear_speed(&self, context: &mut Context<'_, Player>) {
-        context.source().remove_effect(EffectType::Speed);
+        context.source().remove_effect(effect::Speed);
         context.reply("Speed effect removed.");
+    }
+
+    #[subcommand("instant-health")]
+    fn instant_health(&self, context: &mut Context<'_, Player>, level: i32, potency: f64) {
+        context.source().add_effect(effect::instant_with_potency(
+            effect::InstantHealth,
+            level,
+            potency,
+        ));
+        context.reply("Instant health applied.");
     }
 
     #[subcommand("name-tag")]

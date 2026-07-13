@@ -9,7 +9,7 @@ extern "C" {
 #endif
 
 #define DF_ABI_VERSION 1u
-#define DF_HOST_ABI_VERSION 11u
+#define DF_HOST_ABI_VERSION 12u
 #define DF_STATUS_OK 0
 #define DF_STATUS_ERROR 1
 
@@ -143,34 +143,34 @@ typedef struct { uint32_t kind; uint32_t data; int32_t integer; uint32_t flags; 
 #define DF_PLAYER_STATE_IMMOBILE 10u
 #define DF_PLAYER_OPERATION_HEAL 0u
 #define DF_PLAYER_OPERATION_HURT 1u
-#define DF_EFFECT_SPEED 1u
-#define DF_EFFECT_SLOWNESS 2u
-#define DF_EFFECT_HASTE 3u
-#define DF_EFFECT_MINING_FATIGUE 4u
-#define DF_EFFECT_STRENGTH 5u
-#define DF_EFFECT_INSTANT_HEALTH 6u
-#define DF_EFFECT_INSTANT_DAMAGE 7u
-#define DF_EFFECT_JUMP_BOOST 8u
-#define DF_EFFECT_NAUSEA 9u
-#define DF_EFFECT_REGENERATION 10u
-#define DF_EFFECT_RESISTANCE 11u
-#define DF_EFFECT_FIRE_RESISTANCE 12u
-#define DF_EFFECT_WATER_BREATHING 13u
-#define DF_EFFECT_INVISIBILITY 14u
-#define DF_EFFECT_BLINDNESS 15u
-#define DF_EFFECT_NIGHT_VISION 16u
-#define DF_EFFECT_HUNGER 17u
-#define DF_EFFECT_WEAKNESS 18u
-#define DF_EFFECT_POISON 19u
-#define DF_EFFECT_WITHER 20u
-#define DF_EFFECT_HEALTH_BOOST 21u
-#define DF_EFFECT_ABSORPTION 22u
-#define DF_EFFECT_SATURATION 23u
-#define DF_EFFECT_LEVITATION 24u
-#define DF_EFFECT_FATAL_POISON 25u
-#define DF_EFFECT_CONDUIT_POWER 26u
-#define DF_EFFECT_SLOW_FALLING 27u
-#define DF_EFFECT_DARKNESS 30u
+#define DF_EFFECT_SPEED 1
+#define DF_EFFECT_SLOWNESS 2
+#define DF_EFFECT_HASTE 3
+#define DF_EFFECT_MINING_FATIGUE 4
+#define DF_EFFECT_STRENGTH 5
+#define DF_EFFECT_INSTANT_HEALTH 6
+#define DF_EFFECT_INSTANT_DAMAGE 7
+#define DF_EFFECT_JUMP_BOOST 8
+#define DF_EFFECT_NAUSEA 9
+#define DF_EFFECT_REGENERATION 10
+#define DF_EFFECT_RESISTANCE 11
+#define DF_EFFECT_FIRE_RESISTANCE 12
+#define DF_EFFECT_WATER_BREATHING 13
+#define DF_EFFECT_INVISIBILITY 14
+#define DF_EFFECT_BLINDNESS 15
+#define DF_EFFECT_NIGHT_VISION 16
+#define DF_EFFECT_HUNGER 17
+#define DF_EFFECT_WEAKNESS 18
+#define DF_EFFECT_POISON 19
+#define DF_EFFECT_WITHER 20
+#define DF_EFFECT_HEALTH_BOOST 21
+#define DF_EFFECT_ABSORPTION 22
+#define DF_EFFECT_SATURATION 23
+#define DF_EFFECT_LEVITATION 24
+#define DF_EFFECT_FATAL_POISON 25
+#define DF_EFFECT_CONDUIT_POWER 26
+#define DF_EFFECT_SLOW_FALLING 27
+#define DF_EFFECT_DARKNESS 30
 #define DF_SOUND_KIND_ANVIL_BREAK 0u
 #define DF_SOUND_KIND_ANVIL_LAND 1u
 #define DF_SOUND_KIND_ANVIL_USE 2u
@@ -271,7 +271,11 @@ typedef struct { double healed; } DfPlayerHealResult;
 typedef struct { double damage; uint8_t vulnerable; } DfPlayerHurtResult;
 #define DF_PLAYER_EFFECT_ADD 0u
 #define DF_PLAYER_EFFECT_REMOVE 1u
-typedef struct { uint32_t effect_type; int32_t level; uint64_t duration_milliseconds; uint8_t ambient; uint8_t infinite; uint8_t particles_hidden; } DfEffectView;
+#define DF_EFFECT_MODE_TIMED 0u
+#define DF_EFFECT_MODE_AMBIENT 1u
+#define DF_EFFECT_MODE_INFINITE 2u
+#define DF_EFFECT_MODE_INSTANT 3u
+typedef struct { int32_t effect_type; int32_t level; uint64_t duration_milliseconds; double potency; uint32_t mode; uint8_t particles_hidden; } DfEffectView;
 typedef struct { uint32_t width; uint32_t height; uint32_t animation_type; int64_t frame_count; int64_t expression; uint64_t pixels_len; } DfSkinAnimationInfo;
 typedef struct { uint32_t width; uint32_t height; uint8_t persona; uint64_t play_fab_id_len; uint64_t full_id_len; uint64_t pixels_len; uint64_t model_default_len; uint64_t model_animated_face_len; uint64_t model_len; uint32_t cape_width; uint32_t cape_height; uint64_t cape_pixels_len; uint64_t animation_count; } DfSkinInfo;
 typedef struct { DfStringBuffer play_fab_id; DfStringBuffer full_id; DfStringBuffer pixels; DfStringBuffer model_default; DfStringBuffer model_animated_face; DfStringBuffer model; DfStringBuffer cape_pixels; DfStringBuffer *animation_pixels; uint64_t animation_capacity; } DfSkinData;
@@ -387,7 +391,7 @@ typedef struct {
     DfHostPlayerSoundPlayFn player_sound_play;
     DfHostPlayerHealFn player_heal;
     DfHostPlayerHurtFn player_hurt;
-} DfHostApiV11;
+} DfHostApiV12;
 #define DF_COMMAND_PARAMETER_SUBCOMMAND 1u
 #define DF_COMMAND_PARAMETER_ENUM 2u
 #define DF_COMMAND_PARAMETER_STRING 3u
@@ -840,7 +844,7 @@ typedef DfStatus (*DfPluginLifecycleFn)(void *instance);
 typedef const DfCommandDescriptor *(*DfPluginCommandsFn)(void *instance, uint64_t *count);
 typedef DfStatus (*DfHandleCommandFn)(void *instance, uint64_t command, const DfCommandInput *input, DfCommandState *state);
 typedef DfStatus (*DfCommandEnumOptionsFn)(void *instance, uint64_t command, uint64_t overload, uint64_t parameter, const DfCommandEnumContext *context, DfStringBuffer *output);
-typedef DfStatus (*DfPluginSetHostFn)(void *instance, const DfHostApiV11 *host);
+typedef DfStatus (*DfPluginSetHostFn)(void *instance, const DfHostApiV12 *host);
 typedef void (*DfPluginDestroyFn)(void *instance);
 
 typedef struct {
@@ -860,7 +864,7 @@ typedef struct {
 typedef const DfPluginApiV1 *(*DfPluginEntryV1Fn)(void);
 
 typedef struct DfRuntime DfRuntime;
-typedef struct { DfStringView plugin_directory; const DfHostApiV11 *host; } DfRuntimeConfig;
+typedef struct { DfStringView plugin_directory; const DfHostApiV12 *host; } DfRuntimeConfig;
 
 DfStatus df_runtime_create(const DfRuntimeConfig *config, DfRuntime **out, uint8_t *error, uint64_t error_capacity);
 DfStatus df_runtime_enable(DfRuntime *runtime);

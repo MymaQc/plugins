@@ -2,6 +2,7 @@ package host
 
 import (
 	"context"
+	"image/color"
 	"math"
 	"reflect"
 	"testing"
@@ -212,6 +213,7 @@ func TestPlayersReadsAndChangesState(t *testing.T) {
 		}
 		if !players.ChangePlayerEffect(invocation, id, native.PlayerEffectAdd, native.PlayerEffect{
 			Type: native.EffectSpeed, Level: 2, Duration: 30 * time.Second,
+			Potency: 1, Mode: native.PlayerEffectTimed,
 		}) {
 			t.Fatal("add effect failed")
 		}
@@ -225,8 +227,63 @@ func TestPlayersReadsAndChangesState(t *testing.T) {
 		if _, ok := player.Effect(effect.Speed); ok {
 			t.Fatal("effect still present")
 		}
+		player.SetGameMode(world.GameModeSurvival)
+		before := player.Health()
+		if !players.ChangePlayerEffect(invocation, id, native.PlayerEffectAdd, native.PlayerEffect{
+			Type: native.EffectInstantHealth, Level: 1, Potency: 0.5, Mode: native.PlayerEffectInstant,
+		}) {
+			t.Fatal("instant effect failed")
+		}
+		if got := player.Health(); got != before+2 {
+			t.Fatalf("health after half-potency instant health = %v, want %v", got, before+2)
+		}
+
+		const customID = 32_000
+		effect.Register(customID, testLastingEffect{})
+		if !players.ChangePlayerEffect(invocation, id, native.PlayerEffectAdd, native.PlayerEffect{
+			Type: customID, Level: 1, Duration: time.Second, Potency: 1, Mode: native.PlayerEffectTimed,
+		}) {
+			t.Fatal("registered effect failed")
+		}
+		if applied, ok := player.Effect(testLastingEffect{}); !ok || applied.Level() != 1 {
+			t.Fatalf("registered effect = %+v ok=%v", applied, ok)
+		}
+		if !players.ChangePlayerEffect(invocation, id, native.PlayerEffectAdd, native.PlayerEffect{
+			Type: native.EffectRegeneration, Level: 1, Duration: time.Second,
+			Potency: 1, Mode: native.PlayerEffectAmbient, ParticlesHidden: true,
+		}) {
+			t.Fatal("ambient effect failed")
+		}
+		if applied, ok := player.Effect(effect.Regeneration); !ok || !applied.Ambient() || !applied.ParticlesHidden() {
+			t.Fatalf("ambient effect = %+v ok=%v", applied, ok)
+		}
+		if !players.ChangePlayerEffect(invocation, id, native.PlayerEffectAdd, native.PlayerEffect{
+			Type: native.EffectFireResistance, Level: 1, Potency: 1, Mode: native.PlayerEffectInfinite,
+		}) {
+			t.Fatal("infinite effect failed")
+		}
+		if applied, ok := player.Effect(effect.FireResistance); !ok || !applied.Infinite() {
+			t.Fatalf("infinite effect = %+v ok=%v", applied, ok)
+		}
+		if players.ChangePlayerEffect(invocation, id, native.PlayerEffectAdd, native.PlayerEffect{
+			Type: customID, Level: 1, Potency: 0.5, Mode: native.PlayerEffectInstant,
+		}) {
+			t.Fatal("registered lasting effect accepted as instant")
+		}
+		if players.ChangePlayerEffect(invocation, id, native.PlayerEffectAdd, native.PlayerEffect{
+			Type: native.EffectSpeed, Level: 0, Potency: 1, Mode: native.PlayerEffectTimed,
+		}) {
+			t.Fatal("zero-level effect accepted")
+		}
 	})
 }
+
+type testLastingEffect struct{}
+
+func (testLastingEffect) RGBA() color.RGBA                  { return color.RGBA{} }
+func (testLastingEffect) Apply(world.Entity, effect.Effect) {}
+func (testLastingEffect) Start(world.Entity, int)           {}
+func (testLastingEffect) End(world.Entity, int)             {}
 
 func TestPlayersReconstructsConcreteHealAndHurtSources(t *testing.T) {
 	withPlayerTx(t, func(tx *world.Tx, connected *player.Player) {

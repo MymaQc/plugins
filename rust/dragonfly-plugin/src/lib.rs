@@ -7,6 +7,7 @@ use std::cell::Cell;
 
 pub mod block;
 pub mod damage;
+pub mod effect;
 pub mod entity;
 pub mod form;
 pub mod healing;
@@ -63,7 +64,7 @@ pub mod Event {
     pub use super::PlayerToggleSprintEventData as PlayerToggleSprint;
 }
 
-static HOST_API: AtomicPtr<dragonfly_plugin_sys::DfHostApiV11> =
+static HOST_API: AtomicPtr<dragonfly_plugin_sys::DfHostApiV12> =
     AtomicPtr::new(core::ptr::null_mut());
 
 std::thread_local! {
@@ -112,7 +113,7 @@ impl Drop for SkinSnapshot {
 #[doc(hidden)]
 /// # Safety
 /// `host` must remain valid while plugin callbacks may execute.
-pub unsafe fn install_host(host: *const dragonfly_plugin_sys::DfHostApiV11) {
+pub unsafe fn install_host(host: *const dragonfly_plugin_sys::DfHostApiV12) {
     HOST_API.store(host.cast_mut(), Ordering::Release);
 }
 
@@ -1537,59 +1538,26 @@ impl Player {
 include!("player_state_generated.rs");
 include!("items_generated.rs");
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct Effect {
-    effect_type: EffectType,
-    level: i32,
-    duration: std::time::Duration,
-    ambient: bool,
-    infinite: bool,
-    particles_hidden: bool,
-}
-
-impl Effect {
-    pub fn new(effect_type: EffectType, level: i32, duration: std::time::Duration) -> Self {
-        Self {
-            effect_type,
-            level,
-            duration,
-            ambient: false,
-            infinite: false,
-            particles_hidden: false,
-        }
-    }
-
-    pub fn infinite(effect_type: EffectType, level: i32) -> Self {
-        Self {
-            infinite: true,
-            ..Self::new(effect_type, level, std::time::Duration::ZERO)
-        }
-    }
-
-    pub fn ambient(mut self) -> Self {
-        self.ambient = true;
-        self
-    }
-
-    pub fn without_particles(mut self) -> Self {
-        self.particles_hidden = true;
-        self
-    }
-}
-
 impl Player {
-    pub fn add_effect(&self, effect: Effect) {
+    pub fn add_effect(&self, effect: effect::Effect) {
         self.change_effect(dragonfly_plugin_sys::DF_PLAYER_EFFECT_ADD, effect);
     }
 
-    pub fn remove_effect(&self, effect_type: EffectType) {
+    pub fn remove_effect(&self, effect_type: impl effect::Type) {
         self.change_effect(
             dragonfly_plugin_sys::DF_PLAYER_EFFECT_REMOVE,
-            Effect::new(effect_type, 0, std::time::Duration::ZERO),
+            effect::Effect {
+                effect_type: effect_type.id(),
+                level: 0,
+                duration: std::time::Duration::ZERO,
+                potency: 1.0,
+                mode: dragonfly_plugin_sys::DF_EFFECT_MODE_TIMED,
+                particles_hidden: false,
+            },
         );
     }
 
-    fn change_effect(&self, operation: u32, effect: Effect) {
+    fn change_effect(&self, operation: u32, effect: effect::Effect) {
         let host = HOST_API.load(Ordering::Acquire);
         let Some(host) = (unsafe { host.as_ref() }) else {
             return;
@@ -1598,11 +1566,11 @@ impl Player {
             return;
         };
         let raw = dragonfly_plugin_sys::DfEffectView {
-            effect_type: effect.effect_type as u32,
+            effect_type: effect.effect_type,
             level: effect.level,
             duration_milliseconds: duration_milliseconds(effect.duration),
-            ambient: u8::from(effect.ambient),
-            infinite: u8::from(effect.infinite),
+            potency: effect.potency,
+            mode: effect.mode,
             particles_hidden: u8::from(effect.particles_hidden),
         };
         let _ = unsafe {
@@ -2168,13 +2136,13 @@ fn slice_pointer<T>(value: &[T]) -> *const T {
     }
 }
 
-fn host_api() -> Option<&'static dragonfly_plugin_sys::DfHostApiV11> {
+fn host_api() -> Option<&'static dragonfly_plugin_sys::DfHostApiV12> {
     unsafe { HOST_API.load(Ordering::Acquire).as_ref() }
 }
 
 fn read_item_stack(
     open: impl FnOnce(
-        &dragonfly_plugin_sys::DfHostApiV11,
+        &dragonfly_plugin_sys::DfHostApiV12,
         *mut u64,
         *mut dragonfly_plugin_sys::DfItemStackInfo,
     ) -> Option<dragonfly_plugin_sys::DfStatus>,
@@ -2196,7 +2164,7 @@ fn read_item_stack(
 }
 
 fn read_item_stack_snapshot(
-    host: &dragonfly_plugin_sys::DfHostApiV11,
+    host: &dragonfly_plugin_sys::DfHostApiV12,
     invocation: dragonfly_plugin_sys::DfInvocationId,
     snapshot_id: u64,
     info: dragonfly_plugin_sys::DfItemStackInfo,

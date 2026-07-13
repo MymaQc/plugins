@@ -476,21 +476,35 @@ func (p *Players) ChangePlayerEffect(invocation native.InvocationID, id native.P
 	if operation == native.PlayerEffectRemove {
 		return p.mutatePlayer(invocation, id, func(connected *player.Player) { connected.RemoveEffect(effectType) })
 	}
-	if operation != native.PlayerEffectAdd || value.Level < 0 || value.Duration < 0 {
+	if operation != native.PlayerEffectAdd || value.Level <= 0 || value.Duration < 0 ||
+		math.IsNaN(value.Potency) || math.IsInf(value.Potency, 0) || value.Potency < 0 {
 		return false
 	}
 	var applied effect.Effect
-	if lasting, ok := effectType.(effect.LastingType); ok {
-		switch {
-		case value.Infinite:
-			applied = effect.NewInfinite(lasting, int(value.Level))
-		case value.Ambient:
-			applied = effect.NewAmbient(lasting, int(value.Level), value.Duration)
-		default:
-			applied = effect.New(lasting, int(value.Level), value.Duration)
+	lasting, isLasting := effectType.(effect.LastingType)
+	switch value.Mode {
+	case native.PlayerEffectTimed:
+		if !isLasting || value.Potency != 1 {
+			return false
 		}
-	} else {
-		applied = effect.NewInstant(effectType, int(value.Level))
+		applied = effect.New(lasting, int(value.Level), value.Duration)
+	case native.PlayerEffectAmbient:
+		if !isLasting || value.Potency != 1 {
+			return false
+		}
+		applied = effect.NewAmbient(lasting, int(value.Level), value.Duration)
+	case native.PlayerEffectInfinite:
+		if !isLasting || value.Duration != 0 || value.Potency != 1 {
+			return false
+		}
+		applied = effect.NewInfinite(lasting, int(value.Level))
+	case native.PlayerEffectInstant:
+		if isLasting || value.Duration != 0 {
+			return false
+		}
+		applied = effect.NewInstantWithPotency(effectType, int(value.Level), value.Potency)
+	default:
+		return false
 	}
 	if value.ParticlesHidden {
 		applied = applied.WithoutParticles()

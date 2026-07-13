@@ -100,7 +100,7 @@ type playerText struct {
 
 type effectType struct {
 	Name string `yaml:"name"`
-	ID   uint32 `yaml:"id"`
+	ID   int32  `yaml:"id"`
 	Kind string `yaml:"kind"`
 }
 
@@ -140,6 +140,7 @@ func main() {
 		filepath.Join(*root, "internal", "host", "player_state_generated.go"):                generateGoPlayerStates(player),
 		filepath.Join(*root, "internal", "native", "player_state_generated.go"):              generateGoNativePlayerStates(player),
 		filepath.Join(*root, "rust", "dragonfly-plugin", "src", "player_state_generated.rs"): generateRustPlayerStates(player),
+		filepath.Join(*root, "rust", "dragonfly-plugin", "src", "effects_generated.rs"):      generateRustEffects(player),
 		filepath.Join(*root, "rust", "dragonfly-plugin", "src", "items_generated.rs"):        generateRustItems(items),
 	}
 	for path, data := range outputs {
@@ -249,7 +250,7 @@ func readPlayer(path string) (playerSchema, error) {
 		ids[state.ID], names[state.Name] = true, true
 	}
 	sort.Slice(schema.States, func(i, j int) bool { return schema.States[i].ID < schema.States[j].ID })
-	effectIDs, effectNames := map[uint32]bool{}, map[string]bool{}
+	effectIDs, effectNames := map[int32]bool{}, map[string]bool{}
 	for _, effect := range schema.Effects {
 		if effect.Name == "" || effect.ID == 0 || effectIDs[effect.ID] || effectNames[effect.Name] || effect.Kind != "lasting" && effect.Kind != "instant" {
 			return playerSchema{}, fmt.Errorf("invalid or duplicate effect %+v", effect)
@@ -348,7 +349,7 @@ extern "C" {
 #endif
 
 #define DF_ABI_VERSION 1u
-#define DF_HOST_ABI_VERSION 11u
+#define DF_HOST_ABI_VERSION 12u
 #define DF_STATUS_OK 0
 #define DF_STATUS_ERROR 1
 
@@ -475,7 +476,7 @@ typedef struct { uint32_t kind; uint32_t data; int32_t integer; uint32_t flags; 
 		fmt.Fprintf(&b, "#define DF_PLAYER_OPERATION_%s %du\n", strings.ToUpper(operation.Name), operation.ID)
 	}
 	for _, effect := range player.Effects {
-		fmt.Fprintf(&b, "#define DF_EFFECT_%s %du\n", strings.ToUpper(effect.Name), effect.ID)
+		fmt.Fprintf(&b, "#define DF_EFFECT_%s %d\n", strings.ToUpper(effect.Name), effect.ID)
 	}
 	for _, sound := range player.Sounds {
 		fmt.Fprintf(&b, "#define DF_SOUND_KIND_%s %du\n", strings.ToUpper(sound.Name), sound.ID)
@@ -493,7 +494,11 @@ typedef struct { double healed; } DfPlayerHealResult;
 typedef struct { double damage; uint8_t vulnerable; } DfPlayerHurtResult;
 #define DF_PLAYER_EFFECT_ADD 0u
 #define DF_PLAYER_EFFECT_REMOVE 1u
-typedef struct { uint32_t effect_type; int32_t level; uint64_t duration_milliseconds; uint8_t ambient; uint8_t infinite; uint8_t particles_hidden; } DfEffectView;
+#define DF_EFFECT_MODE_TIMED 0u
+#define DF_EFFECT_MODE_AMBIENT 1u
+#define DF_EFFECT_MODE_INFINITE 2u
+#define DF_EFFECT_MODE_INSTANT 3u
+typedef struct { int32_t effect_type; int32_t level; uint64_t duration_milliseconds; double potency; uint32_t mode; uint8_t particles_hidden; } DfEffectView;
 typedef struct { uint32_t width; uint32_t height; uint32_t animation_type; int64_t frame_count; int64_t expression; uint64_t pixels_len; } DfSkinAnimationInfo;
 typedef struct { uint32_t width; uint32_t height; uint8_t persona; uint64_t play_fab_id_len; uint64_t full_id_len; uint64_t pixels_len; uint64_t model_default_len; uint64_t model_animated_face_len; uint64_t model_len; uint32_t cape_width; uint32_t cape_height; uint64_t cape_pixels_len; uint64_t animation_count; } DfSkinInfo;
 typedef struct { DfStringBuffer play_fab_id; DfStringBuffer full_id; DfStringBuffer pixels; DfStringBuffer model_default; DfStringBuffer model_animated_face; DfStringBuffer model; DfStringBuffer cape_pixels; DfStringBuffer *animation_pixels; uint64_t animation_capacity; } DfSkinData;
@@ -609,7 +614,7 @@ typedef struct {
     DfHostPlayerSoundPlayFn player_sound_play;
     DfHostPlayerHealFn player_heal;
     DfHostPlayerHurtFn player_hurt;
-} DfHostApiV11;
+} DfHostApiV12;
 #define DF_COMMAND_PARAMETER_SUBCOMMAND 1u
 #define DF_COMMAND_PARAMETER_ENUM 2u
 #define DF_COMMAND_PARAMETER_STRING 3u
@@ -665,7 +670,7 @@ typedef DfStatus (*DfPluginLifecycleFn)(void *instance);
 typedef const DfCommandDescriptor *(*DfPluginCommandsFn)(void *instance, uint64_t *count);
 typedef DfStatus (*DfHandleCommandFn)(void *instance, uint64_t command, const DfCommandInput *input, DfCommandState *state);
 typedef DfStatus (*DfCommandEnumOptionsFn)(void *instance, uint64_t command, uint64_t overload, uint64_t parameter, const DfCommandEnumContext *context, DfStringBuffer *output);
-typedef DfStatus (*DfPluginSetHostFn)(void *instance, const DfHostApiV11 *host);
+typedef DfStatus (*DfPluginSetHostFn)(void *instance, const DfHostApiV12 *host);
 typedef void (*DfPluginDestroyFn)(void *instance);
 
 typedef struct {
@@ -685,7 +690,7 @@ typedef struct {
 typedef const DfPluginApiV1 *(*DfPluginEntryV1Fn)(void);
 
 typedef struct DfRuntime DfRuntime;
-typedef struct { DfStringView plugin_directory; const DfHostApiV11 *host; } DfRuntimeConfig;
+typedef struct { DfStringView plugin_directory; const DfHostApiV12 *host; } DfRuntimeConfig;
 
 DfStatus df_runtime_create(const DfRuntimeConfig *config, DfRuntime **out, uint8_t *error, uint64_t error_capacity);
 DfStatus df_runtime_enable(DfRuntime *runtime);
@@ -715,7 +720,7 @@ func generateRust(events []event, player playerSchema) []byte {
 	b.WriteString(`use core::ffi::c_void;
 
 pub const DF_ABI_VERSION: u32 = 1;
-pub const DF_HOST_ABI_VERSION: u32 = 11;
+pub const DF_HOST_ABI_VERSION: u32 = 12;
 pub const DF_STATUS_OK: DfStatus = 0;
 pub const DF_STATUS_ERROR: DfStatus = 1;
 pub type DfStatus = i32;
@@ -904,7 +909,7 @@ pub const DF_PLAYER_TRANSFORM_VELOCITY: u32 = 2;
 		fmt.Fprintf(&b, "pub const DF_PLAYER_OPERATION_%s: u32 = %d;\n", strings.ToUpper(operation.Name), operation.ID)
 	}
 	for _, effect := range player.Effects {
-		fmt.Fprintf(&b, "pub const DF_EFFECT_%s: u32 = %d;\n", strings.ToUpper(effect.Name), effect.ID)
+		fmt.Fprintf(&b, "pub const DF_EFFECT_%s: i32 = %d;\n", strings.ToUpper(effect.Name), effect.ID)
 	}
 	for _, sound := range player.Sounds {
 		fmt.Fprintf(&b, "pub const DF_SOUND_KIND_%s: u32 = %d;\n", strings.ToUpper(sound.Name), sound.ID)
@@ -934,9 +939,13 @@ pub struct DfPlayerHealResult { pub healed: f64 }
 pub struct DfPlayerHurtResult { pub damage: f64, pub vulnerable: u8 }
 pub const DF_PLAYER_EFFECT_ADD: u32 = 0;
 pub const DF_PLAYER_EFFECT_REMOVE: u32 = 1;
+pub const DF_EFFECT_MODE_TIMED: u32 = 0;
+pub const DF_EFFECT_MODE_AMBIENT: u32 = 1;
+pub const DF_EFFECT_MODE_INFINITE: u32 = 2;
+pub const DF_EFFECT_MODE_INSTANT: u32 = 3;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
-pub struct DfEffectView { pub effect_type: u32, pub level: i32, pub duration_milliseconds: u64, pub ambient: u8, pub infinite: u8, pub particles_hidden: u8 }
+pub struct DfEffectView { pub effect_type: i32, pub level: i32, pub duration_milliseconds: u64, pub potency: f64, pub mode: u32, pub particles_hidden: u8 }
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DfSkinAnimationInfo { pub width: u32, pub height: u32, pub animation_type: u32, pub frame_count: i64, pub expression: i64, pub pixels_len: u64 }
@@ -1006,7 +1015,7 @@ pub type DfHostWorldSoundPlayFn = unsafe extern "C" fn(context: u64, invocation:
 pub type DfHostPlayerSoundPlayFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, player: DfPlayerId, sound: *const DfSoundViewV1) -> DfStatus;
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
-pub struct DfHostApiV11 { pub abi_version: u32, pub struct_size: u32, pub context: u64, pub player_text: Option<DfHostPlayerTextFn>, pub player_title: Option<DfHostPlayerTitleFn>, pub player_transform: Option<DfHostPlayerTransformFn>, pub player_rotation: Option<DfHostPlayerRotationFn>, pub player_state_set: Option<DfHostPlayerStateSetFn>, pub player_state_get: Option<DfHostPlayerStateGetFn>, pub player_effect: Option<DfHostPlayerEffectFn>, pub player_entity_visibility: Option<DfHostPlayerEntityVisibilityFn>, pub player_skin_open: Option<DfHostPlayerSkinOpenFn>, pub player_skin_animation_info: Option<DfHostPlayerSkinAnimationInfoFn>, pub player_skin_read: Option<DfHostPlayerSkinReadFn>, pub player_skin_close: Option<DfHostPlayerSkinCloseFn>, pub player_skin_set: Option<DfHostPlayerSkinSetFn>, pub inventory_size: Option<DfHostInventorySizeFn>, pub inventory_item_open: Option<DfHostInventoryItemOpenFn>, pub player_held_item_open: Option<DfHostPlayerHeldItemOpenFn>, pub item_stack_read: Option<DfHostItemStackReadFn>, pub item_stack_close: Option<DfHostItemStackCloseFn>, pub inventory_item_set: Option<DfHostInventoryItemSetFn>, pub inventory_item_add: Option<DfHostInventoryItemAddFn>, pub inventory_clear_slot: Option<DfHostInventoryClearSlotFn>, pub inventory_clear: Option<DfHostInventoryClearFn>, pub player_held_items_set: Option<DfHostPlayerHeldItemsSetFn>, pub player_held_slot_set: Option<DfHostPlayerHeldSlotSetFn>, pub player_scoreboard: Option<DfHostPlayerScoreboardFn>, pub player_scoreboard_remove: Option<DfHostPlayerScoreboardRemoveFn>, pub player_form_send: Option<DfHostPlayerFormSendFn>, pub player_form_close: Option<DfHostPlayerFormCloseFn>, pub world_lookup: Option<DfHostWorldLookupFn>, pub world_open: Option<DfHostWorldOpenFn>, pub world_name: Option<DfHostWorldNameFn>, pub world_unload: Option<DfHostWorldUnloadFn>, pub world_save: Option<DfHostWorldSaveFn>, pub world_block_get: Option<DfHostWorldBlockGetFn>, pub world_block_set: Option<DfHostWorldBlockSetFn>, pub world_time_get: Option<DfHostWorldTimeGetFn>, pub world_time_set: Option<DfHostWorldTimeSetFn>, pub world_spawn_get: Option<DfHostWorldSpawnGetFn>, pub world_spawn_set: Option<DfHostWorldSpawnSetFn>, pub world_entity_spawn: Option<DfHostWorldEntitySpawnFn>, pub world_entities: Option<DfHostWorldEntitiesFn>, pub world_players: Option<DfHostWorldPlayersFn>, pub entity_state: Option<DfHostEntityStateFn>, pub entity_teleport: Option<DfHostEntityTeleportFn>, pub entity_velocity_set: Option<DfHostEntityVelocitySetFn>, pub entity_name_tag_set: Option<DfHostEntityNameTagSetFn>, pub entity_despawn: Option<DfHostEntityDespawnFn>, pub world_particle_add: Option<DfHostWorldParticleAddFn>, pub world_sound_play: Option<DfHostWorldSoundPlayFn>, pub player_sound_play: Option<DfHostPlayerSoundPlayFn>, pub player_heal: Option<DfHostPlayerHealFn>, pub player_hurt: Option<DfHostPlayerHurtFn> }
+pub struct DfHostApiV12 { pub abi_version: u32, pub struct_size: u32, pub context: u64, pub player_text: Option<DfHostPlayerTextFn>, pub player_title: Option<DfHostPlayerTitleFn>, pub player_transform: Option<DfHostPlayerTransformFn>, pub player_rotation: Option<DfHostPlayerRotationFn>, pub player_state_set: Option<DfHostPlayerStateSetFn>, pub player_state_get: Option<DfHostPlayerStateGetFn>, pub player_effect: Option<DfHostPlayerEffectFn>, pub player_entity_visibility: Option<DfHostPlayerEntityVisibilityFn>, pub player_skin_open: Option<DfHostPlayerSkinOpenFn>, pub player_skin_animation_info: Option<DfHostPlayerSkinAnimationInfoFn>, pub player_skin_read: Option<DfHostPlayerSkinReadFn>, pub player_skin_close: Option<DfHostPlayerSkinCloseFn>, pub player_skin_set: Option<DfHostPlayerSkinSetFn>, pub inventory_size: Option<DfHostInventorySizeFn>, pub inventory_item_open: Option<DfHostInventoryItemOpenFn>, pub player_held_item_open: Option<DfHostPlayerHeldItemOpenFn>, pub item_stack_read: Option<DfHostItemStackReadFn>, pub item_stack_close: Option<DfHostItemStackCloseFn>, pub inventory_item_set: Option<DfHostInventoryItemSetFn>, pub inventory_item_add: Option<DfHostInventoryItemAddFn>, pub inventory_clear_slot: Option<DfHostInventoryClearSlotFn>, pub inventory_clear: Option<DfHostInventoryClearFn>, pub player_held_items_set: Option<DfHostPlayerHeldItemsSetFn>, pub player_held_slot_set: Option<DfHostPlayerHeldSlotSetFn>, pub player_scoreboard: Option<DfHostPlayerScoreboardFn>, pub player_scoreboard_remove: Option<DfHostPlayerScoreboardRemoveFn>, pub player_form_send: Option<DfHostPlayerFormSendFn>, pub player_form_close: Option<DfHostPlayerFormCloseFn>, pub world_lookup: Option<DfHostWorldLookupFn>, pub world_open: Option<DfHostWorldOpenFn>, pub world_name: Option<DfHostWorldNameFn>, pub world_unload: Option<DfHostWorldUnloadFn>, pub world_save: Option<DfHostWorldSaveFn>, pub world_block_get: Option<DfHostWorldBlockGetFn>, pub world_block_set: Option<DfHostWorldBlockSetFn>, pub world_time_get: Option<DfHostWorldTimeGetFn>, pub world_time_set: Option<DfHostWorldTimeSetFn>, pub world_spawn_get: Option<DfHostWorldSpawnGetFn>, pub world_spawn_set: Option<DfHostWorldSpawnSetFn>, pub world_entity_spawn: Option<DfHostWorldEntitySpawnFn>, pub world_entities: Option<DfHostWorldEntitiesFn>, pub world_players: Option<DfHostWorldPlayersFn>, pub entity_state: Option<DfHostEntityStateFn>, pub entity_teleport: Option<DfHostEntityTeleportFn>, pub entity_velocity_set: Option<DfHostEntityVelocitySetFn>, pub entity_name_tag_set: Option<DfHostEntityNameTagSetFn>, pub entity_despawn: Option<DfHostEntityDespawnFn>, pub world_particle_add: Option<DfHostWorldParticleAddFn>, pub world_sound_play: Option<DfHostWorldSoundPlayFn>, pub player_sound_play: Option<DfHostPlayerSoundPlayFn>, pub player_heal: Option<DfHostPlayerHealFn>, pub player_hurt: Option<DfHostPlayerHurtFn> }
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct DfCommandParameter { pub kind: u32, pub optional: u8, pub name: DfStringView, pub values: *const DfStringView, pub value_count: u64 }
@@ -1075,7 +1084,7 @@ pub type DfPluginLifecycleFn = unsafe extern "C" fn(instance: *mut c_void) -> Df
 pub type DfPluginCommandsFn = unsafe extern "C" fn(instance: *mut c_void, count: *mut u64) -> *const DfCommandDescriptor;
 pub type DfHandleCommandFn = unsafe extern "C" fn(instance: *mut c_void, command: u64, input: *const DfCommandInput, state: *mut DfCommandState) -> DfStatus;
 pub type DfCommandEnumOptionsFn = unsafe extern "C" fn(instance: *mut c_void, command: u64, overload: u64, parameter: u64, context: *const DfCommandEnumContext, output: *mut DfStringBuffer) -> DfStatus;
-pub type DfPluginSetHostFn = unsafe extern "C" fn(instance: *mut c_void, host: *const DfHostApiV11) -> DfStatus;
+pub type DfPluginSetHostFn = unsafe extern "C" fn(instance: *mut c_void, host: *const DfHostApiV12) -> DfStatus;
 pub type DfPluginDestroyFn = unsafe extern "C" fn(instance: *mut c_void);
 pub type DfHandleEventFn = unsafe extern "C" fn(instance: *mut c_void, event_id: DfEventId, input: *const c_void, state: *mut c_void) -> DfStatus;
 
@@ -1159,11 +1168,11 @@ func generateGoNativePlayerStates(player playerSchema) []byte {
 	for _, state := range player.States {
 		fmt.Fprintf(&b, "\tPlayerState%s PlayerStateKind = %d\n", title(state.Name), state.ID)
 	}
-	b.WriteString(")\n\ntype PlayerStateValue struct {\n\tNumber float64\n\tInteger int64\n}\n\ntype EffectType uint32\n\nconst (\n")
+	b.WriteString(")\n\ntype PlayerStateValue struct {\n\tNumber float64\n\tInteger int64\n}\n\ntype EffectType int32\n\nconst (\n")
 	for _, effect := range player.Effects {
 		fmt.Fprintf(&b, "\tEffect%s EffectType = %d\n", title(effect.Name), effect.ID)
 	}
-	b.WriteString(")\n\ntype PlayerEffectOperation uint32\n\nconst (\n\tPlayerEffectAdd PlayerEffectOperation = iota\n\tPlayerEffectRemove\n)\n\ntype PlayerEffect struct {\n\tType EffectType\n\tLevel int32\n\tDuration time.Duration\n\tAmbient bool\n\tInfinite bool\n\tParticlesHidden bool\n}\n")
+	b.WriteString(")\n\ntype PlayerEffectOperation uint32\n\nconst (\n\tPlayerEffectAdd PlayerEffectOperation = iota\n\tPlayerEffectRemove\n)\n\ntype PlayerEffectMode uint32\n\nconst (\n\tPlayerEffectTimed PlayerEffectMode = iota\n\tPlayerEffectAmbient\n\tPlayerEffectInfinite\n\tPlayerEffectInstant\n)\n\ntype PlayerEffect struct {\n\tType EffectType\n\tLevel int32\n\tDuration time.Duration\n\tPotency float64\n\tMode PlayerEffectMode\n\tParticlesHidden bool\n}\n")
 	b.WriteString("\ntype PlayerTextKind uint32\n\nconst (\n")
 	for _, text := range player.Texts {
 		fmt.Fprintf(&b, "\tPlayerText%s PlayerTextKind = %d\n", title(text.Name), text.ID)
@@ -1205,11 +1214,6 @@ func generateGoValidation(b *bytes.Buffer, state playerState) {
 func generateRustPlayerStates(player playerSchema) []byte {
 	var b bytes.Buffer
 	fmt.Fprintf(&b, "// Code generated by abi-gen v%s. DO NOT EDIT.\n\n", generatorVersion)
-	b.WriteString("#[repr(u32)]\n#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]\npub enum EffectType {\n")
-	for _, effect := range player.Effects {
-		fmt.Fprintf(&b, "    %s = dragonfly_plugin_sys::DF_EFFECT_%s,\n", title(effect.Name), strings.ToUpper(effect.Name))
-	}
-	b.WriteString("}\n\n")
 	b.WriteString("impl Player {\n")
 	for _, text := range player.Texts {
 		fmt.Fprintf(&b, "    pub fn %s(&self, value: &str) { self.send_text(dragonfly_plugin_sys::DF_PLAYER_TEXT_%s, value); }\n", text.Rust, strings.ToUpper(text.Name))
@@ -1242,6 +1246,26 @@ func generateRustPlayerStates(player playerSchema) []byte {
 		}
 	}
 	b.WriteString("}\n")
+	return b.Bytes()
+}
+
+func generateRustEffects(player playerSchema) []byte {
+	var b bytes.Buffer
+	fmt.Fprintf(&b, "// Code generated by abi-gen v%s. DO NOT EDIT.\n\n", generatorVersion)
+	for _, effect := range player.Effects {
+		name := title(effect.Name)
+		fmt.Fprintf(&b, "#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]\npub struct %s;\n", name)
+		fmt.Fprintf(&b, "impl private::Sealed for %s {}\n", name)
+		fmt.Fprintf(&b, "impl Type for %s { fn id(self) -> i32 { dragonfly_plugin_sys::DF_EFFECT_%s } }\n", name, strings.ToUpper(effect.Name))
+		switch effect.Kind {
+		case "lasting":
+			fmt.Fprintf(&b, "impl LastingType for %s {}\n\n", name)
+		case "instant":
+			fmt.Fprintf(&b, "impl InstantType for %s {}\n\n", name)
+		default:
+			panic(fmt.Sprintf("effect %q has unknown kind %q", effect.Name, effect.Kind))
+		}
+	}
 	return b.Bytes()
 }
 

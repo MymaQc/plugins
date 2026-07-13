@@ -23,7 +23,7 @@ type PlayerStateValue struct {
 	Integer int64
 }
 
-type EffectType uint32
+type EffectType int32
 
 const (
 	EffectSpeed          EffectType = 1
@@ -63,12 +63,21 @@ const (
 	PlayerEffectRemove
 )
 
+type PlayerEffectMode uint32
+
+const (
+	PlayerEffectTimed PlayerEffectMode = iota
+	PlayerEffectAmbient
+	PlayerEffectInfinite
+	PlayerEffectInstant
+)
+
 type PlayerEffect struct {
 	Type            EffectType
 	Level           int32
 	Duration        time.Duration
-	Ambient         bool
-	Infinite        bool
+	Potency         float64
+	Mode            PlayerEffectMode
 	ParticlesHidden bool
 }
 
