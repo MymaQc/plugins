@@ -9,7 +9,7 @@ extern "C" {
 #endif
 
 #define DF_ABI_VERSION 3u
-#define DF_HOST_ABI_VERSION 15u
+#define DF_HOST_ABI_VERSION 16u
 #define DF_STATUS_OK 0
 #define DF_STATUS_ERROR 1
 
@@ -46,6 +46,21 @@ typedef struct { DfStringView identifier; int32_t metadata; uint32_t count; uint
 #define DF_WORLD_DIMENSION_OVERWORLD 0u
 #define DF_WORLD_DIMENSION_NETHER 1u
 #define DF_WORLD_DIMENSION_END 2u
+#define DF_WORLD_OPEN_OR_CREATE 0u
+#define DF_WORLD_OPEN_EXISTING 1u
+#define DF_WORLD_CREATE_NEW 2u
+#define DF_WORLD_SAVE_AUTOMATIC 0u
+#define DF_WORLD_SAVE_MANUAL 1u
+#define DF_WORLD_RANDOM_TICKS_DISABLED 0u
+#define DF_WORLD_RANDOM_TICKS_PER_SUBCHUNK 1u
+#define DF_WORLD_TIME_PRESERVE 0u
+#define DF_WORLD_TIME_CYCLE 1u
+#define DF_WORLD_TIME_FIXED 2u
+#define DF_WORLD_WEATHER_PRESERVE 0u
+#define DF_WORLD_WEATHER_CYCLE 1u
+#define DF_WORLD_WEATHER_CLEAR 2u
+#define DF_WORLD_CHUNK_UNLOAD_AFTER 0u
+typedef struct { uint32_t struct_size; uint32_t dimension; DfStringView provider_path; uint64_t save_interval_milliseconds; uint64_t chunk_unload_interval_milliseconds; int64_t fixed_time; uint32_t open_mode; uint32_t save_policy; uint32_t random_tick_policy; uint32_t random_tick_rate; uint32_t time_policy; uint32_t weather_policy; uint32_t chunk_unload_policy; uint8_t read_only; uint8_t reserved[3]; } DfWorldOpenSpecV1;
 typedef struct { DfStringBuffer identifier; DfStringBuffer properties_nbt; } DfBlockData;
 typedef struct { DfStringView identifier; DfStringView properties_nbt; } DfBlockView;
 #define DF_DAMAGE_SOURCE_CUSTOM 0u
@@ -345,6 +360,7 @@ typedef DfStatus (*DfHostPlayerHeldItemsSetFn)(uint64_t context, DfInvocationId 
 typedef DfStatus (*DfHostPlayerHeldSlotSetFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t slot);
 typedef DfStatus (*DfHostWorldLookupFn)(uint64_t context, DfInvocationId invocation, DfStringView name, DfWorldId *world);
 typedef DfStatus (*DfHostWorldOpenFn)(uint64_t context, DfInvocationId invocation, DfStringView name, uint32_t dimension, DfWorldId *world);
+typedef DfStatus (*DfHostWorldOpenSpecFn)(uint64_t context, DfInvocationId invocation, DfStringView name, const DfWorldOpenSpecV1 *spec, DfWorldId *world);
 typedef DfStatus (*DfHostWorldNameFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, DfStringBuffer *name);
 typedef DfStatus (*DfHostWorldUnloadFn)(uint64_t context, DfInvocationId invocation, DfWorldId world);
 typedef DfStatus (*DfHostWorldSaveFn)(uint64_t context, DfInvocationId invocation, DfWorldId world);
@@ -423,7 +439,8 @@ typedef struct {
     DfHostPlayerHurtFn player_hurt;
     DfHostSkinSnapshotInfoFn skin_snapshot_info;
     DfHostSkinSnapshotSetFn skin_snapshot_set;
-} DfHostApiV15;
+    DfHostWorldOpenSpecFn world_open_spec;
+} DfHostApiV16;
 #define DF_COMMAND_PARAMETER_SUBCOMMAND 1u
 #define DF_COMMAND_PARAMETER_ENUM 2u
 #define DF_COMMAND_PARAMETER_STRING 3u
@@ -935,7 +952,7 @@ typedef DfStatus (*DfPluginEntityTypeAtFn)(void *instance, uint64_t index, DfEnt
 typedef DfStatus (*DfPluginHandleEntityFn)(void *instance, uint64_t local_type, uint32_t operation, uint64_t entity_instance, const void *input, void *state);
 typedef DfStatus (*DfHandleCommandFn)(void *instance, uint64_t command, const DfCommandInput *input, DfCommandState *state);
 typedef DfStatus (*DfCommandEnumOptionsFn)(void *instance, uint64_t command, uint64_t overload, uint64_t parameter, const DfCommandEnumContext *context, DfStringBuffer *output);
-typedef DfStatus (*DfPluginSetHostFn)(void *instance, const DfHostApiV15 *host);
+typedef DfStatus (*DfPluginSetHostFn)(void *instance, const DfHostApiV16 *host);
 typedef void (*DfPluginDestroyFn)(void *instance);
 
 typedef struct {
@@ -958,7 +975,7 @@ typedef struct {
 typedef const DfPluginApiV3 *(*DfPluginEntryV3Fn)(void);
 
 typedef struct DfRuntime DfRuntime;
-typedef struct { DfStringView plugin_directory; const DfHostApiV15 *host; } DfRuntimeConfig;
+typedef struct { DfStringView plugin_directory; const DfHostApiV16 *host; } DfRuntimeConfig;
 
 DfStatus df_runtime_create(const DfRuntimeConfig *config, DfRuntime **out, uint8_t *error, uint64_t error_capacity);
 DfStatus df_runtime_enable(DfRuntime *runtime);

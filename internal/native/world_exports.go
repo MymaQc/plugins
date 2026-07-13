@@ -47,6 +47,26 @@ func bg_go_world_open(context C.uint64_t, invocation C.DfInvocationId, name C.Df
 	return C.DF_STATUS_OK
 }
 
+//export bg_go_world_open_spec
+func bg_go_world_open_spec(context C.uint64_t, invocation C.DfInvocationId, name C.DfStringView, spec *C.DfWorldOpenSpecV1, output *C.DfWorldId) C.DfStatus {
+	if output == nil {
+		return C.DF_STATUS_ERROR
+	}
+	output.value = 0
+	host, ok := resolveHost(uint64(context))
+	value, validName := copyWorldString(name, maxWorldNameBytes)
+	worldSpec, validSpec := copyWorldOpenSpec(spec)
+	if !ok || !validName || !validSpec {
+		return C.DF_STATUS_ERROR
+	}
+	id, ok := host.OpenWorldSpec(InvocationID(invocation), value, worldSpec)
+	if !ok || id == 0 {
+		return C.DF_STATUS_ERROR
+	}
+	output.value = C.uint64_t(id)
+	return C.DF_STATUS_OK
+}
+
 //export bg_go_world_name
 func bg_go_world_name(context C.uint64_t, invocation C.DfInvocationId, world C.DfWorldId, output *C.DfStringBuffer) C.DfStatus {
 	host, ok := resolveHost(uint64(context))

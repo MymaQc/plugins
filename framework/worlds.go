@@ -560,6 +560,19 @@ func (m *WorldManager) OpenWorld(_ native.InvocationID, name string, dimension n
 	return id, err == nil
 }
 
+func (m *WorldManager) OpenWorldSpec(_ native.InvocationID, name string, value native.WorldOpenSpec) (native.WorldID, bool) {
+	id, err := m.OpenSpec(WorldID(name), WorldSpec{
+		ProviderPath: value.ProviderPath, Dimension: WorldDimension(value.Dimension),
+		OpenMode: WorldOpenMode(value.OpenMode), ReadOnly: value.ReadOnly,
+		Save: WorldSavePolicy(value.Save), SaveInterval: value.SaveInterval,
+		RandomTicks: WorldRandomTickPolicy(value.RandomTicks), RandomTickRate: value.RandomTickRate,
+		Time: WorldTimePolicy(value.Time), FixedTime: value.FixedTime,
+		Weather: WorldWeatherPolicy(value.Weather), ChunkUnload: WorldChunkUnloadPolicy(value.ChunkUnload),
+		ChunkUnloadAfter: value.ChunkUnloadAfter,
+	})
+	return id, err == nil
+}
+
 func (m *WorldManager) UnloadWorld(invocation native.InvocationID, id native.WorldID) bool {
 	entry, ok := m.entryByHandle(id)
 	return ok && m.unload(invocation, entry) == nil
