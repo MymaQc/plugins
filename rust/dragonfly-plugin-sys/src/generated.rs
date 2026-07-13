@@ -46,9 +46,6 @@ pub const DF_DAMAGE_SOURCE_REDUCED_BY_ARMOUR: u32 = 1;
 pub const DF_DAMAGE_SOURCE_REDUCED_BY_RESISTANCE: u32 = 2;
 pub const DF_DAMAGE_SOURCE_FIRE: u32 = 4;
 pub const DF_DAMAGE_SOURCE_IGNORES_TOTEM: u32 = 8;
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default)]
-pub struct DfItemStackView { pub identifier: DfStringView, pub metadata: i32, pub count: i32, pub damage: i32 }
 pub const DF_INVENTORY_MAIN: u32 = 0;
 pub const DF_INVENTORY_ARMOUR: u32 = 1;
 pub const DF_INVENTORY_OFFHAND: u32 = 2;
@@ -64,6 +61,9 @@ pub struct DfItemEnchantment { pub id: u32, pub level: u32 }
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DfItemStackInfo { pub metadata: i32, pub count: u32, pub damage: u32, pub unbreakable: u8, pub anvil_cost: i32, pub identifier_len: u64, pub custom_name_len: u64, pub lore_bytes_len: u64, pub lore_count: u64, pub nbt_len: u64, pub values_nbt_len: u64, pub enchantment_count: u64 }
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DfItemStackSnapshot { pub snapshot: u64, pub info: DfItemStackInfo }
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct DfItemStackData { pub identifier: DfStringBuffer, pub custom_name: DfStringBuffer, pub lore_bytes: DfStringBuffer, pub nbt: DfStringBuffer, pub values_nbt: DfStringBuffer, pub lore: *mut DfByteSpan, pub lore_capacity: u64, pub enchantments: *mut DfItemEnchantment, pub enchantment_capacity: u64 }
@@ -649,7 +649,7 @@ pub const DF_SUBSCRIPTION_PLAYER_ITEM_CONSUME: u64 = 1u64 << 25;
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DfPlayerItemConsumeInput {
     pub player: DfPlayerId,
-    pub item: DfItemStackView,
+    pub item: DfItemStackSnapshot,
 }
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
@@ -663,7 +663,7 @@ pub const DF_SUBSCRIPTION_PLAYER_ITEM_RELEASE: u64 = 1u64 << 26;
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DfPlayerItemReleaseInput {
     pub player: DfPlayerId,
-    pub item: DfItemStackView,
+    pub item: DfItemStackSnapshot,
     pub duration_milliseconds: u64,
 }
 #[repr(C)]
@@ -678,7 +678,7 @@ pub const DF_SUBSCRIPTION_PLAYER_ITEM_DAMAGE: u64 = 1u64 << 27;
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DfPlayerItemDamageInput {
     pub player: DfPlayerId,
-    pub item: DfItemStackView,
+    pub item: DfItemStackSnapshot,
 }
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
@@ -693,7 +693,7 @@ pub const DF_SUBSCRIPTION_PLAYER_ITEM_DROP: u64 = 1u64 << 28;
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DfPlayerItemDropInput {
     pub player: DfPlayerId,
-    pub item: DfItemStackView,
+    pub item: DfItemStackSnapshot,
 }
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]

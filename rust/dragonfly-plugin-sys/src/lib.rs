@@ -52,6 +52,8 @@ mod tests {
     fn host_v3_layout_is_stable() {
         assert_eq!(size_of::<DfInventoryId>(), 32);
         assert_eq!(size_of::<DfItemStackInfo>(), 80);
+        assert_eq!(size_of::<DfItemStackSnapshot>(), 88);
+        assert_eq!(size_of::<DfItemStackSnapshot>(), 88);
         assert_eq!(size_of::<DfItemStackData>(), 152);
         assert_eq!(size_of::<DfItemStackViewV3>(), 120);
         assert_eq!(size_of::<DfHostApiV3>(), 208);

@@ -29,7 +29,6 @@ typedef struct { DfStringView name; } DfHealingSourceView;
 #define DF_DAMAGE_SOURCE_REDUCED_BY_RESISTANCE 2u
 #define DF_DAMAGE_SOURCE_FIRE 4u
 #define DF_DAMAGE_SOURCE_IGNORES_TOTEM 8u
-typedef struct { DfStringView identifier; int32_t metadata; int32_t count; int32_t damage; } DfItemStackView;
 #define DF_INVENTORY_MAIN 0u
 #define DF_INVENTORY_ARMOUR 1u
 #define DF_INVENTORY_OFFHAND 2u
@@ -37,6 +36,7 @@ typedef struct { DfPlayerId player; uint32_t kind; uint32_t reserved; } DfInvent
 typedef struct { uint64_t offset; uint64_t len; } DfByteSpan;
 typedef struct { uint32_t id; uint32_t level; } DfItemEnchantment;
 typedef struct { int32_t metadata; uint32_t count; uint32_t damage; uint8_t unbreakable; int32_t anvil_cost; uint64_t identifier_len; uint64_t custom_name_len; uint64_t lore_bytes_len; uint64_t lore_count; uint64_t nbt_len; uint64_t values_nbt_len; uint64_t enchantment_count; } DfItemStackInfo;
+typedef struct { uint64_t snapshot; DfItemStackInfo info; } DfItemStackSnapshot;
 typedef struct { DfStringBuffer identifier; DfStringBuffer custom_name; DfStringBuffer lore_bytes; DfStringBuffer nbt; DfStringBuffer values_nbt; DfByteSpan *lore; uint64_t lore_capacity; DfItemEnchantment *enchantments; uint64_t enchantment_capacity; } DfItemStackData;
 typedef struct { DfStringView identifier; int32_t metadata; uint32_t count; uint32_t damage; uint8_t unbreakable; int32_t anvil_cost; DfStringView custom_name; const DfStringView *lore; uint64_t lore_count; DfStringView nbt; DfStringView values_nbt; const DfItemEnchantment *enchantments; uint64_t enchantment_count; } DfItemStackViewV3;
 #define DF_PLAYER_TRANSFORM_TELEPORT 0u
@@ -542,7 +542,7 @@ typedef struct {
 
 typedef struct {
     DfPlayerId player;
-    DfItemStackView item;
+    DfItemStackSnapshot item;
 } DfPlayerItemConsumeInput;
 
 typedef struct {
@@ -553,7 +553,7 @@ typedef struct {
 
 typedef struct {
     DfPlayerId player;
-    DfItemStackView item;
+    DfItemStackSnapshot item;
     uint64_t duration_milliseconds;
 } DfPlayerItemReleaseInput;
 
@@ -565,7 +565,7 @@ typedef struct {
 
 typedef struct {
     DfPlayerId player;
-    DfItemStackView item;
+    DfItemStackSnapshot item;
 } DfPlayerItemDamageInput;
 
 typedef struct {
@@ -577,7 +577,7 @@ typedef struct {
 
 typedef struct {
     DfPlayerId player;
-    DfItemStackView item;
+    DfItemStackSnapshot item;
 } DfPlayerItemDropInput;
 
 typedef struct {

@@ -255,20 +255,9 @@ impl ItemStack {
         }
     }
 
-    fn from_raw(raw: &dragonfly_plugin_sys::DfItemStackView) -> Self {
-        Self {
-            identifier: unsafe { string_view(raw.identifier) }.to_owned(),
-            metadata: raw.metadata,
-            count: u32::try_from(raw.count).unwrap_or_default(),
-            damage: u32::try_from(raw.damage).unwrap_or_default(),
-            unbreakable: false,
-            anvil_cost: 0,
-            custom_name: String::new(),
-            lore: Vec::new(),
-            nbt: std::collections::BTreeMap::new(),
-            values: std::collections::BTreeMap::new(),
-            enchantments: Vec::new(),
-        }
+    fn from_snapshot(raw: &dragonfly_plugin_sys::DfItemStackSnapshot) -> Option<Self> {
+        let host = host_api()?;
+        read_item_stack_snapshot(host, raw.snapshot, raw.info)
     }
 
     pub fn potion(potion: Potion, count: u32) -> Self {
@@ -1905,11 +1894,7 @@ fn read_item_stack(
         *mut dragonfly_plugin_sys::DfItemStackInfo,
     ) -> Option<dragonfly_plugin_sys::DfStatus>,
 ) -> Option<ItemStack> {
-    const MAX_ITEM_BYTES: u64 = 16 << 20;
-    const MAX_ITEM_LIST: usize = 256;
-
     let host = host_api()?;
-    let read = host.item_stack_read?;
     let close = host.item_stack_close?;
     let mut snapshot_id = 0;
     let mut info = dragonfly_plugin_sys::DfItemStackInfo::default();
@@ -1921,6 +1906,21 @@ fn read_item_stack(
         id: snapshot_id,
         close,
     };
+    read_item_stack_snapshot(host, snapshot.id, info)
+}
+
+fn read_item_stack_snapshot(
+    host: &dragonfly_plugin_sys::DfHostApiV3,
+    snapshot_id: u64,
+    info: dragonfly_plugin_sys::DfItemStackInfo,
+) -> Option<ItemStack> {
+    const MAX_ITEM_BYTES: u64 = 16 << 20;
+    const MAX_ITEM_LIST: usize = 256;
+
+    if snapshot_id == 0 {
+        return None;
+    }
+    let read = host.item_stack_read?;
     let lore_count = usize::try_from(info.lore_count).ok()?;
     let enchantment_count = usize::try_from(info.enchantment_count).ok()?;
     if lore_count > MAX_ITEM_LIST || enchantment_count > MAX_ITEM_LIST {
@@ -1965,7 +1965,7 @@ fn read_item_stack(
         },
         enchantment_capacity: enchantments.len() as u64,
     };
-    if unsafe { read(host.context, snapshot.id, &mut data) } != dragonfly_plugin_sys::DF_STATUS_OK {
+    if unsafe { read(host.context, snapshot_id, &mut data) } != dragonfly_plugin_sys::DF_STATUS_OK {
         return None;
     }
     finish_buffer(&mut identifier, data.identifier)?;
@@ -2742,7 +2742,7 @@ impl<'a> PlayerItemConsumeEventData<'a> {
         Player::from_id(self.input.player)
     }
     pub fn item(&self) -> ItemStack {
-        ItemStack::from_raw(&self.input.item)
+        ItemStack::from_snapshot(&self.input.item).unwrap_or_else(ItemStack::empty)
     }
     pub fn cancelled(&self) -> bool {
         self.state.cancelled != 0
@@ -2776,7 +2776,7 @@ impl<'a> PlayerItemDamageEventData<'a> {
         Player::from_id(self.input.player)
     }
     pub fn item(&self) -> ItemStack {
-        ItemStack::from_raw(&self.input.item)
+        ItemStack::from_snapshot(&self.input.item).unwrap_or_else(ItemStack::empty)
     }
     pub fn damage(&self) -> i32 {
         self.state.damage
@@ -2811,7 +2811,7 @@ impl<'a> PlayerItemDropEventData<'a> {
         Player::from_id(self.input.player)
     }
     pub fn item(&self) -> ItemStack {
-        ItemStack::from_raw(&self.input.item)
+        ItemStack::from_snapshot(&self.input.item).unwrap_or_else(ItemStack::empty)
     }
     pub fn cancelled(&self) -> bool {
         self.state.cancelled != 0
@@ -2835,7 +2835,7 @@ impl<'a> PlayerItemReleaseEventData<'a> {
         Player::from_id(self.input.player)
     }
     pub fn item(&self) -> ItemStack {
-        ItemStack::from_raw(&self.input.item)
+        ItemStack::from_snapshot(&self.input.item).unwrap_or_else(ItemStack::empty)
     }
     pub fn duration(&self) -> std::time::Duration {
         std::time::Duration::from_millis(self.input.duration_milliseconds)
@@ -3136,27 +3136,5 @@ mod tests {
         assert_eq!(potion.metadata(), 22);
         assert_eq!(Potion::from_id(22), Potion::StrongHealing);
         assert_eq!(Potion::from_id(255), Potion::Custom(255));
-    }
-
-    #[test]
-    fn event_item_view_becomes_owned() {
-        let stack = {
-            let identifier = b"minecraft:stone".to_vec();
-            let raw = dragonfly_plugin_sys::DfItemStackView {
-                identifier: dragonfly_plugin_sys::DfStringView {
-                    data: identifier.as_ptr(),
-                    len: identifier.len() as u64,
-                },
-                metadata: 3,
-                count: 12,
-                damage: 4,
-            };
-            ItemStack::from_raw(&raw)
-        };
-
-        assert_eq!(stack.identifier(), "minecraft:stone");
-        assert_eq!(stack.metadata(), 3);
-        assert_eq!(stack.count(), 12);
-        assert_eq!(stack.damage(), 4);
     }
 }

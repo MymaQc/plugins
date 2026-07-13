@@ -477,11 +477,11 @@ The host ABI is currently v3. WIP releases intentionally make breaking ABI chang
 
 ## Items and inventories
 
-`ItemStack` is an owned Rust value. It carries identifier, metadata, count, damage, custom name, lore, item NBT, Dragonfly `WithValue` data, and registered enchantments. Item identity follows Dragonfly: typed values such as `item::Sword::new(item::ToolTier::Diamond)` encode identifier and metadata, while `item::new(item, count)` creates the stack. Generated simple items are zero-sized values such as `item::Diamond`. `item::Custom` is the explicit identifier/metadata escape hatch for plugin-registered items. Registered custom enchantment and potion IDs remain representable across the ABI.
+`ItemStack` is an owned Rust value. It carries identifier, metadata, count, damage, unbreakable state, anvil cost, custom name, lore, item NBT, Dragonfly `WithValue` data, and registered enchantments. Item identity follows Dragonfly: typed values such as `item::Sword::new(item::ToolTier::Diamond)` encode identifier and metadata, while `item::new(item, count)` creates the stack. Generated simple items are zero-sized values such as `item::Diamond`. `item::Custom` is the explicit identifier/metadata escape hatch for plugin-registered items. Registered custom enchantment and potion IDs remain representable across the ABI.
 
 NBT uses standard fixed little-endian named-root compounds. The SDK hides encoding and validates size, depth, element count, UTF-8, and homogeneous list types. Go `gob` payloads are never exposed as a language ABI.
 
-`Player::inventory()`, `armour()`, and `offhand()` return small value handles containing player identity and inventory kind. Item reads open immutable Go-owned snapshots; writes borrow Rust buffers for one synchronous call. Snapshot reads preflight every capacity and perform no partial writes. Host status codes remain private to the SDK; setters do not expose transport failures as public booleans or errors. `add_item()` returns the domain-level count added. `held_items()`, `set_held_items()`, and `set_held_slot()` use the same conversion path.
+`Player::inventory()`, `armour()`, and `offhand()` return small value handles containing player identity and inventory kind. Inventory reads and item-bearing events open immutable Go-owned snapshots; event snapshots live for the complete synchronous plugin chain. Writes borrow Rust buffers for one synchronous call. Snapshot reads preflight every capacity and perform no partial writes. Host status codes remain private to the SDK; setters do not expose transport failures as public booleans or errors. `add_item()` returns the domain-level count added. `held_items()`, `set_held_items()`, and `set_held_slot()` use the same conversion path.
 
 ## Object identity
 

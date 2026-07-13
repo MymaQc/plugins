@@ -27,24 +27,25 @@ use dragonfly_plugin_sys::{
     DF_SUBSCRIPTION_PLAYER_SIGN_EDIT, DF_SUBSCRIPTION_PLAYER_SLEEP,
     DF_SUBSCRIPTION_PLAYER_START_BREAK, DF_SUBSCRIPTION_PLAYER_TELEPORT,
     DF_SUBSCRIPTION_PLAYER_TOGGLE_SNEAK, DF_SUBSCRIPTION_PLAYER_TOGGLE_SPRINT, DfCommandDescriptor,
-    DfCommandInput, DfCommandState, DfHostApiV3, DfPlayerBlockBreakInput, DfPlayerBlockBreakState,
-    DfPlayerBlockPickInput, DfPlayerBlockPickState, DfPlayerBlockPlaceInput,
-    DfPlayerBlockPlaceState, DfPlayerChatInput, DfPlayerChatState, DfPlayerDeathInput,
-    DfPlayerDeathState, DfPlayerExperienceGainInput, DfPlayerExperienceGainState,
-    DfPlayerFireExtinguishInput, DfPlayerFireExtinguishState, DfPlayerFoodLossInput,
-    DfPlayerFoodLossState, DfPlayerHealInput, DfPlayerHealState, DfPlayerHeldSlotChangeInput,
-    DfPlayerHeldSlotChangeState, DfPlayerHurtInput, DfPlayerHurtState, DfPlayerItemConsumeInput,
-    DfPlayerItemConsumeState, DfPlayerItemDamageInput, DfPlayerItemDamageState,
-    DfPlayerItemDropInput, DfPlayerItemDropState, DfPlayerItemReleaseInput,
-    DfPlayerItemReleaseState, DfPlayerItemUseInput, DfPlayerItemUseOnBlockInput,
-    DfPlayerItemUseOnBlockState, DfPlayerItemUseState, DfPlayerJoinInput, DfPlayerJoinState,
-    DfPlayerJumpInput, DfPlayerJumpState, DfPlayerLecternPageTurnInput,
-    DfPlayerLecternPageTurnState, DfPlayerMoveInput, DfPlayerMoveState, DfPlayerPunchAirInput,
-    DfPlayerPunchAirState, DfPlayerQuitInput, DfPlayerQuitState, DfPlayerSignEditInput,
-    DfPlayerSignEditState, DfPlayerSleepInput, DfPlayerSleepState, DfPlayerStartBreakInput,
-    DfPlayerStartBreakState, DfPlayerTeleportInput, DfPlayerTeleportState,
-    DfPlayerToggleSneakInput, DfPlayerToggleSneakState, DfPlayerToggleSprintInput,
-    DfPlayerToggleSprintState, DfPluginApiV1, DfPluginEntryV1Fn, DfStatus, DfStringView,
+    DfCommandInput, DfCommandState, DfHostApiV3, DfItemStackSnapshot, DfPlayerBlockBreakInput,
+    DfPlayerBlockBreakState, DfPlayerBlockPickInput, DfPlayerBlockPickState,
+    DfPlayerBlockPlaceInput, DfPlayerBlockPlaceState, DfPlayerChatInput, DfPlayerChatState,
+    DfPlayerDeathInput, DfPlayerDeathState, DfPlayerExperienceGainInput,
+    DfPlayerExperienceGainState, DfPlayerFireExtinguishInput, DfPlayerFireExtinguishState,
+    DfPlayerFoodLossInput, DfPlayerFoodLossState, DfPlayerHealInput, DfPlayerHealState,
+    DfPlayerHeldSlotChangeInput, DfPlayerHeldSlotChangeState, DfPlayerHurtInput, DfPlayerHurtState,
+    DfPlayerItemConsumeInput, DfPlayerItemConsumeState, DfPlayerItemDamageInput,
+    DfPlayerItemDamageState, DfPlayerItemDropInput, DfPlayerItemDropState,
+    DfPlayerItemReleaseInput, DfPlayerItemReleaseState, DfPlayerItemUseInput,
+    DfPlayerItemUseOnBlockInput, DfPlayerItemUseOnBlockState, DfPlayerItemUseState,
+    DfPlayerJoinInput, DfPlayerJoinState, DfPlayerJumpInput, DfPlayerJumpState,
+    DfPlayerLecternPageTurnInput, DfPlayerLecternPageTurnState, DfPlayerMoveInput,
+    DfPlayerMoveState, DfPlayerPunchAirInput, DfPlayerPunchAirState, DfPlayerQuitInput,
+    DfPlayerQuitState, DfPlayerSignEditInput, DfPlayerSignEditState, DfPlayerSleepInput,
+    DfPlayerSleepState, DfPlayerStartBreakInput, DfPlayerStartBreakState, DfPlayerTeleportInput,
+    DfPlayerTeleportState, DfPlayerToggleSneakInput, DfPlayerToggleSneakState,
+    DfPlayerToggleSprintInput, DfPlayerToggleSprintState, DfPluginApiV1, DfPluginEntryV1Fn,
+    DfStatus, DfStringView,
 };
 use libloading::{Library, Symbol};
 use std::ffi::{OsStr, c_void};
@@ -1322,6 +1323,25 @@ unsafe fn string_view<'a>(view: DfStringView) -> Result<&'a str, String> {
     std::str::from_utf8(bytes).map_err(|err| format!("invalid UTF-8: {err}"))
 }
 
+fn valid_item_snapshot(item: &DfItemStackSnapshot) -> bool {
+    const MAX_ITEM_BYTES: u64 = 16 << 20;
+    item.snapshot != 0
+        && item.info.identifier_len <= 256
+        && item.info.custom_name_len <= 4096
+        && item.info.lore_count <= 256
+        && item.info.enchantment_count <= 256
+        && [
+            item.info.identifier_len,
+            item.info.custom_name_len,
+            item.info.lore_bytes_len,
+            item.info.nbt_len,
+            item.info.values_nbt_len,
+        ]
+        .into_iter()
+        .try_fold(0u64, u64::checked_add)
+        .is_some_and(|total| total <= MAX_ITEM_BYTES)
+}
+
 unsafe fn abi_slice<'a, T>(data: *const T, len: u64) -> Result<&'a [T], ()> {
     if len == 0 {
         return Ok(&[]);
@@ -1801,10 +1821,7 @@ pub unsafe extern "C" fn df_runtime_handle_event(
             ) else {
                 return DF_STATUS_ERROR;
             };
-            if unsafe { string_view(input.item.identifier) }.is_err()
-                || input.item.count < 0
-                || input.item.damage < 0
-            {
+            if !valid_item_snapshot(&input.item) {
                 return DF_STATUS_ERROR;
             }
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -1820,10 +1837,7 @@ pub unsafe extern "C" fn df_runtime_handle_event(
             ) else {
                 return DF_STATUS_ERROR;
             };
-            if unsafe { string_view(input.item.identifier) }.is_err()
-                || input.item.count < 0
-                || input.item.damage < 0
-            {
+            if !valid_item_snapshot(&input.item) {
                 return DF_STATUS_ERROR;
             }
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -1839,11 +1853,7 @@ pub unsafe extern "C" fn df_runtime_handle_event(
             ) else {
                 return DF_STATUS_ERROR;
             };
-            if unsafe { string_view(input.item.identifier) }.is_err()
-                || input.item.count < 0
-                || input.item.damage < 0
-                || state.damage < 0
-            {
+            if !valid_item_snapshot(&input.item) || state.damage < 0 {
                 return DF_STATUS_ERROR;
             }
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -1859,10 +1869,7 @@ pub unsafe extern "C" fn df_runtime_handle_event(
             ) else {
                 return DF_STATUS_ERROR;
             };
-            if unsafe { string_view(input.item.identifier) }.is_err()
-                || input.item.count < 0
-                || input.item.damage < 0
-            {
+            if !valid_item_snapshot(&input.item) {
                 return DF_STATUS_ERROR;
             }
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {

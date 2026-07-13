@@ -224,12 +224,6 @@ type PlayerItemUseOnBlockInput struct {
 	Face          int
 	ClickPosition Vec3
 }
-type ItemStackView struct {
-	Identifier string
-	Metadata   int
-	Count      int
-	Damage     int
-}
 type PlayerItemDamageOutput struct {
 	Cancelled bool
 	Damage    int
@@ -1026,11 +1020,11 @@ func (r *Runtime) HandlePlayerItemUseOnBlock(input PlayerItemUseOnBlockInput, ca
 	return state.cancelled != 0, nil
 }
 
-func (r *Runtime) HandlePlayerItemConsume(player PlayerID, item ItemStackView, cancelled bool) (bool, error) {
+func (r *Runtime) HandlePlayerItemConsume(player PlayerID, item ItemStack, cancelled bool) (bool, error) {
 	return r.handlePlayerItemStackEvent(C.DF_EVENT_PLAYER_ITEM_CONSUME, player, item, 0, cancelled)
 }
 
-func (r *Runtime) HandlePlayerItemRelease(player PlayerID, item ItemStackView, duration time.Duration, cancelled bool) (bool, error) {
+func (r *Runtime) HandlePlayerItemRelease(player PlayerID, item ItemStack, duration time.Duration, cancelled bool) (bool, error) {
 	milliseconds := duration.Milliseconds()
 	if milliseconds < 0 {
 		milliseconds = 0
@@ -1038,11 +1032,15 @@ func (r *Runtime) HandlePlayerItemRelease(player PlayerID, item ItemStackView, d
 	return r.handlePlayerItemStackEvent(C.DF_EVENT_PLAYER_ITEM_RELEASE, player, item, uint64(milliseconds), cancelled)
 }
 
-func (r *Runtime) handlePlayerItemStackEvent(event C.DfEventId, player PlayerID, item ItemStackView, duration uint64, cancelled bool) (bool, error) {
+func (r *Runtime) handlePlayerItemStackEvent(event C.DfEventId, player PlayerID, item ItemStack, duration uint64, cancelled bool) (bool, error) {
 	if r == nil || r.ptr == nil {
 		return cancelled, errors.New("native runtime is closed")
 	}
-	stack := nativeItemStack(item)
+	stack, ok := r.openEventItemSnapshot(item)
+	if !ok {
+		return cancelled, errors.New("open item event snapshot")
+	}
+	defer unregisterItemSnapshot(r.hostContext, uint64(stack.snapshot))
 	var state C.DfPlayerItemConsumeState
 	if cancelled {
 		state.cancelled = 1
@@ -1066,14 +1064,19 @@ func (r *Runtime) handlePlayerItemStackEvent(event C.DfEventId, player PlayerID,
 	return state.cancelled != 0, nil
 }
 
-func (r *Runtime) HandlePlayerItemDamage(player PlayerID, item ItemStackView, damage int, cancelled bool) (PlayerItemDamageOutput, error) {
+func (r *Runtime) HandlePlayerItemDamage(player PlayerID, item ItemStack, damage int, cancelled bool) (PlayerItemDamageOutput, error) {
 	output := PlayerItemDamageOutput{Cancelled: cancelled, Damage: damage}
 	if r == nil || r.ptr == nil {
 		return output, errors.New("native runtime is closed")
 	}
 	var input C.DfPlayerItemDamageInput
 	fillPlayerID(&input.player, player)
-	input.item = nativeItemStack(item)
+	stack, ok := r.openEventItemSnapshot(item)
+	if !ok {
+		return output, errors.New("open item event snapshot")
+	}
+	defer unregisterItemSnapshot(r.hostContext, uint64(stack.snapshot))
+	input.item = stack
 	state := C.DfPlayerItemDamageState{damage: C.int32_t(damage)}
 	if cancelled {
 		state.cancelled = 1
@@ -1084,13 +1087,18 @@ func (r *Runtime) HandlePlayerItemDamage(player PlayerID, item ItemStackView, da
 	return PlayerItemDamageOutput{Cancelled: state.cancelled != 0, Damage: int(state.damage)}, nil
 }
 
-func (r *Runtime) HandlePlayerItemDrop(player PlayerID, item ItemStackView, cancelled bool) (bool, error) {
+func (r *Runtime) HandlePlayerItemDrop(player PlayerID, item ItemStack, cancelled bool) (bool, error) {
 	if r == nil || r.ptr == nil {
 		return cancelled, errors.New("native runtime is closed")
 	}
 	var input C.DfPlayerItemDropInput
 	fillPlayerID(&input.player, player)
-	input.item = nativeItemStack(item)
+	stack, ok := r.openEventItemSnapshot(item)
+	if !ok {
+		return cancelled, errors.New("open item event snapshot")
+	}
+	defer unregisterItemSnapshot(r.hostContext, uint64(stack.snapshot))
+	input.item = stack
 	var state C.DfPlayerItemDropState
 	if cancelled {
 		state.cancelled = 1
@@ -1101,9 +1109,17 @@ func (r *Runtime) HandlePlayerItemDrop(player PlayerID, item ItemStackView, canc
 	return state.cancelled != 0, nil
 }
 
-func nativeItemStack(item ItemStackView) C.DfItemStackView {
-	identifier := unsafe.StringData(item.Identifier)
-	return C.DfItemStackView{identifier: C.DfStringView{data: (*C.uint8_t)(unsafe.Pointer(identifier)), len: C.uint64_t(len(item.Identifier))}, metadata: C.int32_t(item.Metadata), count: C.int32_t(item.Count), damage: C.int32_t(item.Damage)}
+func (r *Runtime) openEventItemSnapshot(item ItemStack) (C.DfItemStackSnapshot, bool) {
+	if r == nil || r.ptr == nil || !validNativeItem(item) {
+		return C.DfItemStackSnapshot{}, false
+	}
+	id, ok := registerItemSnapshot(r.hostContext, item)
+	if !ok {
+		return C.DfItemStackSnapshot{}, false
+	}
+	var info C.DfItemStackInfo
+	fillItemStackInfo(&info, item)
+	return C.DfItemStackSnapshot{snapshot: C.uint64_t(id), info: info}, true
 }
 
 func nativeBlockPos(position BlockPos) C.DfBlockPos {

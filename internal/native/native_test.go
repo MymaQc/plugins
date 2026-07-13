@@ -850,7 +850,7 @@ func TestPlayerItemConsumeAndRelease(t *testing.T) {
 	if runtime.Subscriptions()&PlayerItemConsumeSubscription == 0 || runtime.Subscriptions()&PlayerItemReleaseSubscription == 0 {
 		t.Fatal("item-consume or item-release subscription missing")
 	}
-	stack := ItemStackView{Identifier: "minecraft:apple", Count: 1}
+	stack := ItemStack{Identifier: "minecraft:apple", Count: 1}
 	cancelled, err := runtime.HandlePlayerItemConsume(PlayerID{}, stack, false)
 	if err != nil {
 		t.Fatal(err)
@@ -867,12 +867,31 @@ func TestPlayerItemConsumeAndRelease(t *testing.T) {
 	}
 }
 
+func TestPlayerItemEventPreservesFullStack(t *testing.T) {
+	runtime := openTestRuntime(t)
+	nbtData := []byte{10, 0, 0, 8, 4, 0, 'k', 'i', 'n', 'd', 5, 0, 'e', 'v', 'e', 'n', 't', 0}
+	valuesNBT := []byte{10, 0, 0, 8, 5, 0, 'o', 'w', 'n', 'e', 'r', 4, 0, 'r', 'u', 's', 't', 0}
+	stack := ItemStack{
+		Identifier: "minecraft:diamond_sword", Count: 1, Damage: 7,
+		Unbreakable: true, AnvilCost: 4, CustomName: "__snapshot_test__",
+		Lore: []string{"one", "two"}, NBT: nbtData, ValuesNBT: valuesNBT,
+		Enchantments: []ItemEnchantment{{ID: 9, Level: 5}},
+	}
+	cancelled, err := runtime.HandlePlayerItemConsume(PlayerID{}, stack, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cancelled {
+		t.Fatal("full item snapshot was not preserved through event dispatch")
+	}
+}
+
 func TestPlayerItemDamageAndDrop(t *testing.T) {
 	runtime := openTestRuntime(t)
 	if runtime.Subscriptions()&PlayerItemDamageSubscription == 0 || runtime.Subscriptions()&PlayerItemDropSubscription == 0 {
 		t.Fatal("item-damage or item-drop subscription missing")
 	}
-	stack := ItemStackView{Identifier: "minecraft:diamond_sword", Count: 1}
+	stack := ItemStack{Identifier: "minecraft:diamond_sword", Count: 1}
 	output, err := runtime.HandlePlayerItemDamage(PlayerID{}, stack, 1, false)
 	if err != nil {
 		t.Fatal(err)

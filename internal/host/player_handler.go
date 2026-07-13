@@ -41,10 +41,10 @@ type playerRuntime interface {
 	HandlePlayerSignEdit(native.PlayerSignEditInput, bool) (bool, error)
 	HandlePlayerItemUse(native.PlayerID, bool) (bool, error)
 	HandlePlayerItemUseOnBlock(native.PlayerItemUseOnBlockInput, bool) (bool, error)
-	HandlePlayerItemConsume(native.PlayerID, native.ItemStackView, bool) (bool, error)
-	HandlePlayerItemRelease(native.PlayerID, native.ItemStackView, time.Duration, bool) (bool, error)
-	HandlePlayerItemDamage(native.PlayerID, native.ItemStackView, int, bool) (native.PlayerItemDamageOutput, error)
-	HandlePlayerItemDrop(native.PlayerID, native.ItemStackView, bool) (bool, error)
+	HandlePlayerItemConsume(native.PlayerID, native.ItemStack, bool) (bool, error)
+	HandlePlayerItemRelease(native.PlayerID, native.ItemStack, time.Duration, bool) (bool, error)
+	HandlePlayerItemDamage(native.PlayerID, native.ItemStack, int, bool) (native.PlayerItemDamageOutput, error)
+	HandlePlayerItemDrop(native.PlayerID, native.ItemStack, bool) (bool, error)
 }
 
 func (h *PlayerHandler) HandleJump(p *player.Player) {
@@ -360,7 +360,12 @@ func (h *PlayerHandler) HandleItemConsume(ctx *player.Context, stack item.Stack)
 		return
 	}
 	p := ctx.Player()
-	cancelled, err := h.runtime.HandlePlayerItemConsume(h.playerID(p), nativeItemStack(stack), ctx.Cancelled())
+	value, ok := itemStackToNative(stack)
+	if !ok {
+		h.log.Error("convert item consume stack", "player", p.Name())
+		return
+	}
+	cancelled, err := h.runtime.HandlePlayerItemConsume(h.playerID(p), value, ctx.Cancelled())
 	if err != nil {
 		h.log.Error("native plugin item-consume handler failed", "player", p.Name(), "error", err)
 		return
@@ -375,7 +380,12 @@ func (h *PlayerHandler) HandleItemRelease(ctx *player.Context, stack item.Stack,
 		return
 	}
 	p := ctx.Player()
-	cancelled, err := h.runtime.HandlePlayerItemRelease(h.playerID(p), nativeItemStack(stack), duration, ctx.Cancelled())
+	value, ok := itemStackToNative(stack)
+	if !ok {
+		h.log.Error("convert item release stack", "player", p.Name())
+		return
+	}
+	cancelled, err := h.runtime.HandlePlayerItemRelease(h.playerID(p), value, duration, ctx.Cancelled())
 	if err != nil {
 		h.log.Error("native plugin item-release handler failed", "player", p.Name(), "error", err)
 		return
@@ -390,7 +400,12 @@ func (h *PlayerHandler) HandleItemDamage(ctx *player.Context, stack item.Stack, 
 		return
 	}
 	p := ctx.Player()
-	output, err := h.runtime.HandlePlayerItemDamage(h.playerID(p), nativeItemStack(stack), *damage, ctx.Cancelled())
+	value, ok := itemStackToNative(stack)
+	if !ok {
+		h.log.Error("convert item damage stack", "player", p.Name())
+		return
+	}
+	output, err := h.runtime.HandlePlayerItemDamage(h.playerID(p), value, *damage, ctx.Cancelled())
 	if err != nil {
 		h.log.Error("native plugin item-damage handler failed", "player", p.Name(), "error", err)
 		return
@@ -406,7 +421,12 @@ func (h *PlayerHandler) HandleItemDrop(ctx *player.Context, stack item.Stack) {
 		return
 	}
 	p := ctx.Player()
-	cancelled, err := h.runtime.HandlePlayerItemDrop(h.playerID(p), nativeItemStack(stack), ctx.Cancelled())
+	value, ok := itemStackToNative(stack)
+	if !ok {
+		h.log.Error("convert item drop stack", "player", p.Name())
+		return
+	}
+	cancelled, err := h.runtime.HandlePlayerItemDrop(h.playerID(p), value, ctx.Cancelled())
 	if err != nil {
 		h.log.Error("native plugin item-drop handler failed", "player", p.Name(), "error", err)
 		return
@@ -505,18 +525,6 @@ func blockName(block world.Block) string {
 	}
 	name, _ := block.EncodeBlock()
 	return name
-}
-
-func nativeItemStack(stack item.Stack) native.ItemStackView {
-	if stack.Empty() {
-		return native.ItemStackView{}
-	}
-	name, metadata := stack.Item().EncodeItem()
-	damage := 0
-	if maximum := stack.MaxDurability(); maximum >= 0 {
-		damage = maximum - stack.Durability()
-	}
-	return native.ItemStackView{Identifier: name, Metadata: int(metadata), Count: stack.Count(), Damage: damage}
 }
 
 func nativeDamageSource(source world.DamageSource) native.DamageSource {

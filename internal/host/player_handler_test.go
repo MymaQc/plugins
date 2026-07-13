@@ -124,16 +124,16 @@ func (r *runtimeStub) HandlePlayerItemUse(_ native.PlayerID, cancelled bool) (bo
 func (r *runtimeStub) HandlePlayerItemUseOnBlock(_ native.PlayerItemUseOnBlockInput, cancelled bool) (bool, error) {
 	return cancelled, nil
 }
-func (r *runtimeStub) HandlePlayerItemConsume(_ native.PlayerID, _ native.ItemStackView, cancelled bool) (bool, error) {
+func (r *runtimeStub) HandlePlayerItemConsume(_ native.PlayerID, _ native.ItemStack, cancelled bool) (bool, error) {
 	return cancelled, nil
 }
-func (r *runtimeStub) HandlePlayerItemRelease(_ native.PlayerID, _ native.ItemStackView, _ time.Duration, cancelled bool) (bool, error) {
+func (r *runtimeStub) HandlePlayerItemRelease(_ native.PlayerID, _ native.ItemStack, _ time.Duration, cancelled bool) (bool, error) {
 	return cancelled, nil
 }
-func (r *runtimeStub) HandlePlayerItemDamage(_ native.PlayerID, _ native.ItemStackView, damage int, cancelled bool) (native.PlayerItemDamageOutput, error) {
+func (r *runtimeStub) HandlePlayerItemDamage(_ native.PlayerID, _ native.ItemStack, damage int, cancelled bool) (native.PlayerItemDamageOutput, error) {
 	return native.PlayerItemDamageOutput{Cancelled: cancelled, Damage: damage}, nil
 }
-func (r *runtimeStub) HandlePlayerItemDrop(_ native.PlayerID, _ native.ItemStackView, cancelled bool) (bool, error) {
+func (r *runtimeStub) HandlePlayerItemDrop(_ native.PlayerID, _ native.ItemStack, cancelled bool) (bool, error) {
 	return cancelled, nil
 }
 

@@ -1,4 +1,4 @@
-use dragonfly::{Event, Plugin, Title, plugin};
+use dragonfly::{Enchantment, Event, Plugin, Title, Value, plugin};
 
 #[derive(Default)]
 struct LifecycleLogger;
@@ -116,11 +116,21 @@ impl Plugin for LifecycleLogger {
         );
     }
     fn on_item_consume(&self, event: &mut Event::PlayerItemConsume<'_>) {
-        eprintln!(
-            "consumed {} x{}",
-            event.item().identifier(),
-            event.item().count()
-        );
+        let item = event.item();
+        eprintln!("consumed {} x{}", item.identifier(), item.count());
+        if item.custom_name() == "__snapshot_test__"
+            && item.damage() == 7
+            && item.unbreakable()
+            && item.anvil_cost() == 4
+            && item.lore() == ["one", "two"]
+            && item.nbt().get("kind") == Some(&Value::String("event".to_owned()))
+            && item.value("owner") == Some(&Value::String("rust".to_owned()))
+            && item
+                .enchantment(Enchantment::Sharpness)
+                .is_some_and(|enchantment| enchantment.level() == 5)
+        {
+            event.cancel();
+        }
     }
     fn on_item_release(&self, event: &mut Event::PlayerItemRelease<'_>) {
         eprintln!(
