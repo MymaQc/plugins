@@ -1,4 +1,9 @@
 use crate::{BlockPos, Entity, Player, Vec3, block, entity, particle, sound};
+use std::time::Duration;
+
+#[cfg(test)]
+#[path = "world_spec_test.rs"]
+mod world_spec_test;
 
 const MAX_WORLD_NAME_BYTES: usize = 256;
 const MAX_BLOCK_IDENTIFIER_BYTES: usize = 256;
@@ -11,6 +16,177 @@ pub enum Dimension {
     Overworld = dragonfly_plugin_sys::DF_WORLD_DIMENSION_OVERWORLD,
     Nether = dragonfly_plugin_sys::DF_WORLD_DIMENSION_NETHER,
     End = dragonfly_plugin_sys::DF_WORLD_DIMENSION_END,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum OpenMode {
+    OpenOrCreate,
+    OpenExisting,
+    CreateNew,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SavePolicy {
+    Automatic(Duration),
+    Manual,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RandomTicks {
+    Disabled,
+    PerSubchunk(u32),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TimePolicy {
+    Preserve,
+    Cycle,
+    Fixed(i64),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WeatherPolicy {
+    Preserve,
+    Cycle,
+    Clear,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ChunkUnloadPolicy {
+    After(Duration),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct WorldSpec {
+    provider_path: String,
+    dimension: Dimension,
+    open_mode: OpenMode,
+    read_only: bool,
+    save: SavePolicy,
+    random_ticks: RandomTicks,
+    time: TimePolicy,
+    weather: WeatherPolicy,
+    chunk_unload: ChunkUnloadPolicy,
+}
+
+impl WorldSpec {
+    pub fn persistent(provider_path: impl Into<String>) -> Self {
+        Self {
+            provider_path: provider_path.into(),
+            dimension: Dimension::Overworld,
+            open_mode: OpenMode::OpenOrCreate,
+            read_only: false,
+            save: SavePolicy::Automatic(Duration::from_secs(600)),
+            random_ticks: RandomTicks::PerSubchunk(3),
+            time: TimePolicy::Preserve,
+            weather: WeatherPolicy::Preserve,
+            chunk_unload: ChunkUnloadPolicy::After(Duration::from_secs(120)),
+        }
+    }
+
+    pub fn dimension(mut self, dimension: Dimension) -> Self {
+        self.dimension = dimension;
+        self
+    }
+
+    pub fn open_mode(mut self, mode: OpenMode) -> Self {
+        self.open_mode = mode;
+        self
+    }
+
+    pub fn read_only(mut self, read_only: bool) -> Self {
+        self.read_only = read_only;
+        self
+    }
+
+    pub fn save(mut self, policy: SavePolicy) -> Self {
+        self.save = policy;
+        self
+    }
+
+    pub fn random_ticks(mut self, policy: RandomTicks) -> Self {
+        self.random_ticks = policy;
+        self
+    }
+
+    pub fn time(mut self, policy: TimePolicy) -> Self {
+        self.time = policy;
+        self
+    }
+
+    pub fn weather(mut self, policy: WeatherPolicy) -> Self {
+        self.weather = policy;
+        self
+    }
+
+    pub fn chunk_unload(mut self, policy: ChunkUnloadPolicy) -> Self {
+        self.chunk_unload = policy;
+        self
+    }
+
+    fn encode(&self) -> Option<dragonfly_plugin_sys::DfWorldOpenSpecV1> {
+        if self.provider_path.is_empty() || self.provider_path.len() > 4096 {
+            return None;
+        }
+        let (save_policy, save_interval_milliseconds) = if self.read_only {
+            (dragonfly_plugin_sys::DF_WORLD_SAVE_MANUAL, 0)
+        } else {
+            match self.save {
+                SavePolicy::Automatic(duration) => (
+                    dragonfly_plugin_sys::DF_WORLD_SAVE_AUTOMATIC,
+                    duration_milliseconds(duration)?,
+                ),
+                SavePolicy::Manual => (dragonfly_plugin_sys::DF_WORLD_SAVE_MANUAL, 0),
+            }
+        };
+        let (random_tick_policy, random_tick_rate) = match self.random_ticks {
+            RandomTicks::Disabled => (dragonfly_plugin_sys::DF_WORLD_RANDOM_TICKS_DISABLED, 0),
+            RandomTicks::PerSubchunk(rate) if rate > 0 && rate <= i32::MAX as u32 => (
+                dragonfly_plugin_sys::DF_WORLD_RANDOM_TICKS_PER_SUBCHUNK,
+                rate,
+            ),
+            RandomTicks::PerSubchunk(_) => return None,
+        };
+        let (time_policy, fixed_time) = match self.time {
+            TimePolicy::Preserve => (dragonfly_plugin_sys::DF_WORLD_TIME_PRESERVE, 0),
+            TimePolicy::Cycle => (dragonfly_plugin_sys::DF_WORLD_TIME_CYCLE, 0),
+            TimePolicy::Fixed(time) => (dragonfly_plugin_sys::DF_WORLD_TIME_FIXED, time),
+        };
+        let weather_policy = match self.weather {
+            WeatherPolicy::Preserve => dragonfly_plugin_sys::DF_WORLD_WEATHER_PRESERVE,
+            WeatherPolicy::Cycle => dragonfly_plugin_sys::DF_WORLD_WEATHER_CYCLE,
+            WeatherPolicy::Clear => dragonfly_plugin_sys::DF_WORLD_WEATHER_CLEAR,
+        };
+        let ChunkUnloadPolicy::After(unload_after) = self.chunk_unload;
+        Some(dragonfly_plugin_sys::DfWorldOpenSpecV1 {
+            struct_size: core::mem::size_of::<dragonfly_plugin_sys::DfWorldOpenSpecV1>() as u32,
+            dimension: self.dimension as u32,
+            provider_path: crate::string_view_from_str(&self.provider_path),
+            save_interval_milliseconds,
+            chunk_unload_interval_milliseconds: duration_milliseconds(unload_after)?,
+            fixed_time,
+            open_mode: match self.open_mode {
+                OpenMode::OpenOrCreate => dragonfly_plugin_sys::DF_WORLD_OPEN_OR_CREATE,
+                OpenMode::OpenExisting => dragonfly_plugin_sys::DF_WORLD_OPEN_EXISTING,
+                OpenMode::CreateNew => dragonfly_plugin_sys::DF_WORLD_CREATE_NEW,
+            },
+            save_policy,
+            random_tick_policy,
+            random_tick_rate,
+            time_policy,
+            weather_policy,
+            chunk_unload_policy: dragonfly_plugin_sys::DF_WORLD_CHUNK_UNLOAD_AFTER,
+            read_only: u8::from(self.read_only),
+            reserved: [0; 3],
+        })
+    }
+}
+
+fn duration_milliseconds(duration: Duration) -> Option<u64> {
+    const MAX_MILLISECONDS: u128 = i64::MAX as u128 / 1_000_000;
+    let milliseconds = duration.as_millis();
+    (milliseconds > 0 && milliseconds <= MAX_MILLISECONDS)
+        .then(|| u64::try_from(milliseconds).ok())?
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -59,6 +235,25 @@ impl World {
         };
         (status == dragonfly_plugin_sys::DF_STATUS_OK && raw.value != 0)
             .then_some(Self { raw: raw.value })
+    }
+
+    /// Opens a persistent custom world using immutable creation policies.
+    pub fn open_with(name: &str, spec: &WorldSpec) -> Option<Self> {
+        let host = crate::host_api()?;
+        let open = host.world_open_spec?;
+        let raw_spec = spec.encode()?;
+        let mut world = dragonfly_plugin_sys::DfWorldId::default();
+        let status = unsafe {
+            open(
+                host.context,
+                crate::current_invocation(),
+                crate::string_view_from_str(name),
+                &raw_spec,
+                &mut world,
+            )
+        };
+        (status == dragonfly_plugin_sys::DF_STATUS_OK && world.value != 0)
+            .then_some(Self { raw: world.value })
     }
 
     pub fn overworld() -> Option<Self> {
@@ -426,7 +621,6 @@ mod tests {
         properties: Vec<u8>,
     }
 
-    static HOST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
     static RECORDED_BLOCK: std::sync::Mutex<Option<RecordedBlock>> = std::sync::Mutex::new(None);
 
     unsafe extern "C" fn record_block(
@@ -470,7 +664,7 @@ mod tests {
 
     #[test]
     fn set_block_sends_typed_identifier_and_properties_to_host() {
-        let _host_guard = HOST_LOCK.lock().unwrap();
+        let _host_guard = crate::TEST_HOST_LOCK.lock().unwrap();
         *RECORDED_BLOCK.lock().unwrap() = None;
         let mut host: dragonfly_plugin_sys::DfHostApiV16 = unsafe { core::mem::zeroed() };
         host.context = 17;

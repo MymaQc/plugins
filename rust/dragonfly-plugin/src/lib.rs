@@ -22,7 +22,10 @@ pub mod sound;
 pub mod world;
 
 pub use entity::{Entity, EntityId};
-pub use world::{Dimension, World};
+pub use world::{
+    ChunkUnloadPolicy, Dimension, OpenMode, RandomTicks, SavePolicy, TimePolicy, WeatherPolicy,
+    World, WorldSpec,
+};
 
 pub use dragonfly_plugin_macros::{Command, CommandEnum, entity, plugin};
 
@@ -77,6 +80,9 @@ pub mod Event {
 
 static HOST_API: AtomicPtr<dragonfly_plugin_sys::DfHostApiV16> =
     AtomicPtr::new(core::ptr::null_mut());
+
+#[cfg(test)]
+pub(crate) static TEST_HOST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 std::thread_local! {
     static CURRENT_INVOCATION: Cell<dragonfly_plugin_sys::DfInvocationId> = const { Cell::new(0) };
