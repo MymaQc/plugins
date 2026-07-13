@@ -205,7 +205,7 @@ Every ABI structure must:
 - Avoid platform-sized `long`, `size_t` in persisted layouts, and C bitfields.
 - Have generated size, alignment, and offset tests.
 
-The ABI is intentionally strict while the project is WIP. A breaking layout or callback change increments the host ABI version, and mismatched runtimes/plugins fail to load. Compatibility shims are deferred until the API is stable enough to justify them.
+The ABI is intentionally strict while the project is WIP. Host ABI v16 appends the 80-byte `DfWorldOpenSpecV1` contract and `world_open_spec` function at offset 448; plugin ABI remains v3. A breaking layout or callback change increments the host ABI version, and mismatched runtimes/plugins fail to load. Compatibility shims are deferred until the API is stable enough to justify them. Independent ABI branches must never publish different layouts under one version; the transferable-entity prototype must advance to v17 if integrated after this v16.
 
 ## Runtime
 
@@ -281,11 +281,17 @@ example:arena_1
 World manager currently owns:
 
 - World registry and opaque, never-reused handles.
-- Persistent creation/loading through namespaced IDs and `mcdb` below a configured root.
+- Persistent creation/loading through namespaced IDs and typed immutable `WorldSpec` policies below a configured root.
 - Handler installation before publication.
 - Core-world protection.
 - Occupancy checks before unload.
 - Save, close, stale-handle rejection, and shutdown lifecycle.
+
+`WorldSpec` maps creation-time policies directly to Dragonfly `world.Config`, provider `Settings`, and `mcdb`: dimension; open-or-create, open-existing, or create-new intent; read-only/manual/automatic saving; random ticks; time; weather; and chunk unloading. Defaults are explicit rather than relying on Dragonfly's zero-value rewrites. Provider paths are normalized root-relative slash paths, reject existing symlink components, and are ownership keys rather than a native-code sandbox.
+
+The manager reserves both world ID and normalized provider path before synchronous provider I/O. Concurrent identical opens share one result. A published mismatch or a second name for one path fails. Failed opens release reservations; unload releases a provider path only after a successful close. Shutdown becomes terminal, rejects new opens, waits in-flight opens, and then closes their published worlds. Opening is allowed from lifecycle and event callbacks because it never retains an invocation or transaction.
+
+The Rust SDK exposes `World::open_with(name, &WorldSpec) -> Option<World>`. Invalid policies, provider failures, duplicate mismatches, and native transport errors remain private as `None`. `World::open` remains the convenience API with the standard policies and a path derived from the world ID. Read-only canonicalizes to manual saving independent of builder order.
 - Transaction-aware block reads/writes.
 
 Current Rust SDK exposes:
@@ -509,7 +515,7 @@ Current host actions include:
 
 Every synchronous player callback registers one invocation ID for its exact transaction. Same-world block operations use that `world.Tx` directly. Calls with no invocation are off-owner: writes enqueue through `World.Do` and reads use `world.Call`. Cross-world writes from callbacks enqueue, while cross-world synchronous block reads are rejected because reciprocal owner calls can deadlock. Save/unload are rejected from callbacks and run only off-owner. Transaction values never cross or survive the ABI; the asynchronous task API will provide callback-safe cross-world reads and lifecycle operations.
 
-The host ABI is currently v15 and the plugin ABI is v3. WIP releases intentionally make breaking ABI changes instead of retaining compatibility shims; runtime and plugins must be compiled from the same revision.
+The host ABI is currently v16 and the plugin ABI is v3. WIP releases intentionally make breaking ABI changes instead of retaining compatibility shims; runtime and plugins must be compiled from the same revision.
 
 ## Entities
 

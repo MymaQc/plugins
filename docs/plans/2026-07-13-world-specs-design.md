@@ -1,6 +1,6 @@
 # Configurable Persistent World Specs
 
-Status: Implementation-ready
+Status: Implemented and verified on `feature/world-specs`
 
 ## Goal
 

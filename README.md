@@ -35,20 +35,32 @@ Framework creates Dragonfly, installs world/player handlers, owns accept loop, a
 
 Framework world manager protects `minecraft:overworld`, `minecraft:nether`, and `minecraft:end`; custom worlds use namespaced IDs such as `example:lobby`. It installs handlers before publication and owns save/unload cleanup.
 
-Rust can look up core worlds, open persistent custom worlds, read/write typed block states, and manage time/spawn:
+Rust can look up core worlds, open persistent custom worlds with typed creation policies, read/write typed block states, and manage time/spawn:
 
 ```rust
-use dragonfly::{BlockPos, Dimension, World, block};
+use dragonfly::{
+    BlockPos, OpenMode, RandomTicks, SavePolicy, TimePolicy, WeatherPolicy, World, WorldSpec,
+    block,
+};
 
-let world = World::open("example:arena", Dimension::Overworld);
+let spec = WorldSpec::persistent("arenas/example")
+    .open_mode(OpenMode::OpenOrCreate)
+    .save(SavePolicy::Manual)
+    .random_ticks(RandomTicks::Disabled)
+    .time(TimePolicy::Fixed(6000))
+    .weather(WeatherPolicy::Clear);
+let world = World::open_with("example:arena", &spec);
 if let Some(world) = world {
     let pillar = block::OakLog::new(block::PillarAxis::Y);
     world.set_block(BlockPos { x: 0, y: 64, z: 0 }, pillar);
-    world.set_time(6000);
 }
 ```
 
-World handles are opaque and never reused. The world API derives custom-world paths from namespaced IDs below `worlds.directory`; this is path organization, not a security sandbox—native plugins already run with the server process's filesystem access. Every callback carries an opaque invocation ID, so same-world operations reuse exactly that callback's Dragonfly `world.Tx`, never another concurrent callback's transaction. Off-owner writes use `World.Do`. Synchronous cross-world block reads are unavailable inside callbacks until the task API lands, preventing reciprocal world-owner deadlocks.
+`WorldSpec::persistent` defaults to overworld, open-or-create, writable, automatic saves every ten minutes, three random ticks per subchunk, preserved time/weather, and two-minute chunk unloading. Provider paths are slash-separated and relative to `worlds.directory`; absolute, escaping, or existing symlink paths are rejected. This organization is not a security sandbox—native plugins already run with the server process's filesystem access.
+
+Specifications are immutable after publication. The same world name and normalized specification returns the same handle, a mismatch fails, and two names cannot own one provider path. `OpenExisting` requires an existing MCDB provider, while `CreateNew` rejects anything already at the path. Read-only always canonicalizes to manual saving regardless of builder order. Opens are synchronous and valid from lifecycle or event callbacks; no callback transaction is retained. Invalid input and host/provider failures remain private as `None`.
+
+World handles are opaque and never reused. `World::open(name, dimension)` remains the default convenience API and derives its path from the namespaced ID. Every callback carries an opaque invocation ID, so same-world operations reuse exactly that callback's Dragonfly `world.Tx`, never another concurrent callback's transaction. Off-owner writes use `World.Do`. Synchronous cross-world block reads are unavailable inside callbacks until the task API lands, preventing reciprocal world-owner deadlocks.
 
 Entities use generation-tagged `world.EntityHandle` identities. Typed descriptors keep Go adapter code shared:
 

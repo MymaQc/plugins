@@ -6,6 +6,11 @@
 
 **Tech Stack:** Go 1.26, Dragonfly v0.11, cgo/C11, Rust 1.96 edition 2024, generated native ABI, `mcdb`, standard-library filesystem and concurrency primitives.
 
+**Progress:** Tasks 1-4 are implemented in local commits `61b1579`, `63c793f`,
+`03b4305`, `87f615a`, and `3f7f107`. Task 5 passes the complete verification
+matrix and is ready to commit. Task 6 remains an integration-branch decision
+and must not merge the independent transferable-entity v16 layout.
+
 ## Global Constraints
 
 - Work from `master@b5d33d97fec35ff59ea1843d9266edbed8953631` unless the ABI coordination gate requires a rebase.
@@ -535,8 +540,8 @@ explicit and covered.
 Run:
 
 ```bash
-cargo test -p dragonfly
-cargo clippy -p dragonfly --all-targets -- -D warnings
+cargo test -p dragonfly-plugin
+cargo clippy -p dragonfly-plugin --all-targets -- -D warnings
 ```
 
 Expected: PASS with tests located in `world_spec_test.rs`.

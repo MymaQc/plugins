@@ -1,4 +1,7 @@
-use dragonfly::{BlockPos, Context, Dimension, Player, Plugin, World, block, plugin};
+use dragonfly::{
+    BlockPos, Context, Dimension, OpenMode, Player, Plugin, RandomTicks, SavePolicy, TimePolicy,
+    WeatherPolicy, World, WorldSpec, block, plugin,
+};
 
 #[derive(Default)]
 struct WorldCommand;
@@ -8,9 +11,9 @@ struct WorldCommand;
 impl Plugin for WorldCommand {
     #[command]
     fn root(&self, context: &mut Context<'_, Player>) {
-        context.source().message(
-            "Use /world inspect <x> <y> <z>, /world set-stone <x> <y> <z>, or /world open <name>.",
-        );
+        context
+            .source()
+            .message("Use /world inspect, /world set-stone, /world open, or /world open-spec.");
     }
 
     #[subcommand("inspect")]
@@ -55,6 +58,23 @@ impl Plugin for WorldCommand {
         world.set_time(6000);
         world.set_spawn(BlockPos { x: 0, y: 64, z: 0 });
         context.source().message(&format!("Opened {name}."));
+    }
+
+    #[subcommand("open-spec")]
+    fn open_spec(&self, context: &mut Context<'_, Player>, name: String) {
+        let spec = WorldSpec::persistent("examples/managed")
+            .open_mode(OpenMode::OpenOrCreate)
+            .save(SavePolicy::Manual)
+            .random_ticks(RandomTicks::Disabled)
+            .time(TimePolicy::Fixed(6000))
+            .weather(WeatherPolicy::Clear);
+        let Some(_world) = World::open_with(&name, &spec) else {
+            context.source().message("Could not open specified world.");
+            return;
+        };
+        context
+            .source()
+            .message(&format!("Opened {name} from a typed specification."));
     }
 }
 
