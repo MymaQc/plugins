@@ -32,6 +32,7 @@ type Host interface {
 	SetPlayerState(PlayerID, PlayerStateKind, PlayerStateValue) bool
 	PlayerState(PlayerID, PlayerStateKind) (PlayerStateValue, bool)
 	ChangePlayerEffect(PlayerID, PlayerEffectOperation, PlayerEffect) bool
+	SetPlayerEntityVisible(PlayerID, EntityID, bool) bool
 }
 
 type noopHost struct{}
@@ -47,6 +48,7 @@ func (noopHost) PlayerState(PlayerID, PlayerStateKind) (PlayerStateValue, bool) 
 	return PlayerStateValue{}, false
 }
 func (noopHost) ChangePlayerEffect(PlayerID, PlayerEffectOperation, PlayerEffect) bool { return false }
+func (noopHost) SetPlayerEntityVisible(PlayerID, EntityID, bool) bool                  { return false }
 
 var (
 	hostSequence atomic.Uint64

@@ -13,6 +13,9 @@ pub type DfEventId = u32;
 pub struct DfPlayerId { pub bytes: [u8; 16], pub generation: u64 }
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
+pub struct DfEntityId { pub bytes: [u8; 16], pub generation: u64 }
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct DfVec3 { pub x: f64, pub y: f64, pub z: f64 }
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
@@ -168,9 +171,10 @@ pub type DfHostPlayerRotationFn = unsafe extern "C" fn(context: u64, player: DfP
 pub type DfHostPlayerStateSetFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, kind: u32, value: DfPlayerStateValue) -> DfStatus;
 pub type DfHostPlayerStateGetFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, kind: u32, value: *mut DfPlayerStateValue) -> DfStatus;
 pub type DfHostPlayerEffectFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, operation: u32, effect: DfEffectView) -> DfStatus;
+pub type DfHostPlayerEntityVisibilityFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, entity: DfEntityId, visible: u8) -> DfStatus;
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
-pub struct DfHostApiV1 { pub abi_version: u32, pub struct_size: u32, pub context: u64, pub player_text: Option<DfHostPlayerTextFn>, pub player_title: Option<DfHostPlayerTitleFn>, pub player_transform: Option<DfHostPlayerTransformFn>, pub player_rotation: Option<DfHostPlayerRotationFn>, pub player_state_set: Option<DfHostPlayerStateSetFn>, pub player_state_get: Option<DfHostPlayerStateGetFn>, pub player_effect: Option<DfHostPlayerEffectFn> }
+pub struct DfHostApiV1 { pub abi_version: u32, pub struct_size: u32, pub context: u64, pub player_text: Option<DfHostPlayerTextFn>, pub player_title: Option<DfHostPlayerTitleFn>, pub player_transform: Option<DfHostPlayerTransformFn>, pub player_rotation: Option<DfHostPlayerRotationFn>, pub player_state_set: Option<DfHostPlayerStateSetFn>, pub player_state_get: Option<DfHostPlayerStateGetFn>, pub player_effect: Option<DfHostPlayerEffectFn>, pub player_entity_visibility: Option<DfHostPlayerEntityVisibilityFn> }
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct DfCommandParameter { pub kind: u32, pub optional: u8, pub name: DfStringView, pub values: *const DfStringView, pub value_count: u64 }

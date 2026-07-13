@@ -121,6 +121,46 @@ impl From<dragonfly_plugin_sys::DfPlayerId> for PlayerId {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct EntityId {
+    uuid: [u8; 16],
+    generation: u64,
+}
+
+impl EntityId {
+    pub const fn uuid_bytes(self) -> [u8; 16] {
+        self.uuid
+    }
+
+    pub const fn generation(self) -> u64 {
+        self.generation
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct Entity {
+    id: EntityId,
+}
+
+impl Entity {
+    pub const fn id(self) -> EntityId {
+        self.id
+    }
+
+    fn raw_id(self) -> dragonfly_plugin_sys::DfEntityId {
+        dragonfly_plugin_sys::DfEntityId {
+            bytes: self.id.uuid,
+            generation: self.id.generation,
+        }
+    }
+}
+
+impl From<Player> for Entity {
+    fn from(player: Player) -> Self {
+        player.entity()
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Title {
     text: String,
@@ -180,6 +220,15 @@ struct PlayerName {
 impl Player {
     pub const fn id(self) -> PlayerId {
         self.id
+    }
+
+    pub const fn entity(self) -> Entity {
+        Entity {
+            id: EntityId {
+                uuid: self.id.uuid,
+                generation: self.id.generation,
+            },
+        }
     }
 
     pub fn latency(&self) -> Option<std::time::Duration> {
@@ -265,6 +314,14 @@ impl Player {
         );
     }
 
+    pub fn hide_entity(&self, entity: Entity) {
+        self.set_entity_visible(entity, false);
+    }
+
+    pub fn show_entity(&self, entity: Entity) {
+        self.set_entity_visible(entity, true);
+    }
+
     fn send_text(&self, kind: u32, message: &str) {
         let host = HOST_API.load(Ordering::Acquire);
         let Some(host) = (unsafe { host.as_ref() }) else {
@@ -309,6 +366,24 @@ impl Player {
         };
         let value = dragonfly_plugin_sys::DfPlayerStateValue { number, integer };
         let _ = unsafe { set(host.context, self.raw_id(), kind, value) };
+    }
+
+    fn set_entity_visible(&self, entity: Entity, visible: bool) {
+        let host = HOST_API.load(Ordering::Acquire);
+        let Some(host) = (unsafe { host.as_ref() }) else {
+            return;
+        };
+        let Some(change) = host.player_entity_visibility else {
+            return;
+        };
+        let _ = unsafe {
+            change(
+                host.context,
+                self.raw_id(),
+                entity.raw_id(),
+                u8::from(visible),
+            )
+        };
     }
 
     fn state(&self, kind: u32) -> dragonfly_plugin_sys::DfPlayerStateValue {

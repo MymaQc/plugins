@@ -16,6 +16,7 @@ typedef int32_t DfStatus;
 typedef uint32_t DfEventId;
 
 typedef struct { uint8_t bytes[16]; uint64_t generation; } DfPlayerId;
+typedef struct { uint8_t bytes[16]; uint64_t generation; } DfEntityId;
 typedef struct { double x; double y; double z; } DfVec3;
 typedef struct { double yaw; double pitch; } DfRotation;
 typedef struct { int32_t x; int32_t y; int32_t z; } DfBlockPos;
@@ -149,6 +150,7 @@ typedef DfStatus (*DfHostPlayerRotationFn)(uint64_t context, DfPlayerId player, 
 typedef DfStatus (*DfHostPlayerStateSetFn)(uint64_t context, DfPlayerId player, uint32_t kind, DfPlayerStateValue value);
 typedef DfStatus (*DfHostPlayerStateGetFn)(uint64_t context, DfPlayerId player, uint32_t kind, DfPlayerStateValue *value);
 typedef DfStatus (*DfHostPlayerEffectFn)(uint64_t context, DfPlayerId player, uint32_t operation, DfEffectView effect);
+typedef DfStatus (*DfHostPlayerEntityVisibilityFn)(uint64_t context, DfPlayerId player, DfEntityId entity, uint8_t visible);
 typedef struct {
     uint32_t abi_version;
     uint32_t struct_size;
@@ -160,6 +162,7 @@ typedef struct {
     DfHostPlayerStateSetFn player_state_set;
     DfHostPlayerStateGetFn player_state_get;
     DfHostPlayerEffectFn player_effect;
+    DfHostPlayerEntityVisibilityFn player_entity_visibility;
 } DfHostApiV1;
 #define DF_COMMAND_PARAMETER_SUBCOMMAND 1u
 #define DF_COMMAND_PARAMETER_ENUM 2u

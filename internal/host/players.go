@@ -107,6 +107,17 @@ func (p *Players) ResolveID(id native.PlayerID) (*player.Player, bool) {
 	return nil, false
 }
 
+func (p *Players) ResolveEntityID(id native.EntityID) (*player.Player, bool) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	for connected, candidate := range p.entries {
+		if candidate.UUID == id.UUID && candidate.Generation == id.Generation {
+			return connected, true
+		}
+	}
+	return nil, false
+}
+
 func (p *Players) SendPlayerText(id native.PlayerID, kind native.PlayerTextKind, message string) bool {
 	connected, ok := p.ResolveID(id)
 	if !ok {
@@ -207,6 +218,23 @@ func (p *Players) ChangePlayerEffect(id native.PlayerID, operation native.Player
 		applied = applied.WithoutParticles()
 	}
 	connected.AddEffect(applied)
+	return true
+}
+
+func (p *Players) SetPlayerEntityVisible(viewerID native.PlayerID, entityID native.EntityID, visible bool) bool {
+	viewer, ok := p.ResolveID(viewerID)
+	if !ok {
+		return false
+	}
+	entity, ok := p.ResolveEntityID(entityID)
+	if !ok {
+		return false
+	}
+	if visible {
+		viewer.ShowEntity(entity)
+	} else {
+		viewer.HideEntity(entity)
+	}
 	return true
 }
 

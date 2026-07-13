@@ -58,6 +58,11 @@ type PlayerID struct {
 	Generation uint64
 }
 
+type EntityID struct {
+	UUID       [16]byte
+	Generation uint64
+}
+
 type Vec3 struct {
 	X, Y, Z float64
 }

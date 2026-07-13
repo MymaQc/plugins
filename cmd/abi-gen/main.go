@@ -237,6 +237,7 @@ typedef int32_t DfStatus;
 typedef uint32_t DfEventId;
 
 typedef struct { uint8_t bytes[16]; uint64_t generation; } DfPlayerId;
+typedef struct { uint8_t bytes[16]; uint64_t generation; } DfEntityId;
 typedef struct { double x; double y; double z; } DfVec3;
 typedef struct { double yaw; double pitch; } DfRotation;
 typedef struct { int32_t x; int32_t y; int32_t z; } DfBlockPos;
@@ -272,6 +273,7 @@ typedef DfStatus (*DfHostPlayerRotationFn)(uint64_t context, DfPlayerId player, 
 typedef DfStatus (*DfHostPlayerStateSetFn)(uint64_t context, DfPlayerId player, uint32_t kind, DfPlayerStateValue value);
 typedef DfStatus (*DfHostPlayerStateGetFn)(uint64_t context, DfPlayerId player, uint32_t kind, DfPlayerStateValue *value);
 typedef DfStatus (*DfHostPlayerEffectFn)(uint64_t context, DfPlayerId player, uint32_t operation, DfEffectView effect);
+typedef DfStatus (*DfHostPlayerEntityVisibilityFn)(uint64_t context, DfPlayerId player, DfEntityId entity, uint8_t visible);
 typedef struct {
     uint32_t abi_version;
     uint32_t struct_size;
@@ -283,6 +285,7 @@ typedef struct {
     DfHostPlayerStateSetFn player_state_set;
     DfHostPlayerStateGetFn player_state_get;
     DfHostPlayerEffectFn player_effect;
+    DfHostPlayerEntityVisibilityFn player_entity_visibility;
 } DfHostApiV1;
 #define DF_COMMAND_PARAMETER_SUBCOMMAND 1u
 #define DF_COMMAND_PARAMETER_ENUM 2u
@@ -398,6 +401,9 @@ pub type DfEventId = u32;
 pub struct DfPlayerId { pub bytes: [u8; 16], pub generation: u64 }
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
+pub struct DfEntityId { pub bytes: [u8; 16], pub generation: u64 }
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct DfVec3 { pub x: f64, pub y: f64, pub z: f64 }
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
@@ -455,9 +461,10 @@ pub type DfHostPlayerRotationFn = unsafe extern "C" fn(context: u64, player: DfP
 pub type DfHostPlayerStateSetFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, kind: u32, value: DfPlayerStateValue) -> DfStatus;
 pub type DfHostPlayerStateGetFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, kind: u32, value: *mut DfPlayerStateValue) -> DfStatus;
 pub type DfHostPlayerEffectFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, operation: u32, effect: DfEffectView) -> DfStatus;
+pub type DfHostPlayerEntityVisibilityFn = unsafe extern "C" fn(context: u64, player: DfPlayerId, entity: DfEntityId, visible: u8) -> DfStatus;
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
-pub struct DfHostApiV1 { pub abi_version: u32, pub struct_size: u32, pub context: u64, pub player_text: Option<DfHostPlayerTextFn>, pub player_title: Option<DfHostPlayerTitleFn>, pub player_transform: Option<DfHostPlayerTransformFn>, pub player_rotation: Option<DfHostPlayerRotationFn>, pub player_state_set: Option<DfHostPlayerStateSetFn>, pub player_state_get: Option<DfHostPlayerStateGetFn>, pub player_effect: Option<DfHostPlayerEffectFn> }
+pub struct DfHostApiV1 { pub abi_version: u32, pub struct_size: u32, pub context: u64, pub player_text: Option<DfHostPlayerTextFn>, pub player_title: Option<DfHostPlayerTitleFn>, pub player_transform: Option<DfHostPlayerTransformFn>, pub player_rotation: Option<DfHostPlayerRotationFn>, pub player_state_set: Option<DfHostPlayerStateSetFn>, pub player_state_get: Option<DfHostPlayerStateGetFn>, pub player_effect: Option<DfHostPlayerEffectFn>, pub player_entity_visibility: Option<DfHostPlayerEntityVisibilityFn> }
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct DfCommandParameter { pub kind: u32, pub optional: u8, pub name: DfStringView, pub values: *const DfStringView, pub value_count: u64 }

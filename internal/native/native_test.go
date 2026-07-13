@@ -60,6 +60,8 @@ type recordingHost struct {
 	reads      []PlayerStateKind
 	effectOps  []PlayerEffectOperation
 	effects    []PlayerEffect
+	entities   []EntityID
+	visible    []bool
 }
 
 func (h *recordingHost) SendPlayerText(player PlayerID, kind PlayerTextKind, message string) bool {
@@ -100,6 +102,12 @@ func (h *recordingHost) PlayerState(_ PlayerID, kind PlayerStateKind) (PlayerSta
 func (h *recordingHost) ChangePlayerEffect(_ PlayerID, operation PlayerEffectOperation, effect PlayerEffect) bool {
 	h.effectOps = append(h.effectOps, operation)
 	h.effects = append(h.effects, effect)
+	return true
+}
+
+func (h *recordingHost) SetPlayerEntityVisible(_ PlayerID, entity EntityID, visible bool) bool {
+	h.entities = append(h.entities, entity)
+	h.visible = append(h.visible, visible)
 	return true
 }
 
@@ -336,6 +344,39 @@ func TestPlayerSoundAndDisconnectHostCalls(t *testing.T) {
 	wantTexts := []string{"Disconnected by Rust plugin.", "Kicked by Rust plugin."}
 	if !slices.Equal(host.kinds, wantKinds) || !slices.Equal(host.texts, wantTexts) {
 		t.Fatalf("kinds=%v texts=%v", host.kinds, host.texts)
+	}
+}
+
+func TestPlayerEntityVisibilityHostCalls(t *testing.T) {
+	library, plugins := nativeArtifacts(t)
+	host := &recordingHost{}
+	runtime, err := OpenWithHost(library, plugins, host)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(runtime.Close)
+	if err := runtime.Enable(); err != nil {
+		t.Fatal(err)
+	}
+	commands, err := runtime.Commands()
+	if err != nil {
+		t.Fatal(err)
+	}
+	viewer := PlayerID{Generation: 12}
+	target := PlayerID{UUID: [16]byte{1, 2, 3}, Generation: 13}
+	encoded := "01020300000000000000000000000000:13:0:Target"
+	for _, arguments := range []string{"hide " + encoded, "show " + encoded} {
+		output, err := runtime.HandleCommand(commands[0].Index, CommandInput{
+			Source: "Viewer", SourceKind: CommandSourcePlayer, SourcePlayer: &viewer,
+			OnlinePlayers: []CommandPlayer{{Player: viewer, Name: "Viewer"}, {Player: target, Name: "Target"}}, Arguments: arguments,
+		})
+		if err != nil || output.Failed {
+			t.Fatalf("%s: output=%+v error=%v", arguments, output, err)
+		}
+	}
+	want := EntityID{UUID: target.UUID, Generation: target.Generation}
+	if len(host.entities) != 2 || host.entities[0] != want || host.entities[1] != want || !slices.Equal(host.visible, []bool{false, true}) {
+		t.Fatalf("entities=%+v visible=%v", host.entities, host.visible)
 	}
 }
 

@@ -116,12 +116,30 @@ func bg_go_player_effect(context C.uint64_t, player C.DfPlayerId, operation C.ui
 	return C.DF_STATUS_OK
 }
 
+//export bg_go_player_entity_visibility
+func bg_go_player_entity_visibility(context C.uint64_t, player C.DfPlayerId, entity C.DfEntityId, visible C.uint8_t) C.DfStatus {
+	host, ok := resolveHost(uint64(context))
+	if !ok || !host.SetPlayerEntityVisible(playerID(player), entityID(entity), visible != 0) {
+		return C.DF_STATUS_ERROR
+	}
+	return C.DF_STATUS_OK
+}
+
 func playerID(player C.DfPlayerId) PlayerID {
 	var id PlayerID
 	for index := range id.UUID {
 		id.UUID[index] = byte(player.bytes[index])
 	}
 	id.Generation = uint64(player.generation)
+	return id
+}
+
+func entityID(entity C.DfEntityId) EntityID {
+	var id EntityID
+	for index := range id.UUID {
+		id.UUID[index] = byte(entity.bytes[index])
+	}
+	id.Generation = uint64(entity.generation)
 	return id
 }
 

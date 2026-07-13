@@ -2331,6 +2331,7 @@ mod tests {
             player_state_set: None,
             player_state_get: None,
             player_effect: None,
+            player_entity_visibility: None,
         };
         let runtime = DfRuntime::load(&directory, ptr::from_ref(&host)).unwrap();
         assert!(runtime.plugins.is_empty());

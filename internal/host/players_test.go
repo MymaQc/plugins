@@ -97,6 +97,10 @@ func TestPlayersReadsAndChangesState(t *testing.T) {
 		if !players.SetPlayerState(id, native.PlayerStateSound, native.PlayerStateValue{Integer: int64(native.SoundLevelUp)}) {
 			t.Fatal("play sound failed")
 		}
+		entityID := native.EntityID{UUID: id.UUID, Generation: id.Generation}
+		if !players.SetPlayerEntityVisible(id, entityID, false) || !players.SetPlayerEntityVisible(id, entityID, true) {
+			t.Fatal("entity visibility failed")
+		}
 		if !players.ChangePlayerEffect(id, native.PlayerEffectAdd, native.PlayerEffect{
 			Type: native.EffectSpeed, Level: 2, Duration: 30 * time.Second,
 		}) {

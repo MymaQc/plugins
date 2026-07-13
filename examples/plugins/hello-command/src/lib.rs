@@ -226,4 +226,16 @@ impl Plugin for HelloCommand {
     fn kick(&self, context: &mut Context<'_, Player>) {
         context.source().kick("Kicked by Rust plugin.");
     }
+
+    #[subcommand("hide")]
+    fn hide(&self, context: &mut Context<'_, Player>, target: Player) {
+        context.source().hide_entity(target.entity());
+        context.reply("Entity hidden.");
+    }
+
+    #[subcommand("show")]
+    fn show(&self, context: &mut Context<'_, Player>, target: Player) {
+        context.source().show_entity(target.entity());
+        context.reply("Entity shown.");
+    }
 }
