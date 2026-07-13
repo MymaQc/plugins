@@ -103,6 +103,9 @@ func TestPlayerSourceIsResolvedByUUID(t *testing.T) {
 		if runtime.input.SourcePlayer == nil || runtime.input.SourcePlayer.Generation != 3 {
 			t.Fatalf("source player = %#v", runtime.input.SourcePlayer)
 		}
+		if runtime.input.SourceKind != native.CommandSourcePlayer {
+			t.Fatalf("source kind = %v, want player", runtime.input.SourceKind)
+		}
 	})
 }
 

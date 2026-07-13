@@ -115,6 +115,7 @@ func (c pluginCommandBase) dispatchActive(invocation native.InvocationID, source
 		playerUUID := sourcePlayer.UUID()
 		if id, found := c.players.ResolveUUID(playerUUID); found {
 			input.SourcePlayer = &id
+			input.SourceKind = native.CommandSourcePlayer
 		}
 	}
 	result, err := c.runtime.HandleCommand(c.index, input)
