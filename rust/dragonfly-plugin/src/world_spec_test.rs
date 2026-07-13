@@ -116,16 +116,15 @@ fn defaults_encode_explicit_dragonfly_values() {
 
 #[test]
 fn read_only_switches_to_manual_save_independent_of_order() {
-    let first = WorldSpec::persistent("arenas/readonly")
+    let first_spec = WorldSpec::persistent("arenas/readonly")
         .read_only(true)
-        .save(SavePolicy::Automatic(Duration::from_secs(5)))
-        .encode()
-        .unwrap();
-    let second = WorldSpec::persistent("arenas/readonly")
+        .save(SavePolicy::Automatic(Duration::from_secs(5)));
+    let second_spec = WorldSpec::persistent("arenas/readonly")
         .save(SavePolicy::Automatic(Duration::from_secs(30)))
-        .read_only(true)
-        .encode()
-        .unwrap();
+        .read_only(true);
+    assert_eq!(first_spec, second_spec);
+    let first = first_spec.encode().unwrap();
+    let second = second_spec.encode().unwrap();
     assert_eq!(
         first.save_policy,
         dragonfly_plugin_sys::DF_WORLD_SAVE_MANUAL
@@ -135,6 +134,40 @@ fn read_only_switches_to_manual_save_independent_of_order() {
     assert_eq!(
         second.save_interval_milliseconds,
         first.save_interval_milliseconds
+    );
+}
+
+#[test]
+fn duration_encoding_accepts_exact_max_and_rejects_next_millisecond() {
+    const MAX_MILLISECONDS: u64 = i64::MAX as u64 / 1_000_000;
+    let maximum = Duration::from_millis(MAX_MILLISECONDS);
+    let overflow = Duration::from_millis(MAX_MILLISECONDS + 1);
+
+    let save_at_max = WorldSpec::persistent("arenas/max-save")
+        .save(SavePolicy::Automatic(maximum))
+        .encode()
+        .unwrap();
+    assert_eq!(save_at_max.save_interval_milliseconds, MAX_MILLISECONDS);
+    assert!(
+        WorldSpec::persistent("arenas/overflow-save")
+            .save(SavePolicy::Automatic(overflow))
+            .encode()
+            .is_none()
+    );
+
+    let unload_at_max = WorldSpec::persistent("arenas/max-unload")
+        .chunk_unload(ChunkUnloadPolicy::After(maximum))
+        .encode()
+        .unwrap();
+    assert_eq!(
+        unload_at_max.chunk_unload_interval_milliseconds,
+        MAX_MILLISECONDS
+    );
+    assert!(
+        WorldSpec::persistent("arenas/overflow-unload")
+            .chunk_unload(ChunkUnloadPolicy::After(overflow))
+            .encode()
+            .is_none()
     );
 }
 

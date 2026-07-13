@@ -60,7 +60,7 @@ pub enum ChunkUnloadPolicy {
     After(Duration),
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct WorldSpec {
     provider_path: String,
     dimension: Dimension,
@@ -72,6 +72,22 @@ pub struct WorldSpec {
     weather: WeatherPolicy,
     chunk_unload: ChunkUnloadPolicy,
 }
+
+impl PartialEq for WorldSpec {
+    fn eq(&self, other: &Self) -> bool {
+        self.provider_path == other.provider_path
+            && self.dimension == other.dimension
+            && self.open_mode == other.open_mode
+            && self.read_only == other.read_only
+            && (self.read_only || self.save == other.save)
+            && self.random_ticks == other.random_ticks
+            && self.time == other.time
+            && self.weather == other.weather
+            && self.chunk_unload == other.chunk_unload
+    }
+}
+
+impl Eq for WorldSpec {}
 
 impl WorldSpec {
     pub fn persistent(provider_path: impl Into<String>) -> Self {
