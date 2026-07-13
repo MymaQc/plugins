@@ -1355,27 +1355,27 @@ impl Player {
     }
 
     #[doc(hidden)]
-    pub fn from_command_argument(value: &str) -> Result<Self, CommandParseError> {
+    pub fn __from_command_argument(value: &str) -> Result<Self, CommandParseError> {
         let mut parts = value.split(':');
         let uuid = parts
             .next()
-            .ok_or_else(|| CommandParseError::new("player is no longer online"))?;
+            .ok_or_else(|| CommandParseError::__new("player is no longer online"))?;
         let generation = parts
             .next()
-            .ok_or_else(|| CommandParseError::new("player is no longer online"))?;
+            .ok_or_else(|| CommandParseError::__new("player is no longer online"))?;
         let latency_milliseconds = parts.next().and_then(|value| value.parse().ok());
         let name = parts.next();
         if uuid.len() != 32 {
-            return Err(CommandParseError::new("player is no longer online"));
+            return Err(CommandParseError::__new("player is no longer online"));
         }
         let mut bytes = [0; 16];
         for (index, byte) in bytes.iter_mut().enumerate() {
             *byte = u8::from_str_radix(&uuid[index * 2..index * 2 + 2], 16)
-                .map_err(|_| CommandParseError::new("player is no longer online"))?;
+                .map_err(|_| CommandParseError::__new("player is no longer online"))?;
         }
         let generation = generation
             .parse()
-            .map_err(|_| CommandParseError::new("player is no longer online"))?;
+            .map_err(|_| CommandParseError::__new("player is no longer online"))?;
         let mut player = Self {
             id: PlayerId {
                 uuid: bytes,
@@ -1893,7 +1893,7 @@ pub struct CommandSource<'a> {
 
 impl<'a> CommandSource<'a> {
     #[doc(hidden)]
-    pub const fn new(
+    pub const fn __new(
         name: &'a str,
         online_players: &'a [dragonfly_plugin_sys::DfStringView],
     ) -> Self {
@@ -1929,7 +1929,7 @@ pub struct Varargs(String);
 
 impl Varargs {
     #[doc(hidden)]
-    pub fn new(value: String) -> Self {
+    pub fn __new(value: String) -> Self {
         Self(value)
     }
 
@@ -1944,7 +1944,7 @@ impl Varargs {
 
 impl<T> Dynamic<T> {
     #[doc(hidden)]
-    pub fn new(value: impl Into<String>) -> Self {
+    pub fn __new(value: impl Into<String>) -> Self {
         Self {
             value: value.into(),
             marker: core::marker::PhantomData,
@@ -1961,7 +1961,7 @@ impl<T> Dynamic<T> {
 }
 
 #[doc(hidden)]
-pub fn write_dynamic_options(
+pub fn __write_dynamic_options(
     options: Vec<String>,
     output: &mut dragonfly_plugin_sys::DfStringBuffer,
 ) -> Result<(), MessageTooLong> {
@@ -1992,7 +1992,7 @@ pub struct CommandParseError(String);
 
 impl CommandParseError {
     #[doc(hidden)]
-    pub fn new(message: impl Into<String>) -> Self {
+    pub fn __new(message: impl Into<String>) -> Self {
         Self(message.into())
     }
 }
@@ -2008,6 +2008,97 @@ impl std::error::Error for CommandParseError {}
 pub struct Any;
 pub struct Console;
 
+/// A command sender that can be named and receive messages.
+pub trait Source {
+    fn name(&self) -> &str;
+
+    fn message(&mut self, message: &str);
+}
+
+impl Source for Player {
+    fn name(&self) -> &str {
+        Player::name(self).unwrap_or("")
+    }
+
+    fn message(&mut self, message: &str) {
+        Player::message(self, message);
+    }
+}
+
+/// A console command source tied to the active command invocation.
+pub struct ConsoleSource<'a> {
+    name: &'a str,
+    state: &'a mut dragonfly_plugin_sys::DfCommandState,
+}
+
+impl Source for ConsoleSource<'_> {
+    fn name(&self) -> &str {
+        self.name
+    }
+
+    fn message(&mut self, message: &str) {
+        if write_command_output(self.state, message, false).is_err() {
+            write_command_overflow(self.state, "command output exceeded the runtime buffer");
+        }
+    }
+}
+
+/// A command source whose concrete kind is determined at runtime.
+pub enum AnySource<'a> {
+    Player(Player),
+    Console(ConsoleSource<'a>),
+}
+
+impl Source for AnySource<'_> {
+    fn name(&self) -> &str {
+        match self {
+            Self::Player(player) => Source::name(player),
+            Self::Console(console) => console.name(),
+        }
+    }
+
+    fn message(&mut self, message: &str) {
+        match self {
+            Self::Player(player) => Source::message(player, message),
+            Self::Console(console) => console.message(message),
+        }
+    }
+}
+
+/// Runtime context passed to command handlers.
+///
+/// Command output is sent through [`Context::source`] rather than through the context itself.
+/// The former response and source-conversion methods are intentionally unavailable:
+///
+/// ```compile_fail
+/// fn removed(context: &mut dragonfly::Context<'_>) {
+///     context.reply("hello");
+/// }
+/// ```
+///
+/// ```compile_fail
+/// fn removed(context: &mut dragonfly::Context<'_>) {
+///     context.fail("no");
+/// }
+/// ```
+///
+/// ```compile_fail
+/// fn removed(context: &mut dragonfly::Context<'_>) {
+///     let _ = context.player_context();
+/// }
+/// ```
+///
+/// ```compile_fail
+/// fn removed(context: &mut dragonfly::Context<'_>) {
+///     let _ = context.console_context();
+/// }
+/// ```
+///
+/// ```compile_fail
+/// fn removed(context: &dragonfly::Context<'_>) {
+///     let _ = context.source_name();
+/// }
+/// ```
 pub struct Context<'a, S = Any> {
     input: &'a dragonfly_plugin_sys::DfCommandInput,
     state: &'a mut dragonfly_plugin_sys::DfCommandState,
@@ -2020,7 +2111,7 @@ impl<'a> Context<'a, Any> {
     /// # Safety
     /// Both references and the state's output buffer must belong to the same active command callback.
     #[doc(hidden)]
-    pub unsafe fn from_raw(
+    pub unsafe fn __from_raw(
         input: &'a dragonfly_plugin_sys::DfCommandInput,
         state: &'a mut dragonfly_plugin_sys::DfCommandState,
     ) -> Self {
@@ -2031,7 +2122,19 @@ impl<'a> Context<'a, Any> {
         }
     }
 
-    pub fn player_context(&mut self) -> Option<Context<'_, Player>> {
+    pub fn source(&mut self) -> AnySource<'_> {
+        if let Some(player) = self.source_player() {
+            AnySource::Player(player)
+        } else {
+            AnySource::Console(ConsoleSource {
+                name: unsafe { string_view(self.input.source) },
+                state: &mut *self.state,
+            })
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn __player_context(&mut self) -> Option<Context<'_, Player>> {
         let source = self.source_player()?;
         Some(Context {
             input: self.input,
@@ -2040,7 +2143,8 @@ impl<'a> Context<'a, Any> {
         })
     }
 
-    pub fn console_context(&mut self) -> Option<Context<'_, Console>> {
+    #[doc(hidden)]
+    pub fn __console_context(&mut self) -> Option<Context<'_, Console>> {
         (self.input.source_kind == dragonfly_plugin_sys::DF_COMMAND_SOURCE_CONSOLE).then_some({
             Context {
                 input: self.input,
@@ -2052,10 +2156,6 @@ impl<'a> Context<'a, Any> {
 }
 
 impl<S> Context<'_, S> {
-    pub fn source_name(&self) -> &str {
-        unsafe { string_view(self.input.source) }
-    }
-
     pub fn arguments(&self) -> &str {
         unsafe { string_view(self.input.arguments) }
     }
@@ -2097,52 +2197,50 @@ impl Context<'_, Player> {
     }
 }
 
+impl Context<'_, Console> {
+    pub fn source(&mut self) -> ConsoleSource<'_> {
+        ConsoleSource {
+            name: unsafe { string_view(self.input.source) },
+            state: &mut *self.state,
+        }
+    }
+}
+
 impl<S> Context<'_, S> {
-    pub fn reply(&mut self, message: &str) {
-        if self.try_reply(message).is_err() {
-            self.state.failed = 1;
-            self.state.output.len = 0;
-            let _ = self.write("command output exceeded the runtime buffer", true);
+    #[doc(hidden)]
+    pub fn __fail(&mut self, message: &str) {
+        if write_command_output(self.state, message, true).is_err() {
+            write_command_overflow(self.state, "command error exceeded the runtime buffer");
         }
     }
+}
 
-    pub fn fail(&mut self, message: &str) {
-        if self.try_fail(message).is_err() {
-            self.state.failed = 1;
-            self.state.output.len = 0;
-            let _ = self.write("command error exceeded the runtime buffer", true);
-        }
-    }
+fn write_command_overflow(state: &mut dragonfly_plugin_sys::DfCommandState, fallback: &str) {
+    state.failed = 1;
+    state.output.len = 0;
+    let _ = write_command_output(state, fallback, true);
+}
 
-    pub fn try_reply(&mut self, message: &str) -> Result<(), MessageTooLong> {
-        self.write(message, false)
+fn write_command_output(
+    state: &mut dragonfly_plugin_sys::DfCommandState,
+    message: &str,
+    failed: bool,
+) -> Result<(), MessageTooLong> {
+    let capacity = state.output.capacity as usize;
+    if message.len() > capacity || (!message.is_empty() && state.output.data.is_null()) {
+        return Err(MessageTooLong {
+            length: message.len(),
+            capacity,
+        });
     }
-
-    pub fn try_fail(&mut self, message: &str) -> Result<(), MessageTooLong> {
-        self.write(message, true)
+    if !message.is_empty() {
+        unsafe {
+            core::ptr::copy_nonoverlapping(message.as_ptr(), state.output.data, message.len())
+        };
     }
-
-    fn write(&mut self, message: &str, failed: bool) -> Result<(), MessageTooLong> {
-        let capacity = self.state.output.capacity as usize;
-        if message.len() > capacity || (!message.is_empty() && self.state.output.data.is_null()) {
-            return Err(MessageTooLong {
-                length: message.len(),
-                capacity,
-            });
-        }
-        if !message.is_empty() {
-            unsafe {
-                core::ptr::copy_nonoverlapping(
-                    message.as_ptr(),
-                    self.state.output.data,
-                    message.len(),
-                )
-            };
-        }
-        self.state.output.len = message.len() as u64;
-        self.state.failed = u8::from(failed);
-        Ok(())
-    }
+    state.output.len = message.len() as u64;
+    state.failed = u8::from(failed);
+    Ok(())
 }
 
 unsafe fn string_view<'a>(view: dragonfly_plugin_sys::DfStringView) -> &'a str {
@@ -3521,6 +3619,109 @@ pub trait Plugin: Default + Send + Sync + 'static {
 mod tests {
     use super::*;
 
+    fn command_input(
+        source: &str,
+        source_kind: u32,
+        source_player: dragonfly_plugin_sys::DfPlayerId,
+        online_players: &[dragonfly_plugin_sys::DfCommandPlayer],
+    ) -> dragonfly_plugin_sys::DfCommandInput {
+        dragonfly_plugin_sys::DfCommandInput {
+            invocation: 0,
+            source: string_view_from_str(source),
+            arguments: string_view_from_str(""),
+            source_kind,
+            source_player,
+            online_players: online_players.as_ptr(),
+            online_player_count: online_players.len() as u64,
+        }
+    }
+
+    fn command_state(output: &mut [u8]) -> dragonfly_plugin_sys::DfCommandState {
+        dragonfly_plugin_sys::DfCommandState {
+            failed: 0,
+            output: dragonfly_plugin_sys::DfStringBuffer {
+                data: output.as_mut_ptr(),
+                len: 0,
+                capacity: output.len() as u64,
+            },
+        }
+    }
+
+    fn message_from_common_source(source: &mut impl Source, expected_name: &str) {
+        assert_eq!(source.name(), expected_name);
+        source.message("hello from source");
+    }
+
+    #[test]
+    fn player_context_source_is_the_player_value() {
+        let raw_player = dragonfly_plugin_sys::DfPlayerId {
+            bytes: [7; 16],
+            generation: 9,
+        };
+        let player_name = "Gopher";
+        let online_players = [dragonfly_plugin_sys::DfCommandPlayer {
+            player: raw_player,
+            latency_milliseconds: 42,
+            name: string_view_from_str(player_name),
+        }];
+        let input = command_input(
+            player_name,
+            dragonfly_plugin_sys::DF_COMMAND_SOURCE_PLAYER,
+            raw_player,
+            &online_players,
+        );
+        let mut output = [0; 64];
+        let mut state = command_state(&mut output);
+        let mut context = unsafe { Context::__from_raw(&input, &mut state) };
+        let context = context.__player_context().unwrap();
+
+        let player: Player = context.source();
+        assert_eq!(player.name(), Some(player_name));
+        assert_eq!(player.id().generation(), 9);
+        player.message("");
+    }
+
+    #[test]
+    fn console_context_source_names_and_messages_through_command_state() {
+        let input = command_input(
+            "Console",
+            dragonfly_plugin_sys::DF_COMMAND_SOURCE_CONSOLE,
+            dragonfly_plugin_sys::DfPlayerId::default(),
+            &[],
+        );
+        let mut output = [0; 64];
+        let mut state = command_state(&mut output);
+        let mut context = unsafe { Context::__from_raw(&input, &mut state) };
+        {
+            let mut context = context.__console_context().unwrap();
+            let mut source: ConsoleSource<'_> = context.source();
+            message_from_common_source(&mut source, "Console");
+        }
+
+        assert_eq!(state.failed, 0);
+        assert_eq!(state.output.len, 17);
+        assert_eq!(&output[..17], b"hello from source");
+    }
+
+    #[test]
+    fn any_context_source_is_an_explicit_common_source_enum() {
+        let input = command_input(
+            "Console",
+            dragonfly_plugin_sys::DF_COMMAND_SOURCE_CONSOLE,
+            dragonfly_plugin_sys::DfPlayerId::default(),
+            &[],
+        );
+        let mut output = [0; 64];
+        let mut state = command_state(&mut output);
+        let mut context = unsafe { Context::__from_raw(&input, &mut state) };
+        let mut source: AnySource<'_> = context.source();
+        assert!(matches!(source, AnySource::Console(_)));
+        message_from_common_source(&mut source, "Console");
+
+        assert_eq!(state.output.len, 17);
+        assert_eq!(&output[..17], b"hello from source");
+    }
+
     #[test]
     fn invocation_scope_restores_nested_value() {
         assert_eq!(current_invocation(), 0);
@@ -3814,7 +4015,8 @@ mod tests {
         assert_eq!(player.id().uuid_bytes()[15], 15);
         assert_eq!(player.latency(), None);
         let player =
-            Player::from_command_argument("000102030405060708090a0b0c0d0e0f:9:42:Danick").unwrap();
+            Player::__from_command_argument("000102030405060708090a0b0c0d0e0f:9:42:Danick")
+                .unwrap();
         assert_eq!(player.latency(), Some(std::time::Duration::from_millis(42)));
         assert_eq!(player.name(), Some("Danick"));
         let ModeCommand::Message { text } = ModeCommand::parse("message hello from rust").unwrap()

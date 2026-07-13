@@ -30,49 +30,51 @@ struct PlayerCommand;
 impl Plugin for PlayerCommand {
     #[command]
     fn root(&self, context: &mut Context<'_, Player>) {
-        context.reply("Use a player subcommand.");
+        context.source().message("Use a player subcommand.");
     }
 
     #[subcommand("teleport")]
     fn teleport(&self, context: &mut Context<'_, Player>, x: f64, y: f64, z: f64) {
         context.source().teleport(Vec3 { x, y, z });
-        context.reply("Teleported.");
+        context.source().message("Teleported.");
     }
 
     #[subcommand("move")]
     fn move_by(&self, context: &mut Context<'_, Player>, x: f64, y: f64, z: f64) {
         context.source().move_by(Vec3 { x, y, z }, 0.0, 0.0);
-        context.reply("Moved.");
+        context.source().message("Moved.");
     }
 
     #[subcommand("velocity")]
     fn velocity(&self, context: &mut Context<'_, Player>, x: f64, y: f64, z: f64) {
         context.source().set_velocity(Vec3 { x, y, z });
-        context.reply("Velocity set.");
+        context.source().message("Velocity set.");
     }
 
     #[subcommand("rotation")]
     fn rotation(&self, context: &mut Context<'_, Player>) {
         let rotation = context.source().rotation();
-        context.reply(&format!("yaw={} pitch={}", rotation.yaw, rotation.pitch));
+        context
+            .source()
+            .message(&format!("yaw={} pitch={}", rotation.yaw, rotation.pitch));
     }
 
     #[subcommand("face")]
     fn face(&self, context: &mut Context<'_, Player>, yaw: f64, pitch: f64) {
         context.source().face(Rotation { yaw, pitch });
-        context.reply("Rotation set.");
+        context.source().message("Rotation set.");
     }
 
     #[subcommand("gamemode")]
     fn game_mode(&self, context: &mut Context<'_, Player>, mode: Mode) {
         context.source().set_game_mode(mode.into());
-        context.reply("Game mode set.");
+        context.source().message("Game mode set.");
     }
 
     #[subcommand("heal")]
     fn heal(&self, context: &mut Context<'_, Player>, amount: f64) {
         let healed = context.source().heal(amount, healing::Instant);
-        context.reply(&format!(
+        context.source().message(&format!(
             "Healed: {healed}, health: {}",
             context.source().health()
         ));
@@ -81,7 +83,7 @@ impl Plugin for PlayerCommand {
     #[subcommand("hurt")]
     fn hurt(&self, context: &mut Context<'_, Player>, amount: f64) {
         let (damage, vulnerable) = context.source().hurt(amount, damage::Instant);
-        context.reply(&format!(
+        context.source().message(&format!(
             "Damage: {damage}, vulnerable: {vulnerable}, health: {}",
             context.source().health()
         ));
@@ -90,7 +92,7 @@ impl Plugin for PlayerCommand {
     #[subcommand("heal-food")]
     fn heal_food(&self, context: &mut Context<'_, Player>, amount: f64, quick: bool) {
         let healed = context.source().heal(amount, healing::Food::new(quick));
-        context.reply(&format!("Healed: {healed}"));
+        context.source().message(&format!("Healed: {healed}"));
     }
 
     #[subcommand("hurt-attack")]
@@ -98,7 +100,7 @@ impl Plugin for PlayerCommand {
         let result = context
             .source()
             .hurt(amount, damage::Attack::new(attacker.entity()));
-        context.reply(&format!("Damage: {}", result.0));
+        context.source().message(&format!("Damage: {}", result.0));
     }
 
     #[subcommand("hurt-projectile")]
@@ -106,7 +108,7 @@ impl Plugin for PlayerCommand {
         let result = context
             .source()
             .hurt(amount, damage::Projectile::new(projectile.entity(), None));
-        context.reply(&format!("Damage: {}", result.0));
+        context.source().message(&format!("Damage: {}", result.0));
     }
 
     #[subcommand("hurt-block")]
@@ -115,7 +117,7 @@ impl Plugin for PlayerCommand {
             amount,
             damage::Block::new(block::Cactus::new(block::CactusAge::Value4)),
         );
-        context.reply(&format!("Damage: {}", result.0));
+        context.source().message(&format!("Damage: {}", result.0));
     }
 
     #[subcommand("hurt-custom")]
@@ -126,31 +128,37 @@ impl Plugin for PlayerCommand {
             damage::AffectedProtections::FIRE | damage::AffectedProtections::BLAST,
         );
         let result = context.source().hurt(amount, source);
-        context.reply(&format!("Damage: {}", result.0));
+        context.source().message(&format!("Damage: {}", result.0));
     }
 
     #[subcommand("food")]
     fn food(&self, context: &mut Context<'_, Player>, level: i64) {
         context.source().set_food(level as i32);
-        context.reply(&format!("Food: {}", context.source().food()));
+        context
+            .source()
+            .message(&format!("Food: {}", context.source().food()));
     }
 
     #[subcommand("max-health")]
     fn max_health(&self, context: &mut Context<'_, Player>, health: f64) {
         context.source().set_max_health(health);
-        context.reply(&format!("Max health: {}", context.source().max_health()));
+        context
+            .source()
+            .message(&format!("Max health: {}", context.source().max_health()));
     }
 
     #[subcommand("experience-level")]
     fn experience_level(&self, context: &mut Context<'_, Player>, level: i32) {
         context.source().set_experience_level(level);
-        context.reply(&format!("Level: {}", context.source().experience_level()));
+        context
+            .source()
+            .message(&format!("Level: {}", context.source().experience_level()));
     }
 
     #[subcommand("experience-progress")]
     fn experience_progress(&self, context: &mut Context<'_, Player>, progress: f64) {
         context.source().set_experience_progress(progress);
-        context.reply(&format!(
+        context.source().message(&format!(
             "Progress: {}",
             context.source().experience_progress()
         ));
@@ -162,13 +170,13 @@ impl Plugin for PlayerCommand {
         context
             .source()
             .add_effect(effect::new(effect::Speed, level, duration));
-        context.reply("Speed effect added.");
+        context.source().message("Speed effect added.");
     }
 
     #[subcommand("clear-speed")]
     fn clear_speed(&self, context: &mut Context<'_, Player>) {
         context.source().remove_effect(effect::Speed);
-        context.reply("Speed effect removed.");
+        context.source().message("Speed effect removed.");
     }
 
     #[subcommand("instant-health")]
@@ -178,37 +186,43 @@ impl Plugin for PlayerCommand {
             level,
             potency,
         ));
-        context.reply("Instant health applied.");
+        context.source().message("Instant health applied.");
     }
 
     #[subcommand("name-tag")]
     fn name_tag(&self, context: &mut Context<'_, Player>, name: Varargs) {
         context.source().set_name_tag(name.value());
-        context.reply("Name tag set.");
+        context.source().message("Name tag set.");
     }
 
     #[subcommand("scale")]
     fn scale(&self, context: &mut Context<'_, Player>, scale: f64) {
         context.source().set_scale(scale);
-        context.reply(&format!("Scale: {}", context.source().scale()));
+        context
+            .source()
+            .message(&format!("Scale: {}", context.source().scale()));
     }
 
     #[subcommand("invisible")]
     fn invisible(&self, context: &mut Context<'_, Player>, invisible: bool) {
         context.source().set_invisible(invisible);
-        context.reply(&format!("Invisible: {}", context.source().invisible()));
+        context
+            .source()
+            .message(&format!("Invisible: {}", context.source().invisible()));
     }
 
     #[subcommand("immobile")]
     fn immobile(&self, context: &mut Context<'_, Player>, immobile: bool) {
         context.source().set_immobile(immobile);
-        context.reply(&format!("Immobile: {}", context.source().immobile()));
+        context
+            .source()
+            .message(&format!("Immobile: {}", context.source().immobile()));
     }
 
     #[subcommand("sound")]
     fn sound(&self, context: &mut Context<'_, Player>) {
         context.source().play_sound(sound::LevelUp);
-        context.reply("Played level-up sound.");
+        context.source().message("Played level-up sound.");
     }
 
     #[subcommand("disconnect")]
@@ -224,19 +238,19 @@ impl Plugin for PlayerCommand {
     #[subcommand("hide")]
     fn hide(&self, context: &mut Context<'_, Player>, target: Player) {
         context.source().hide_entity(target.entity());
-        context.reply("Entity hidden.");
+        context.source().message("Entity hidden.");
     }
 
     #[subcommand("show")]
     fn show(&self, context: &mut Context<'_, Player>, target: Player) {
         context.source().show_entity(target.entity());
-        context.reply("Entity shown.");
+        context.source().message("Entity shown.");
     }
 
     #[subcommand("skin-copy")]
     fn skin_copy(&self, context: &mut Context<'_, Player>) {
         let skin = context.source().skin();
         context.source().set_skin(&skin);
-        context.reply("Skin copied.");
+        context.source().message("Skin copied.");
     }
 }

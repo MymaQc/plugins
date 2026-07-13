@@ -555,19 +555,56 @@ fn restricted_call(
     match restriction {
         ContextRestriction::Any => call,
         ContextRestriction::Player => quote! {
-            if let Some(mut restricted_context) = context.player_context() {
+            if let Some(mut restricted_context) = context.__player_context() {
                 #call
             } else {
-                context.fail("This command can only be used by a player.");
+                context.__fail("This command can only be used by a player.");
             }
         },
         ContextRestriction::Console => quote! {
-            if let Some(mut restricted_context) = context.console_context() {
+            if let Some(mut restricted_context) = context.__console_context() {
                 #call
             } else {
-                context.fail("This command can only be used by the console.");
+                context.__fail("This command can only be used by the console.");
             }
         },
+    }
+}
+
+#[cfg(test)]
+mod command_tests {
+    use super::*;
+
+    #[test]
+    fn typed_source_restrictions_use_hidden_runtime_helpers() {
+        let player = restricted_call(ContextRestriction::Player, quote!(run()));
+        let player = player.to_string();
+        assert!(player.contains("__player_context"));
+        assert!(player.contains("__fail"));
+        assert!(!player.contains("context . player_context"));
+
+        let console = restricted_call(ContextRestriction::Console, quote!(run()));
+        let console = console.to_string();
+        assert!(console.contains("__console_context"));
+        assert!(console.contains("__fail"));
+        assert!(!console.contains("context . console_context"));
+    }
+
+    #[test]
+    fn generated_parsers_use_hidden_conversion_and_error_helpers() {
+        let input: DeriveInput = syn::parse_quote! {
+            #[command(name = "sample", description = "Sample")]
+            enum Sample {
+                Root { count: i64, player: Player, rest: Varargs },
+            }
+        };
+        let expansion = expand_command(input).unwrap().to_string();
+
+        assert!(expansion.contains("CommandParseError :: __new"));
+        assert!(expansion.contains("Player :: __from_command_argument"));
+        assert!(expansion.contains("Varargs :: __new"));
+        assert!(!expansion.contains("CommandParseError :: new"));
+        assert!(!expansion.contains("Player :: from_command_argument"));
     }
 }
 
@@ -617,11 +654,11 @@ fn generic_argument(value: &Type, expected: &str) -> Option<Type> {
 
 fn parse_scalar(field: &syn::Ident, ty: &Type) -> proc_macro2::TokenStream {
     quote! {
-        let raw = parts.next().ok_or_else(|| ::dragonfly_plugin::CommandParseError::new(
+        let raw = parts.next().ok_or_else(|| ::dragonfly_plugin::CommandParseError::__new(
             concat!("missing command argument ", stringify!(#field))
         ))?;
         let #field = raw.parse::<#ty>().map_err(|_| {
-            ::dragonfly_plugin::CommandParseError::new(format!("invalid {}: {raw}", stringify!(#field)))
+            ::dragonfly_plugin::CommandParseError::__new(format!("invalid {}: {raw}", stringify!(#field)))
         })?;
     }
 }
@@ -745,7 +782,7 @@ fn expand_command(input: DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
                             (
                                 quote!(::dragonfly_plugin::CommandParameter::raw_text(#parameter_name)),
                                 quote! {
-                                let #field_name = ::dragonfly_plugin::Varargs::new(
+                                let #field_name = ::dragonfly_plugin::Varargs::__new(
                                     parts.by_ref().collect::<Vec<_>>().join(" ")
                                 );
                                 },
@@ -760,9 +797,9 @@ fn expand_command(input: DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
                             (
                                 quote!(::dragonfly_plugin::CommandParameter::dynamic_enum(#parameter_name)),
                                 quote! {
-                                    let #field_name = ::dragonfly_plugin::Dynamic::new(
+                                    let #field_name = ::dragonfly_plugin::Dynamic::__new(
                                         parts.next().ok_or_else(|| {
-                                            ::dragonfly_plugin::CommandParseError::new(
+                                            ::dragonfly_plugin::CommandParseError::__new(
                                                 concat!("missing command argument ", stringify!(#field_name))
                                             )
                                         })?
@@ -775,18 +812,18 @@ fn expand_command(input: DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
                                     quote!(::dragonfly_plugin::CommandParameter::player(#parameter_name)),
                                     quote! {
                                         let raw = parts.next().ok_or_else(|| {
-                                            ::dragonfly_plugin::CommandParseError::new(
+                                            ::dragonfly_plugin::CommandParseError::__new(
                                                 concat!("missing command argument ", stringify!(#field_name))
                                             )
                                         })?;
-                                        let #field_name = ::dragonfly_plugin::Player::from_command_argument(raw)?;
+                                        let #field_name = ::dragonfly_plugin::Player::__from_command_argument(raw)?;
                                     },
                                 ),
                                 Some("String") => (
                                     quote!(::dragonfly_plugin::CommandParameter::string(#parameter_name)),
                                     quote! {
                                         let #field_name = parts.next().ok_or_else(|| {
-                                            ::dragonfly_plugin::CommandParseError::new(
+                                            ::dragonfly_plugin::CommandParseError::__new(
                                                 concat!("missing command argument ", stringify!(#field_name))
                                             )
                                         })?.to_owned();
@@ -815,11 +852,11 @@ fn expand_command(input: DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
                                         )
                                     },
                                     quote! {
-                                        let raw = parts.next().ok_or_else(|| ::dragonfly_plugin::CommandParseError::new(
+                                        let raw = parts.next().ok_or_else(|| ::dragonfly_plugin::CommandParseError::__new(
                                             concat!("missing command argument ", stringify!(#field_name))
                                         ))?;
                                         let #field_name = <#field_type as ::dragonfly_plugin::CommandEnum>::parse(raw).ok_or_else(|| {
-                                            ::dragonfly_plugin::CommandParseError::new(format!("invalid {}: {raw}", stringify!(#field_name)))
+                                            ::dragonfly_plugin::CommandParseError::__new(format!("invalid {}: {raw}", stringify!(#field_name)))
                                         })?;
                                     },
                                 ),
@@ -878,7 +915,7 @@ fn expand_command(input: DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
         let parser = quote! {
                 #(#reads)*
                 if let Some(extra) = parts.next() {
-                    return Err(::dragonfly_plugin::CommandParseError::new(format!("unexpected command argument: {extra}")));
+                    return Err(::dragonfly_plugin::CommandParseError::__new(format!("unexpected command argument: {extra}")));
                 }
                 return Ok(#construct);
         };
@@ -895,7 +932,7 @@ fn expand_command(input: DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
     }
     let root_parser = root_parser.unwrap_or_else(|| quote! {
         let subcommand = subcommand.unwrap_or("<missing>");
-        return Err(::dragonfly_plugin::CommandParseError::new(format!("unknown subcommand: {subcommand}")));
+        return Err(::dragonfly_plugin::CommandParseError::__new(format!("unknown subcommand: {subcommand}")));
     });
     Ok(quote! {
         impl ::dragonfly_plugin::CommandDefinition for #name {
@@ -1073,7 +1110,7 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
             #index => match <#command_type as ::dragonfly_plugin::CommandDefinition>::parse(context.arguments()) {
                 Ok(command) => { #call },
                 Err(error) => {
-                    context.fail(&error.to_string());
+                    context.__fail(&error.to_string());
                 }
             },
         });
@@ -1162,7 +1199,7 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
                     #(#variant_dispatch)*
                 },
                 Err(error) => {
-                    context.fail(&error.to_string());
+                    context.__fail(&error.to_string());
                 }
             },
         });
@@ -1518,7 +1555,7 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
                     return sys::DF_STATUS_ERROR;
                 }
                 let result = ::std::panic::catch_unwind(::std::panic::AssertUnwindSafe(|| {
-                    let mut context = unsafe { ::dragonfly_plugin::Context::from_raw(&*input, &mut *state) };
+                    let mut context = unsafe { ::dragonfly_plugin::Context::__from_raw(&*input, &mut *state) };
                     ::dragonfly_plugin::with_invocation(unsafe { (*input).invocation }, || {
                         <PluginType as ::dragonfly_plugin::Plugin>::on_command(plugin, command as usize, &mut context);
                     });
@@ -1562,13 +1599,13 @@ pub fn plugin(attributes: TokenStream, input: TokenStream) -> TokenStream {
                             )
                         }
                     };
-                    let source = ::dragonfly_plugin::CommandSource::new(name, online_players);
+                    let source = ::dragonfly_plugin::CommandSource::__new(name, online_players);
                     let options = match command as usize {
                         #(#dynamic_dispatch_arms)*
                         _ => None,
                     }.ok_or(())?;
                     unsafe { (*output).len = 0 };
-                    ::dragonfly_plugin::write_dynamic_options(options, unsafe { &mut *output }).map_err(|_| ())
+                    ::dragonfly_plugin::__write_dynamic_options(options, unsafe { &mut *output }).map_err(|_| ())
                 }));
                 match result {
                     Ok(Ok(())) => sys::DF_STATUS_OK,
