@@ -247,3 +247,30 @@ func TestEntitiesOldHandleTokenCannotResolveReregisteredHandle(t *testing.T) {
 		}
 	})
 }
+
+func TestEntitiesRegistersNewWorldlessHandle(t *testing.T) {
+	entities := NewEntities()
+	cleaned := 0
+	id := uuid.New()
+	handle := world.EntitySpawnOpts{ID: id}.New(
+		player.Type,
+		player.Config{UUID: id, Name: "Detached"},
+	)
+
+	handleID, ok := entities.RegisterDetached(handle, func() { cleaned++ })
+	if !ok || !handleID.Valid() {
+		t.Fatalf("RegisterDetached() = %v, %v", handleID, ok)
+	}
+	if current, ok := entities.DetachedHandle(handleID); !ok || current != handle {
+		t.Fatalf("DetachedHandle() = %p, %v, want %p", current, ok, handle)
+	}
+	if _, duplicate := entities.RegisterDetached(handle); duplicate {
+		t.Fatal("duplicate worldless handle registration succeeded")
+	}
+	if !entities.CloseHandle(handleID) || !handle.Closed() {
+		t.Fatal("registered worldless handle did not close")
+	}
+	if !entities.CloseHandle(handleID) || cleaned != 1 {
+		t.Fatalf("cleanup count = %d after repeated close", cleaned)
+	}
+}

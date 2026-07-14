@@ -7,6 +7,7 @@ import (
 	"math"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/bedrock-gophers/plugins/internal/host"
 	"github.com/bedrock-gophers/plugins/internal/native"
@@ -16,6 +17,7 @@ import (
 	"github.com/df-mc/dragonfly/server/player"
 	"github.com/df-mc/dragonfly/server/world"
 	"github.com/go-gl/mathgl/mgl64"
+	"github.com/google/uuid"
 )
 
 type worldEntityIterator struct {
@@ -251,6 +253,65 @@ func (m *WorldManager) CloseEntityHandle(id native.EntityHandleID) bool {
 	return m.entityHandles.CloseHandle(id)
 }
 
+// NewEntity creates a worldless custom Dragonfly entity handle. EntityConfig
+// was already applied by the plugin before Opaque was offered to the host.
+func (m *WorldManager) NewEntity(value native.EntitySpawnOptions) (result native.EntityHandleID, ok bool) {
+	if value.Plugin == 0 || value.LocalType == 0 || value.Opaque == 0 || !worldIDPattern.MatchString(value.Type) || !utf8.ValidString(value.NameTag) ||
+		!finiteVec3(value.Position) || !finiteVec3(value.Velocity) ||
+		math.IsNaN(value.Rotation.Yaw) || math.IsInf(value.Rotation.Yaw, 0) ||
+		math.IsNaN(value.Rotation.Pitch) || math.IsInf(value.Rotation.Pitch, 0) {
+		return native.EntityHandleID{}, false
+	}
+	m.mu.RLock()
+	registry, ready := m.entityTypes, m.registriesReady
+	m.mu.RUnlock()
+	if !ready {
+		return native.EntityHandleID{}, false
+	}
+	entityType, found := registry.Lookup(value.Type)
+	managed, owned := managedEntityTypeInfo(entityType)
+	if !found || !owned || managed.services.runtime == nil {
+		return native.EntityHandleID{}, false
+	}
+	runtime := managed.services.runtime
+	instance, err := runtime.EntityAdoptLocal(value.Plugin, value.LocalType, value.Opaque)
+	if err != nil || instance == 0 {
+		return native.EntityHandleID{}, false
+	}
+	var cleanupOnce sync.Once
+	cleanup := func() { cleanupOnce.Do(func() { runtime.EntityDestroy(instance) }) }
+	defer func() {
+		if recover() != nil {
+			cleanup()
+			result, ok = native.EntityHandleID{}, false
+		}
+	}()
+	handle := (world.EntitySpawnOpts{
+		Position: vec3(value.Position), Rotation: rotation(value.Rotation), Velocity: vec3(value.Velocity),
+		ID: uuid.UUID(value.ID), NameTag: value.NameTag,
+	}).New(entityType, managedEntityConfigFor(managed, instance, &value, cleanup))
+	result, ok = m.entityHandles.RegisterDetached(handle, cleanup)
+	if !ok {
+		_ = handle.Close()
+		cleanup()
+		return native.EntityHandleID{}, false
+	}
+	m.detachedEntityMu.Lock()
+	m.detachedEntities[result] = nil
+	m.detachedEntityMu.Unlock()
+	return result, true
+}
+
+// EntityHandleType returns Dragonfly's encoded type identity for any live
+// active, transferring, or worldless handle.
+func (m *WorldManager) EntityHandleType(id native.EntityHandleID) (string, bool) {
+	handle, ok := m.entityHandles.HandleByID(id)
+	if !ok || handle.Closed() {
+		return "", false
+	}
+	return handle.Type().EncodeEntity(), true
+}
+
 // RemoveEntity removes an entity through the invocation's exact transaction.
 // Player handles remain owned by their session; Player.ChangeWorld is the safe
 // player transfer path until Dragonfly exposes that session operation directly.
@@ -266,7 +327,6 @@ func (m *WorldManager) RemoveEntity(invocation native.InvocationID, id native.En
 	if _, playerEntity := current.(*player.Player); playerEntity {
 		return native.EntityHandleID{}, false
 	}
-	cleanup := advancedEntityCleanup(current)
 	m.detachedEntityMu.Lock()
 	defer m.detachedEntityMu.Unlock()
 	defer func() {
@@ -281,12 +341,9 @@ func (m *WorldManager) RemoveEntity(invocation native.InvocationID, id native.En
 	result, detachedHandle, ok := m.entityHandles.Detach(id)
 	if !ok || detachedHandle != handle {
 		_ = handle.Close()
-		if cleanup != nil {
-			cleanup()
-		}
 		return native.EntityHandleID{}, false
 	}
-	m.detachedEntities[result] = cleanup
+	m.detachedEntities[result] = nil
 	return result, true
 }
 
@@ -491,25 +548,7 @@ func (m *WorldManager) newEntityHandle(tx *world.Tx, value native.EntitySpawn) (
 			}
 		}
 	case native.EntityCustom:
-		entityType, found := tx.World().EntityRegistry().Lookup(value.Type)
-		if found && isForeignEntityType(entityType) {
-			instance := native.EntityInstanceID(0)
-			if advanced, ok := foreignAdvancedType(entityType); ok && advanced.services.runtime != nil {
-				if value.CustomInstance == 0 {
-					return nil, false
-				}
-				adopted, adoptErr := advanced.services.runtime.EntityAdopt(advanced.definition.TypeKey, value.CustomInstance)
-				if adoptErr != nil || adopted == 0 {
-					return nil, false
-				}
-				instance = adopted
-			}
-			handle = opts.New(entityType, foreignEntityConfigFor(entityType, instance))
-			if handle == nil && instance != 0 {
-				advanced, _ := foreignAdvancedType(entityType)
-				advanced.services.runtime.EntityDestroy(instance)
-			}
-		}
+		return nil, false
 	default:
 		owner, ok := m.entityHandles.Resolve(value.Owner, tx)
 		if !ok {

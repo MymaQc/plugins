@@ -176,41 +176,23 @@ const (
 
 type EntityTypeDefinition struct {
 	SaveID, NetworkID string
-	Min, Max          Vec3
 	TypeKey           uint64
-	Family            EntityFamily
-	CallbackFlags     uint32
-	InitialHealth     float64
-	MaxHealth         float64
-	Speed             float64
-	StateVersion      uint32
-	Physics           *EntityPhysics
-}
-
-type EntityFamily uint32
-
-const (
-	EntityFamilyBase EntityFamily = iota
-	EntityFamilyTicking
-	EntityFamilyLiving
-)
-
-const (
-	EntityCallbackState uint32 = 1 << iota
-	EntityCallbackTick
-	EntityCallbackHurt
-	EntityCallbackHeal
-	EntityCallbackDeath
-)
-
-type EntityPhysics struct {
-	Gravity, Drag     float64
-	DragBeforeGravity bool
 }
 
 // EntityInstanceID identifies plugin-owned state for one custom entity.
 // It is opaque outside the native runtime and is never reused by that runtime.
 type EntityInstanceID uint64
+
+type EntityOpenID uint64
+
+type EntityCommonData struct {
+	Position, Velocity Vec3
+	Rotation           Rotation
+	Name               string
+	FireDuration, Age  time.Duration
+}
+
+const EntityCapabilityTicker uint32 = 1
 
 type EntityLoadInput struct {
 	Data    []byte
@@ -298,6 +280,18 @@ type EntitySpawn struct {
 	Item                        *ItemStack
 	Block                       *WorldBlock
 	CustomInstance              uint64
+}
+
+// EntitySpawnOptions mirrors world.EntitySpawnOpts for worldless custom entity
+// construction. Opaque is plugin-owned state prepared by EntityConfig.Apply.
+type EntitySpawnOptions struct {
+	Position, Velocity Vec3
+	Rotation           Rotation
+	ID                 [16]byte
+	NameTag, Type      string
+	Plugin, LocalType  uint64
+	Opaque             uint64
+	FireDuration, Age  time.Duration
 }
 
 type EntityState struct {

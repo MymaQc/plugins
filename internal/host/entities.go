@@ -32,6 +32,7 @@ type entityEntry struct {
 	id       native.EntityID
 	handleID native.EntityHandleID
 	state    entityEntryState
+	cleanup  func()
 }
 
 func NewEntities() *Entities {
@@ -170,15 +171,19 @@ func (e *Entities) CloseHandle(id native.EntityHandleID) bool {
 		return false
 	}
 	e.mu.Lock()
-	defer e.mu.Unlock()
 	handle, ok := e.byHandleID[id]
 	entry, current := e.byHandle[handle]
 	if !ok || !current || entry.handleID != id || handle == nil {
 		_, known := e.handleTombstones[id]
+		e.mu.Unlock()
 		return known
 	}
-	e.expireHandleLocked(handle, entry)
+	cleanup := e.expireHandleLocked(handle, entry)
+	e.mu.Unlock()
 	_ = handle.Close()
+	if cleanup != nil {
+		cleanup()
+	}
 	return true
 }
 
@@ -195,6 +200,63 @@ func (e *Entities) DetachedHandle(id native.EntityHandleID) (*world.EntityHandle
 		return nil, false
 	}
 	return handle, true
+}
+
+// RegisterDetached publishes a newly-created worldless handle. Unlike Detach,
+// no world-bound entity ID exists yet.
+func (e *Entities) RegisterDetached(handle *world.EntityHandle, cleanups ...func()) (native.EntityHandleID, bool) {
+	if handle == nil || handle.Closed() {
+		return native.EntityHandleID{}, false
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if _, exists := e.byHandle[handle]; exists {
+		return native.EntityHandleID{}, false
+	}
+	id, ok := e.nextHandleIDLocked()
+	if !ok {
+		return native.EntityHandleID{}, false
+	}
+	var cleanup func()
+	if len(cleanups) != 0 {
+		cleanup = cleanups[0]
+	}
+	e.byHandle[handle] = entityEntry{handleID: id, state: entityDetached, cleanup: cleanup}
+	e.byHandleID[id] = handle
+	return id, true
+}
+
+// EnsureHandle returns stable handle identity before an entity has reached
+// world handler registration. Provider-loaded custom entities need this from
+// EntityType.Open. Later Register promotes the same entry to active.
+func (e *Entities) EnsureHandle(handle *world.EntityHandle, cleanup func()) (native.EntityHandleID, bool) {
+	if handle == nil || handle.Closed() {
+		return native.EntityHandleID{}, false
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if entry, ok := e.byHandle[handle]; ok {
+		if !entry.handleID.Valid() {
+			var allocated bool
+			entry.handleID, allocated = e.nextHandleIDLocked()
+			if !allocated {
+				return native.EntityHandleID{}, false
+			}
+			e.byHandleID[entry.handleID] = handle
+		}
+		if entry.cleanup == nil {
+			entry.cleanup = cleanup
+		}
+		e.byHandle[handle] = entry
+		return entry.handleID, true
+	}
+	id, ok := e.nextHandleIDLocked()
+	if !ok {
+		return native.EntityHandleID{}, false
+	}
+	e.byHandle[handle] = entityEntry{handleID: id, state: entityDetached, cleanup: cleanup}
+	e.byHandleID[id] = handle
+	return id, true
 }
 
 // ResolveHandle opens a stable handle in the exact transaction passed.
@@ -347,13 +409,17 @@ func (e *Entities) unregisterHandle(handle *world.EntityHandle) {
 		return
 	}
 	e.mu.Lock()
+	var cleanup func()
 	if entry, ok := e.byHandle[handle]; ok {
-		e.expireHandleLocked(handle, entry)
+		cleanup = e.expireHandleLocked(handle, entry)
 	}
 	e.mu.Unlock()
+	if cleanup != nil {
+		cleanup()
+	}
 }
 
-func (e *Entities) expireHandleLocked(handle *world.EntityHandle, entry entityEntry) {
+func (e *Entities) expireHandleLocked(handle *world.EntityHandle, entry entityEntry) func() {
 	delete(e.byHandle, handle)
 	if entry.id.Generation != 0 {
 		delete(e.byID, entry.id)
@@ -362,4 +428,5 @@ func (e *Entities) expireHandleLocked(handle *world.EntityHandle, entry entityEn
 		delete(e.byHandleID, entry.handleID)
 		e.handleTombstones[entry.handleID] = [16]byte(handle.UUID())
 	}
+	return entry.cleanup
 }

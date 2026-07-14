@@ -607,16 +607,7 @@ func (r *Runtime) EntityTypes() ([]EntityTypeDefinition, error) {
 		}
 		definition := EntityTypeDefinition{
 			SaveID: stringView(descriptor.save_id), NetworkID: stringView(descriptor.network_id),
-			Min: nativeEntityVec3(descriptor.min), Max: nativeEntityVec3(descriptor.max),
-			TypeKey: uint64(descriptor.type_key), Family: EntityFamily(descriptor.family),
-			CallbackFlags: uint32(descriptor.callback_flags), InitialHealth: float64(descriptor.initial_health),
-			MaxHealth: float64(descriptor.max_health), Speed: float64(descriptor.speed), StateVersion: uint32(descriptor.state_version),
-		}
-		if uint32(descriptor.physics_flags)&uint32(C.DF_ENTITY_PHYSICS_ENABLED) != 0 {
-			definition.Physics = &EntityPhysics{
-				Gravity: float64(descriptor.gravity), Drag: float64(descriptor.drag),
-				DragBeforeGravity: uint32(descriptor.physics_flags)&uint32(C.DF_ENTITY_PHYSICS_DRAG_BEFORE_GRAVITY) != 0,
-			}
+			TypeKey: uint64(descriptor.type_key),
 		}
 		if !validEntityTypeDefinition(definition) {
 			return nil, fmt.Errorf("invalid native entity type %d", index)
@@ -629,31 +620,10 @@ func (r *Runtime) EntityTypes() ([]EntityTypeDefinition, error) {
 func validEntityTypeDefinition(definition EntityTypeDefinition) bool {
 	if definition.TypeKey == 0 ||
 		len(definition.SaveID) == 0 || len(definition.SaveID) > maxEntityTypeBytes || !utf8.ValidString(definition.SaveID) ||
-		len(definition.NetworkID) == 0 || len(definition.NetworkID) > maxEntityTypeBytes || !utf8.ValidString(definition.NetworkID) ||
-		!validEntityBounds(definition.Min, definition.Max) {
+		len(definition.NetworkID) == 0 || len(definition.NetworkID) > maxEntityTypeBytes || !utf8.ValidString(definition.NetworkID) {
 		return false
 	}
-	const knownCallbacks = EntityCallbackState | EntityCallbackTick | EntityCallbackHurt | EntityCallbackHeal | EntityCallbackDeath
-	if definition.CallbackFlags&^knownCallbacks != 0 || definition.CallbackFlags&EntityCallbackState == 0 && definition.StateVersion != 0 {
-		return false
-	}
-	finite := func(value float64) bool { return !math.IsNaN(value) && !math.IsInf(value, 0) }
-	if definition.Physics != nil && (!finite(definition.Physics.Gravity) || !finite(definition.Physics.Drag) || definition.Physics.Drag < 0 || definition.Physics.Drag > 1) {
-		return false
-	}
-	switch definition.Family {
-	case EntityFamilyBase:
-		return definition.CallbackFlags == 0 && definition.StateVersion == 0 && definition.Physics == nil &&
-			definition.InitialHealth == 0 && definition.MaxHealth == 0 && definition.Speed == 0
-	case EntityFamilyTicking:
-		return definition.CallbackFlags&(EntityCallbackHurt|EntityCallbackHeal|EntityCallbackDeath) == 0 &&
-			definition.InitialHealth == 0 && definition.MaxHealth == 0 && definition.Speed == 0
-	case EntityFamilyLiving:
-		return finite(definition.InitialHealth) && finite(definition.MaxHealth) && finite(definition.Speed) &&
-			definition.InitialHealth > 0 && definition.InitialHealth <= definition.MaxHealth && definition.Speed >= 0
-	default:
-		return false
-	}
+	return true
 }
 
 func validEntityBounds(minimum, maximum Vec3) bool {
@@ -673,6 +643,19 @@ func (r *Runtime) EntityAdopt(typeKey, opaque uint64) (EntityInstanceID, error) 
 	var instance C.DfEntityInstanceId
 	if status := C.bg_runtime_entity_adopt(r.ptr, C.uint64_t(typeKey), C.uint64_t(opaque), &instance); status != C.DF_STATUS_OK {
 		return 0, fmt.Errorf("adopt native entity: status %d", int32(status))
+	}
+	return EntityInstanceID(instance), nil
+}
+
+// EntityAdoptLocal routes plugin-local type identity from a direct host call
+// through the runtime's global instance table.
+func (r *Runtime) EntityAdoptLocal(plugin, typeKey, opaque uint64) (EntityInstanceID, error) {
+	if r == nil || r.ptr == nil {
+		return 0, errors.New("native runtime is closed")
+	}
+	var instance C.DfEntityInstanceId
+	if status := C.bg_runtime_entity_adopt_local(r.ptr, C.uint64_t(plugin), C.uint64_t(typeKey), C.uint64_t(opaque), &instance); status != C.DF_STATUS_OK {
+		return 0, fmt.Errorf("adopt local native entity: status %d", int32(status))
 	}
 	return EntityInstanceID(instance), nil
 }
@@ -815,6 +798,230 @@ func (r *Runtime) EntityDestroy(instance EntityInstanceID) {
 	if r != nil && r.ptr != nil && instance != 0 {
 		C.bg_runtime_entity_destroy(r.ptr, C.DfEntityInstanceId(instance))
 	}
+}
+
+func (r *Runtime) EntityDecodeNBT(typeKey uint64, data EntityCommonData, encoded []byte) (EntityInstanceID, EntityCommonData, error) {
+	if r == nil || r.ptr == nil {
+		return 0, data, errors.New("native runtime is closed")
+	}
+	if typeKey == 0 || len(encoded) > maxEntityStateBytes {
+		return 0, data, errors.New("invalid native entity decode input")
+	}
+	encodedData := C.CBytes(encoded)
+	defer C.free(encodedData)
+	var instance EntityInstanceID
+	updated, err := withNativeEntityCommon(data, func(common *C.DfEntityDataState) C.DfStatus {
+		input := (*C.DfEntityExactInput)(C.malloc(C.size_t(C.sizeof_DfEntityExactInput)))
+		state := (*C.DfEntityExactState)(C.malloc(C.size_t(C.sizeof_DfEntityExactState)))
+		if input == nil || state == nil {
+			C.free(unsafe.Pointer(input))
+			C.free(unsafe.Pointer(state))
+			return C.DF_STATUS_ERROR
+		}
+		defer C.free(unsafe.Pointer(input))
+		defer C.free(unsafe.Pointer(state))
+		*input = C.DfEntityExactInput{
+			data: common,
+			nbt:  C.DfBytesView{data: (*C.uint8_t)(encodedData), len: C.uint64_t(len(encoded))},
+		}
+		*state = C.DfEntityExactState{}
+		status := C.bg_runtime_entity_decode_nbt(r.ptr, C.uint64_t(typeKey), input, state)
+		instance = EntityInstanceID(state.instance)
+		return status
+	})
+	if err != nil || instance == 0 {
+		return 0, data, fmt.Errorf("decode native entity NBT: %w", err)
+	}
+	return instance, updated, nil
+}
+
+func (r *Runtime) EntityEncodeNBT(instance EntityInstanceID, data EntityCommonData) ([]byte, EntityCommonData, error) {
+	if r == nil || r.ptr == nil || instance == 0 {
+		return nil, data, errors.New("native runtime is closed or entity is invalid")
+	}
+	capacity := 4 << 10
+	for attempts := 0; attempts < 2; attempts++ {
+		buffer := C.malloc(C.size_t(capacity))
+		if buffer == nil {
+			return nil, data, errors.New("allocate native entity NBT")
+		}
+		var required uint64
+		updated, err := withNativeEntityCommon(data, func(common *C.DfEntityDataState) C.DfStatus {
+			input := (*C.DfEntityExactInput)(C.malloc(C.size_t(C.sizeof_DfEntityExactInput)))
+			state := (*C.DfEntityExactState)(C.malloc(C.size_t(C.sizeof_DfEntityExactState)))
+			if input == nil || state == nil {
+				C.free(unsafe.Pointer(input))
+				C.free(unsafe.Pointer(state))
+				return C.DF_STATUS_ERROR
+			}
+			defer C.free(unsafe.Pointer(input))
+			defer C.free(unsafe.Pointer(state))
+			*input = C.DfEntityExactInput{data: common}
+			*state = C.DfEntityExactState{nbt: C.DfBytesBuffer{data: (*C.uint8_t)(buffer), capacity: C.uint64_t(capacity)}}
+			status := C.bg_runtime_entity_call(r.ptr, C.DfEntityInstanceId(instance), C.uint32_t(C.DF_ENTITY_OPERATION_ENCODE_NBT), input, state)
+			required = uint64(state.nbt.len)
+			return status
+		})
+		if err == nil && required <= uint64(capacity) {
+			encoded := C.GoBytes(buffer, C.int(required))
+			C.free(buffer)
+			return encoded, updated, nil
+		}
+		C.free(buffer)
+		if required <= uint64(capacity) || required > maxEntityStateBytes {
+			return nil, data, fmt.Errorf("encode native entity NBT: %w", err)
+		}
+		capacity = int(required)
+	}
+	return nil, data, errors.New("native entity NBT did not fit")
+}
+
+func (r *Runtime) EntityOpen(instance EntityInstanceID, invocation InvocationID, handle EntityHandleID, data EntityCommonData) (EntityOpenID, uint32, EntityCommonData, error) {
+	var open EntityOpenID
+	var capabilities uint32
+	updated, err := r.entityExactCall(EntityOpenID(instance), uint32(C.DF_ENTITY_OPERATION_OPEN), invocation, handle, data, func(state *C.DfEntityExactState) {
+		open = EntityOpenID(state.instance)
+		capabilities = uint32(state.capabilities)
+	})
+	if err != nil || open == 0 || capabilities&^EntityCapabilityTicker != 0 {
+		return 0, 0, data, fmt.Errorf("open native entity: %w", err)
+	}
+	return open, capabilities, updated, nil
+}
+
+func (r *Runtime) EntityBBox(open EntityOpenID, invocation InvocationID, data EntityCommonData) (BBox, EntityCommonData, error) {
+	var box BBox
+	updated, err := r.entityExactCall(open, uint32(C.DF_ENTITY_OPERATION_BBOX), invocation, EntityHandleID{}, data, func(state *C.DfEntityExactState) {
+		box = BBox{Min: nativeEntityVec3(state.bbox.min), Max: nativeEntityVec3(state.bbox.max)}
+	})
+	return box, updated, err
+}
+
+func (r *Runtime) EntityClose(open EntityOpenID, invocation InvocationID, data EntityCommonData) (EntityCommonData, error) {
+	return r.entityExactCall(open, uint32(C.DF_ENTITY_OPERATION_CLOSE), invocation, EntityHandleID{}, data, nil)
+}
+
+func (r *Runtime) EntityH(open EntityOpenID, invocation InvocationID, data EntityCommonData) (EntityHandleID, EntityCommonData, error) {
+	var handle EntityHandleID
+	updated, err := r.entityExactCall(open, uint32(C.DF_ENTITY_OPERATION_HANDLE), invocation, EntityHandleID{}, data, func(state *C.DfEntityExactState) {
+		handle = entityHandleID(state.handle)
+	})
+	return handle, updated, err
+}
+
+func (r *Runtime) EntityPosition(open EntityOpenID, invocation InvocationID, data EntityCommonData) (Vec3, EntityCommonData, error) {
+	var position Vec3
+	updated, err := r.entityExactCall(open, uint32(C.DF_ENTITY_OPERATION_POSITION), invocation, EntityHandleID{}, data, func(state *C.DfEntityExactState) {
+		position = nativeEntityVec3(state.position)
+	})
+	return position, updated, err
+}
+
+func (r *Runtime) EntityRotation(open EntityOpenID, invocation InvocationID, data EntityCommonData) (Rotation, EntityCommonData, error) {
+	var rotation Rotation
+	updated, err := r.entityExactCall(open, uint32(C.DF_ENTITY_OPERATION_ROTATION), invocation, EntityHandleID{}, data, func(state *C.DfEntityExactState) {
+		rotation = Rotation{Yaw: float64(state.rotation.yaw), Pitch: float64(state.rotation.pitch)}
+	})
+	return rotation, updated, err
+}
+
+func (r *Runtime) EntityTickExact(open EntityOpenID, invocation InvocationID, current int64, data EntityCommonData) (EntityCommonData, error) {
+	return r.entityExactCallCurrent(open, uint32(C.DF_ENTITY_OPERATION_TICK_EXACT), invocation, current, data)
+}
+
+func (r *Runtime) EntityReleaseOpen(open EntityOpenID) {
+	if r != nil && r.ptr != nil && open != 0 {
+		_ = C.bg_runtime_entity_call(r.ptr, C.DfEntityInstanceId(open), C.uint32_t(C.DF_ENTITY_OPERATION_RELEASE_OPEN), nil, nil)
+	}
+}
+
+func (r *Runtime) entityExactCall(
+	identity EntityOpenID,
+	operation uint32,
+	invocation InvocationID,
+	handle EntityHandleID,
+	data EntityCommonData,
+	read func(*C.DfEntityExactState),
+) (EntityCommonData, error) {
+	return r.entityExactCallWith(identity, operation, invocation, handle, 0, data, read)
+}
+
+func (r *Runtime) entityExactCallCurrent(identity EntityOpenID, operation uint32, invocation InvocationID, current int64, data EntityCommonData) (EntityCommonData, error) {
+	return r.entityExactCallWith(identity, operation, invocation, EntityHandleID{}, current, data, nil)
+}
+
+func (r *Runtime) entityExactCallWith(
+	identity EntityOpenID,
+	operation uint32,
+	invocation InvocationID,
+	handle EntityHandleID,
+	current int64,
+	data EntityCommonData,
+	read func(*C.DfEntityExactState),
+) (EntityCommonData, error) {
+	if r == nil || r.ptr == nil || identity == 0 || invocation == 0 {
+		return data, errors.New("native runtime, entity, or invocation is invalid")
+	}
+	return withNativeEntityCommon(data, func(common *C.DfEntityDataState) C.DfStatus {
+		input := (*C.DfEntityExactInput)(C.malloc(C.size_t(C.sizeof_DfEntityExactInput)))
+		state := (*C.DfEntityExactState)(C.malloc(C.size_t(C.sizeof_DfEntityExactState)))
+		if input == nil || state == nil {
+			C.free(unsafe.Pointer(input))
+			C.free(unsafe.Pointer(state))
+			return C.DF_STATUS_ERROR
+		}
+		defer C.free(unsafe.Pointer(input))
+		defer C.free(unsafe.Pointer(state))
+		*input = C.DfEntityExactInput{invocation: C.DfInvocationId(invocation), data: common, current: C.int64_t(current)}
+		input.handle = cEntityHandleID(handle)
+		*state = C.DfEntityExactState{}
+		status := C.bg_runtime_entity_call(r.ptr, C.DfEntityInstanceId(identity), C.uint32_t(operation), input, state)
+		if status == C.DF_STATUS_OK && read != nil {
+			read(state)
+		}
+		return status
+	})
+}
+
+func withNativeEntityCommon(data EntityCommonData, call func(*C.DfEntityDataState) C.DfStatus) (EntityCommonData, error) {
+	if len(data.Name) > maxEntityTagBytes || !utf8.ValidString(data.Name) {
+		return data, errors.New("invalid native entity name")
+	}
+	name := C.malloc(C.size_t(maxEntityTagBytes))
+	if name == nil {
+		return data, errors.New("allocate native entity name")
+	}
+	defer C.free(name)
+	common := C.malloc(C.size_t(C.sizeof_DfEntityDataState))
+	if common == nil {
+		return data, errors.New("allocate native entity data")
+	}
+	defer C.free(common)
+	copy(unsafe.Slice((*byte)(name), maxEntityTagBytes), data.Name)
+	state := (*C.DfEntityDataState)(common)
+	*state = C.DfEntityDataState{
+		position:                  C.DfVec3{x: C.double(data.Position.X), y: C.double(data.Position.Y), z: C.double(data.Position.Z)},
+		velocity:                  C.DfVec3{x: C.double(data.Velocity.X), y: C.double(data.Velocity.Y), z: C.double(data.Velocity.Z)},
+		rotation:                  C.DfRotation{yaw: C.double(data.Rotation.Yaw), pitch: C.double(data.Rotation.Pitch)},
+		name:                      C.DfStringBuffer{data: (*C.uint8_t)(name), len: C.uint64_t(len(data.Name)), capacity: C.uint64_t(maxEntityTagBytes)},
+		fire_duration_nanoseconds: C.int64_t(data.FireDuration), age_nanoseconds: C.int64_t(data.Age),
+	}
+	if status := call(state); status != C.DF_STATUS_OK {
+		return data, fmt.Errorf("native entity callback status %d", int32(status))
+	}
+	if uint64(state.name.len) > maxEntityTagBytes {
+		return data, errors.New("native entity name is too large")
+	}
+	updated := EntityCommonData{
+		Position: nativeEntityVec3(state.position), Velocity: nativeEntityVec3(state.velocity),
+		Rotation:     Rotation{Yaw: float64(state.rotation.yaw), Pitch: float64(state.rotation.pitch)},
+		Name:         string(unsafe.Slice((*byte)(name), int(state.name.len))),
+		FireDuration: time.Duration(state.fire_duration_nanoseconds), Age: time.Duration(state.age_nanoseconds),
+	}
+	if !utf8.ValidString(updated.Name) {
+		return data, errors.New("native entity returned invalid name")
+	}
+	return updated, nil
 }
 
 func (r *Runtime) Commands() ([]Command, error) {

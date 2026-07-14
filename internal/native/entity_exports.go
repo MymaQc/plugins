@@ -6,6 +6,7 @@ package native
 import "C"
 
 import (
+	"time"
 	"unicode/utf8"
 )
 
@@ -15,6 +16,11 @@ const (
 	maxEntityTypeBytes = 256
 	maxPlayerNameBytes = 256
 )
+
+type entityConstructionHost interface {
+	NewEntity(EntitySpawnOptions) (EntityHandleID, bool)
+	EntityHandleType(EntityHandleID) (string, bool)
+}
 
 //export bg_go_world_current
 func bg_go_world_current(context C.uint64_t, invocation C.DfInvocationId, output *C.DfWorldId) C.DfStatus {
@@ -99,6 +105,56 @@ func bg_go_entity_handle(context C.uint64_t, invocation C.DfInvocationId, entity
 		return C.DF_STATUS_ERROR
 	}
 	*output = cEntityHandleID(id)
+	return C.DF_STATUS_OK
+}
+
+//export bg_go_entity_new
+func bg_go_entity_new(context C.uint64_t, view *C.DfEntityNewView, output *C.DfEntityHandleId) C.DfStatus {
+	host, ok := resolveHost(uint64(context))
+	construction, supported := host.(entityConstructionHost)
+	if !ok || !supported || view == nil || output == nil {
+		return C.DF_STATUS_ERROR
+	}
+	entityType, validType := copyWorldBytes(view.entity_type, maxEntityTypeBytes)
+	nameTag, validName := copyWorldBytes(view.options.name_tag, maxEntityTagBytes)
+	if !validType || !validName || len(entityType) == 0 || !utf8.Valid(entityType) || !utf8.Valid(nameTag) ||
+		view.plugin == 0 || view.local_type == 0 || view.opaque == 0 {
+		return C.DF_STATUS_ERROR
+	}
+	value := EntitySpawnOptions{
+		Position: nativeEntityVec3(view.options.position), Velocity: nativeEntityVec3(view.options.velocity),
+		Rotation: Rotation{Yaw: float64(view.options.rotation.yaw), Pitch: float64(view.options.rotation.pitch)},
+		NameTag:  string(nameTag), Type: string(entityType), Plugin: uint64(view.plugin),
+		LocalType: uint64(view.local_type), Opaque: uint64(view.opaque),
+		FireDuration: time.Duration(view.fire_duration_nanoseconds), Age: time.Duration(view.age_nanoseconds),
+	}
+	for index := range value.ID {
+		value.ID[index] = byte(view.id.bytes[index])
+	}
+	handle, ok := construction.NewEntity(value)
+	if !ok || !handle.Valid() {
+		return C.DF_STATUS_ERROR
+	}
+	*output = cEntityHandleID(handle)
+	return C.DF_STATUS_OK
+}
+
+//export bg_go_entity_handle_type
+func bg_go_entity_handle_type(context C.uint64_t, handle C.DfEntityHandleId, output *C.DfStringBuffer) C.DfStatus {
+	host, ok := resolveHost(uint64(context))
+	construction, supported := host.(entityConstructionHost)
+	if !ok || !supported || output == nil {
+		return C.DF_STATUS_ERROR
+	}
+	entityType, ok := construction.EntityHandleType(entityHandleID(handle))
+	if !ok || len(entityType) == 0 || len(entityType) > maxEntityTypeBytes || !utf8.ValidString(entityType) {
+		return C.DF_STATUS_ERROR
+	}
+	if uint64(output.capacity) < uint64(len(entityType)) || output.data == nil {
+		output.len = C.uint64_t(len(entityType))
+		return C.DF_STATUS_ERROR
+	}
+	writeSkinBuffer(output, []byte(entityType))
 	return C.DF_STATUS_OK
 }
 

@@ -49,7 +49,8 @@ public sealed class KitchenSink : Plugin
             new KitchenWorld(this),
             new KitchenEntities(),
             new KitchenServer(this),
-            new KitchenHandle()));
+            new KitchenHandle(),
+            new KitchenCustomEntity()));
         Console.WriteLine("kitchen-sink enabled");
     }
 
@@ -743,6 +744,54 @@ public sealed class KitchenSink : Plugin
                 foundBefore && resolvedBefore is not null ? "true" : "false",
                 foundDetached ? "true" : "false",
                 foundAfter && resolvedAfter is not null ? "true" : "false",
+                removed.Closed() ? "true" : "false");
+        }
+    }
+
+    internal sealed class KitchenCustomEntity : Cmd.Runnable
+    {
+        [Cmd.Tag("custom-entity")]
+        public Cmd.SubCommand CustomEntity;
+
+        public void Run(Cmd.Source source, Cmd.Output output, World.Tx? tx)
+        {
+            if (tx is null)
+            {
+                output.Error("A world transaction is required.");
+                return;
+            }
+            var entityType = new KitchenMarkerType();
+            var uuid = Guid.Parse("8e6c546c-0ecf-48f7-99e2-df45473a3604");
+            var position = source.Position();
+            var handle = new World.EntitySpawnOpts
+            {
+                Position = position,
+                Rotation = new Rotation(45, -10),
+                Velocity = new Vector3(0.25, 0, 0),
+                ID = uuid,
+                NameTag = "before config",
+            }.New(entityType, new KitchenMarkerConfig(7));
+            var typeOK = entityType.EncodeEntity() == "bedrock_gophers:kitchen_marker";
+            var uuidOK = handle.UUID() == uuid;
+            var (_, foundDetached) = handle.Entity(tx);
+            var added = tx.AddEntity(handle);
+            var expected = new Vector3(position.X, position.Y + 1, position.Z);
+            var addedOK = added is KitchenMarker && added.Position() == expected &&
+                          entityType.BBox(added) == Cube.Box(-0.25, 0, -0.25, 0.25, 0.75, 0.25);
+            var removed = tx.RemoveEntity(added);
+            var (_, foundRemoved) = removed.Entity(tx);
+            var moved = new Vector3(expected.X + 1, expected.Y, expected.Z);
+            var readded = tx.AddEntityAt(removed, moved);
+            var readdedOK = readded.Position() == moved && readded.H().Equals(removed);
+            tx.RemoveEntity(readded).Close();
+            output.Printf(
+                "type={0}, uuid={1}, detached={2}, added={3}, removed={4}, readded={5}, closed={6}",
+                typeOK ? entityType.EncodeEntity() : "invalid",
+                uuidOK ? "true" : "false",
+                !foundDetached ? "true" : "false",
+                addedOK ? "true" : "false",
+                !foundRemoved ? "true" : "false",
+                readdedOK ? "true" : "false",
                 removed.Closed() ? "true" : "false");
         }
     }
@@ -1517,5 +1566,81 @@ public sealed class KitchenSink : Plugin
         public bool AllowsInteraction() => true;
         public bool Visible() => true;
         public bool InstantPortalTravel() => false;
+    }
+
+    internal sealed class KitchenMarkerType : World.EntityType
+    {
+        public World.Entity Open(World.Tx tx, World.EntityHandle handle, World.EntityData data) =>
+            new KitchenMarker(tx, handle, data);
+
+        public string EncodeEntity() => "bedrock_gophers:kitchen_marker";
+
+        public Cube.BBox BBox(World.Entity entity)
+        {
+            var value = entity is KitchenMarker marker && marker.Data.Data is KitchenMarkerData state
+                ? state.Value
+                : 7;
+            var height = 0.5 + value / 28.0;
+            return Cube.Box(-0.25, 0, -0.25, 0.25, height, 0.25);
+        }
+
+        public void DecodeNBT(Dictionary<string, object?> values, World.EntityData data)
+        {
+            var state = new KitchenMarkerData(
+                values.TryGetValue("KitchenValue", out var raw) && raw is int value ? value : 0);
+            if (values.TryGetValue("KitchenTicks", out raw) && raw is int ticks) state.Ticks = ticks;
+            data.Data = state;
+        }
+
+        public Dictionary<string, object?> EncodeNBT(World.EntityData data) => new()
+        {
+            ["KitchenValue"] = data.Data is KitchenMarkerData state ? state.Value : 0,
+            ["KitchenTicks"] = data.Data is KitchenMarkerData ticked ? ticked.Ticks : 0,
+        };
+    }
+
+    internal sealed class KitchenMarkerConfig(int value) : World.EntityConfig
+    {
+        public void Apply(World.EntityData data)
+        {
+            data.Pos = new Vector3(data.Pos.X, data.Pos.Y + 1, data.Pos.Z);
+            data.Name = "Kitchen marker";
+            data.FireDuration = TimeSpan.FromSeconds(2);
+            data.Age = TimeSpan.FromSeconds(3);
+            data.Data = new KitchenMarkerData(value);
+        }
+    }
+
+    internal sealed class KitchenMarkerData(int value)
+    {
+        internal int Value { get; } = value;
+        internal int Ticks { get; set; }
+    }
+
+    internal sealed class KitchenMarker : World.TickerEntity
+    {
+        private readonly World.Tx _tx;
+        private readonly World.EntityHandle _handle;
+
+        internal KitchenMarker(World.Tx tx, World.EntityHandle handle, World.EntityData data)
+        {
+            _tx = tx;
+            _handle = handle;
+            Data = data;
+        }
+
+        internal World.EntityData Data { get; }
+
+        public void Close() => _tx.RemoveEntity(this).Close();
+        public World.EntityHandle H() => _handle;
+        public Vector3 Position() => Data.Pos;
+        public Rotation Rotation() => Data.Rot;
+
+        public void Tick(World.Tx tx, long current)
+        {
+            if (Data.Data is KitchenMarkerData state) state.Ticks++;
+            Data.Age += TimeSpan.FromMilliseconds(50);
+            _ = (tx, current);
+        }
     }
 }

@@ -34,12 +34,27 @@ public sealed partial class World
 
     internal static Entity HostEntityFrom(ulong invocation, EntityId id) => new HostEntity(invocation, id);
 
-    internal static EntityId EntityIdOf(Entity entity) => entity switch
+    internal static EntityId EntityIdOf(Entity entity)
     {
-        HostEntity host => host.Id,
-        Player player => player.NativeEntityId(),
-        _ => throw new ArgumentException("entity is not owned by Dragonfly", nameof(entity)),
-    };
+        if (TryEntityIdOf(entity, out var id)) return id;
+        throw new ArgumentException("entity is not owned by Dragonfly", nameof(entity));
+    }
+
+    internal static bool TryEntityIdOf(Entity entity, out EntityId id)
+    {
+        switch (entity)
+        {
+            case HostEntity host:
+                id = host.Id;
+                return true;
+            case Player player:
+                id = player.NativeEntityId();
+                return true;
+            default:
+                id = default;
+                return false;
+        }
+    }
 
     internal static unsafe bool SameId(EntityId left, EntityId right)
     {

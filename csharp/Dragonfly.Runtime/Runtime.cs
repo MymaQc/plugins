@@ -38,15 +38,50 @@ internal readonly unsafe struct RuntimeCommand(
     internal CommandDescriptor Descriptor { get; } = descriptor;
 }
 
+internal readonly unsafe struct RuntimeEntityType(
+    PluginLibrary plugin,
+    ulong localType,
+    EntityTypeDescriptorV2 descriptor)
+{
+    internal PluginLibrary Plugin { get; } = plugin;
+    internal ulong LocalType { get; } = localType;
+    internal EntityTypeDescriptorV2 Descriptor { get; } = descriptor;
+}
+
+internal readonly unsafe struct RuntimeEntityInstance(
+    PluginLibrary plugin,
+    ulong localType,
+    ulong localInstance)
+{
+    internal PluginLibrary Plugin { get; } = plugin;
+    internal ulong LocalType { get; } = localType;
+    internal ulong LocalInstance { get; } = localInstance;
+}
+
+internal readonly unsafe struct RuntimeEntityOpen(
+    PluginLibrary plugin,
+    ulong localType,
+    ulong localOpen)
+{
+    internal PluginLibrary Plugin { get; } = plugin;
+    internal ulong LocalType { get; } = localType;
+    internal ulong LocalOpen { get; } = localOpen;
+}
+
 internal unsafe sealed class RuntimeState : IDisposable
 {
     internal readonly object Gate = new();
     internal readonly List<PluginLibrary> Plugins = [];
     internal readonly List<RuntimeCommand> Commands = [];
+    internal readonly List<RuntimeEntityType> EntityTypes = [];
+    internal readonly Dictionary<ulong, RuntimeEntityInstance> EntityInstances = [];
+    internal readonly Dictionary<ulong, RuntimeEntityOpen> EntityOpens = [];
     internal ulong Subscriptions;
     private volatile bool _running;
     private volatile bool _enabling;
     private int _activeCalls;
+    private long _nextEntityInstance;
+    private long _nextEntityOpen;
 
     internal static RuntimeState Load(string directory, void* host)
     {
@@ -60,6 +95,7 @@ internal unsafe sealed class RuntimeState : IDisposable
         {
             foreach (var path in Directory.EnumerateFiles(directory, NativeExtension()).Order())
                 runtime.Add(path, host);
+            runtime.PublishEntityTypes();
             return runtime;
         }
         catch
@@ -75,7 +111,7 @@ internal unsafe sealed class RuntimeState : IDisposable
         // leaves those handlers pointing into unmapped code, so the process owns every successful
         // load until exit even when validation or later server startup fails.
         var library = NativeLibrary.Load(path);
-        var entry = (delegate* unmanaged[Cdecl]<PluginApi*>)NativeLibrary.GetExport(library, "df_plugin_entry_v8");
+        var entry = (delegate* unmanaged[Cdecl]<PluginApi*>)NativeLibrary.GetExport(library, "df_plugin_entry_v9");
         var api = entry();
         if (api is null || api->Header.Version != Abi.PluginVersion || api->Header.Size < sizeof(PluginApi))
             throw new InvalidOperationException($"{path} has an incompatible plugin API");
@@ -96,6 +132,35 @@ internal unsafe sealed class RuntimeState : IDisposable
         }
         Plugins.Add(new PluginLibrary { Api = api, Instance = instance });
         Subscriptions |= api->Header.Subscriptions;
+    }
+
+    private void PublishEntityTypes()
+    {
+        var identifiers = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var plugin in Plugins)
+        {
+            if (plugin.Api->EntityTypeCount is null) continue;
+            var count = ((delegate* unmanaged[Cdecl]<void*, ulong>)plugin.Api->EntityTypeCount)(plugin.Instance);
+            if (count > 1 << 16)
+                throw new InvalidOperationException($"plugin {Utf8(plugin.Api->Id)} returned too many entity types");
+            if (count != 0 && (plugin.Api->EntityTypeAt is null || plugin.Api->HandleEntity is null))
+                throw new InvalidOperationException($"plugin {Utf8(plugin.Api->Id)} has incomplete entity callbacks");
+            var localTypes = new HashSet<ulong>();
+            for (var index = 0UL; index < count; index++)
+            {
+                EntityTypeDescriptorV2 descriptor;
+                var read = (delegate* unmanaged[Cdecl]<void*, ulong, EntityTypeDescriptorV2*, int>)plugin.Api->EntityTypeAt;
+                if (read(plugin.Instance, index, &descriptor) != Abi.Ok || descriptor.TypeKey == 0 ||
+                    descriptor.SaveId.Data is null || descriptor.SaveId.Length == 0 ||
+                    descriptor.NetworkId.Data is null || descriptor.NetworkId.Length == 0 ||
+                    !localTypes.Add(descriptor.TypeKey))
+                    throw new InvalidOperationException($"plugin {Utf8(plugin.Api->Id)} returned an invalid entity type");
+                var identifier = Utf8(descriptor.SaveId);
+                if (!identifiers.Add(identifier))
+                    throw new InvalidOperationException($"duplicate entity type {identifier}");
+                EntityTypes.Add(new RuntimeEntityType(plugin, descriptor.TypeKey, descriptor));
+            }
+        }
     }
 
     internal void Enable(StringBuffer* error)
@@ -180,6 +245,177 @@ internal unsafe sealed class RuntimeState : IDisposable
     internal ulong CommandCount()
     {
         lock (Gate) return _running ? (ulong)Commands.Count : 0;
+    }
+
+    internal ulong EntityTypeCount()
+    {
+        lock (Gate) return (ulong)EntityTypes.Count;
+    }
+
+    internal int EntityTypeAt(ulong index, EntityTypeDescriptorV2* output)
+    {
+        if (output is null) return Abi.Error;
+        lock (Gate)
+        {
+            if (index >= (ulong)EntityTypes.Count) return Abi.Error;
+            *output = EntityTypes[checked((int)index)].Descriptor;
+            output->TypeKey = index + 1;
+            return Abi.Ok;
+        }
+    }
+
+    internal int EntityAdopt(ulong type, ulong opaque, ulong* output)
+    {
+        if (type == 0 || output is null) return Abi.Error;
+        RuntimeEntityType route;
+        lock (Gate)
+        {
+            if (type > (ulong)EntityTypes.Count) return Abi.Error;
+            route = EntityTypes[checked((int)type - 1)];
+        }
+        return Adopt(route, opaque, output);
+    }
+
+    internal int EntityAdoptLocal(ulong pluginToken, ulong localType, ulong opaque, ulong* output)
+    {
+        if (pluginToken == 0 || localType == 0 || output is null) return Abi.Error;
+        RuntimeEntityType route;
+        lock (Gate)
+        {
+            var found = EntityTypes.FirstOrDefault(candidate =>
+                (ulong)(nuint)candidate.Plugin.Api == pluginToken && candidate.LocalType == localType);
+            if (found.Plugin is null) return Abi.Error;
+            route = found;
+        }
+        return Adopt(route, opaque, output);
+    }
+
+    private int Adopt(RuntimeEntityType route, ulong opaque, ulong* output)
+    {
+        Interlocked.Increment(ref _activeCalls);
+        try
+        {
+            ulong localInstance = 0;
+            var handle = (delegate* unmanaged[Cdecl]<void*, ulong, uint, ulong, void*, void*, int>)
+                route.Plugin.Api->HandleEntity;
+            if (handle(route.Plugin.Instance, route.LocalType, Abi.EntityOperationAdopt, 0, &opaque, &localInstance) != Abi.Ok ||
+                localInstance == 0) return Abi.Error;
+            var raw = Interlocked.Increment(ref _nextEntityInstance);
+            if (raw <= 0)
+            {
+                _ = handle(route.Plugin.Instance, route.LocalType, Abi.EntityOperationDestroy, localInstance, null, null);
+                return Abi.Error;
+            }
+            var instance = checked((ulong)raw);
+            lock (Gate) EntityInstances.Add(instance, new RuntimeEntityInstance(route.Plugin, route.LocalType, localInstance));
+            *output = instance;
+            return Abi.Ok;
+        }
+        finally { Interlocked.Decrement(ref _activeCalls); }
+    }
+
+    internal int EntityDestroy(ulong instance)
+    {
+        RuntimeEntityInstance route;
+        lock (Gate)
+        {
+            if (!EntityInstances.Remove(instance, out route)) return Abi.Error;
+        }
+        Interlocked.Increment(ref _activeCalls);
+        try
+        {
+            var handle = (delegate* unmanaged[Cdecl]<void*, ulong, uint, ulong, void*, void*, int>)
+                route.Plugin.Api->HandleEntity;
+            return handle(route.Plugin.Instance, 0, Abi.EntityOperationDestroy, route.LocalInstance, null, null);
+        }
+        finally { Interlocked.Decrement(ref _activeCalls); }
+    }
+
+    internal int EntityDecodeNbt(ulong type, EntityExactInput* input, EntityExactState* state)
+    {
+        if (type == 0 || input is null || state is null) return Abi.Error;
+        RuntimeEntityType route;
+        lock (Gate)
+        {
+            if (type > (ulong)EntityTypes.Count) return Abi.Error;
+            route = EntityTypes[checked((int)type - 1)];
+        }
+        Interlocked.Increment(ref _activeCalls);
+        try
+        {
+            var handle = (delegate* unmanaged[Cdecl]<void*, ulong, uint, ulong, void*, void*, int>)
+                route.Plugin.Api->HandleEntity;
+            state->Instance = 0;
+            if (handle(route.Plugin.Instance, route.LocalType, Abi.EntityOperationDecodeNbt, 0, input, state) != Abi.Ok ||
+                state->Instance == 0) return Abi.Error;
+            var local = state->Instance;
+            var raw = Interlocked.Increment(ref _nextEntityInstance);
+            if (raw <= 0)
+            {
+                _ = handle(route.Plugin.Instance, route.LocalType, Abi.EntityOperationDestroy, local, null, null);
+                return Abi.Error;
+            }
+            var global = checked((ulong)raw);
+            lock (Gate) EntityInstances.Add(global, new RuntimeEntityInstance(route.Plugin, route.LocalType, local));
+            state->Instance = global;
+            return Abi.Ok;
+        }
+        finally { Interlocked.Decrement(ref _activeCalls); }
+    }
+
+    internal int EntityCall(ulong identity, uint operation, EntityExactInput* input, EntityExactState* state)
+    {
+        if (identity == 0) return Abi.Error;
+        if (operation == Abi.EntityOperationEncodeNbt || operation == Abi.EntityOperationOpen)
+        {
+            RuntimeEntityInstance route;
+            lock (Gate)
+            {
+                if (!EntityInstances.TryGetValue(identity, out route)) return Abi.Error;
+            }
+            var result = CallEntity(route.Plugin, route.LocalType, operation, route.LocalInstance, input, state);
+            if (result != Abi.Ok || operation != Abi.EntityOperationOpen) return result;
+            if (state is null || state->Instance == 0) return Abi.Error;
+            var localOpen = state->Instance;
+            var raw = Interlocked.Increment(ref _nextEntityOpen);
+            if (raw <= 0)
+            {
+                _ = CallEntity(route.Plugin, route.LocalType, Abi.EntityOperationReleaseOpen, localOpen, null, null);
+                return Abi.Error;
+            }
+            var globalOpen = checked((ulong)raw);
+            lock (Gate) EntityOpens.Add(globalOpen, new RuntimeEntityOpen(route.Plugin, route.LocalType, localOpen));
+            state->Instance = globalOpen;
+            return Abi.Ok;
+        }
+
+        RuntimeEntityOpen open;
+        lock (Gate)
+        {
+            if (operation == Abi.EntityOperationReleaseOpen)
+            {
+                if (!EntityOpens.Remove(identity, out open)) return Abi.Error;
+            }
+            else if (!EntityOpens.TryGetValue(identity, out open)) return Abi.Error;
+        }
+        return CallEntity(open.Plugin, open.LocalType, operation, open.LocalOpen, input, state);
+    }
+
+    private int CallEntity(
+        PluginLibrary plugin,
+        ulong localType,
+        uint operation,
+        ulong localIdentity,
+        EntityExactInput* input,
+        EntityExactState* state)
+    {
+        Interlocked.Increment(ref _activeCalls);
+        try
+        {
+            var handle = (delegate* unmanaged[Cdecl]<void*, ulong, uint, ulong, void*, void*, int>)plugin.Api->HandleEntity;
+            return handle(plugin.Instance, localType, operation, localIdentity, input, state);
+        }
+        finally { Interlocked.Decrement(ref _activeCalls); }
     }
 
     internal int CommandAt(ulong index, CommandDescriptor* output)
@@ -287,8 +523,12 @@ internal unsafe sealed class RuntimeState : IDisposable
     public void Dispose()
     {
         Disable();
+        foreach (var open in EntityOpens.Keys.ToArray())
+            _ = EntityCall(open, Abi.EntityOperationReleaseOpen, null, null);
+        foreach (var instance in EntityInstances.Keys.ToArray()) _ = EntityDestroy(instance);
         for (var index = Plugins.Count - 1; index >= 0; index--) Plugins[index].Dispose();
         Commands.Clear();
+        EntityTypes.Clear();
         Plugins.Clear();
     }
 
@@ -352,13 +592,37 @@ public static unsafe class Exports
     public static ulong Subscriptions(void* runtime) => TryState(runtime)?.Subscriptions ?? 0;
 
     [UnmanagedCallersOnly(EntryPoint = "df_runtime_entity_type_count", CallConvs = [typeof(CallConvCdecl)])]
-    public static ulong EntityTypeCount(void* runtime) => 0;
+    public static ulong EntityTypeCount(void* runtime)
+    {
+        try { return State(runtime).EntityTypeCount(); }
+        catch { return 0; }
+    }
 
     [UnmanagedCallersOnly(EntryPoint = "df_runtime_entity_type_at", CallConvs = [typeof(CallConvCdecl)])]
-    public static int EntityTypeAt(void* runtime, ulong index, void* output) => Abi.Error;
+    public static int EntityTypeAt(void* runtime, ulong index, void* output)
+    {
+        try { return State(runtime).EntityTypeAt(index, (EntityTypeDescriptorV2*)output); }
+        catch { return Abi.Error; }
+    }
 
     [UnmanagedCallersOnly(EntryPoint = "df_runtime_entity_adopt", CallConvs = [typeof(CallConvCdecl)])]
-    public static int EntityAdopt(void* runtime, ulong type, ulong opaque, ulong* output) => Abi.Error;
+    public static int EntityAdopt(void* runtime, ulong type, ulong opaque, ulong* output)
+    {
+        try { return State(runtime).EntityAdopt(type, opaque, output); }
+        catch { return Abi.Error; }
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "df_runtime_entity_adopt_local", CallConvs = [typeof(CallConvCdecl)])]
+    public static int EntityAdoptLocal(
+        void* runtime,
+        ulong plugin,
+        ulong type,
+        ulong opaque,
+        ulong* output)
+    {
+        try { return State(runtime).EntityAdoptLocal(plugin, type, opaque, output); }
+        catch { return Abi.Error; }
+    }
 
     [UnmanagedCallersOnly(EntryPoint = "df_runtime_entity_load", CallConvs = [typeof(CallConvCdecl)])]
     public static int EntityLoad(void* runtime, ulong type, void* input, ulong* output) => Abi.Error;
@@ -379,7 +643,30 @@ public static unsafe class Exports
     public static int EntityDeath(void* runtime, ulong instance, void* input, void* state) => Abi.Error;
 
     [UnmanagedCallersOnly(EntryPoint = "df_runtime_entity_destroy", CallConvs = [typeof(CallConvCdecl)])]
-    public static int EntityDestroy(void* runtime, ulong instance) => Abi.Error;
+    public static int EntityDestroy(void* runtime, ulong instance)
+    {
+        try { return State(runtime).EntityDestroy(instance); }
+        catch { return Abi.Error; }
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "df_runtime_entity_decode_nbt", CallConvs = [typeof(CallConvCdecl)])]
+    public static int EntityDecodeNbt(void* runtime, ulong type, EntityExactInput* input, EntityExactState* state)
+    {
+        try { return State(runtime).EntityDecodeNbt(type, input, state); }
+        catch { return Abi.Error; }
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "df_runtime_entity_call", CallConvs = [typeof(CallConvCdecl)])]
+    public static int EntityCall(
+        void* runtime,
+        ulong identity,
+        uint operation,
+        EntityExactInput* input,
+        EntityExactState* state)
+    {
+        try { return State(runtime).EntityCall(identity, operation, input, state); }
+        catch { return Abi.Error; }
+    }
 
     [UnmanagedCallersOnly(EntryPoint = "df_runtime_command_count", CallConvs = [typeof(CallConvCdecl)])]
     public static ulong CommandCount(void* runtime)

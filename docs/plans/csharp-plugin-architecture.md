@@ -202,12 +202,19 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    resolves them through `world.BlockByName`; failed names or state hashes return `(null, false)`.
    This is the dynamic block path needed by VAP-style arena data, while generated concrete block
    types remain the normal compile-time path.
+   ABI 44 and plugin ABI 9 add AST-generated `EntitySpawnOpts`, `EntityType`, `EntityConfig`,
+   `EntityData`, and `TickerEntity`. `EntitySpawnOpts.New` creates a worldless Dragonfly handle;
+   `Tx.AddEntity`, `RemoveEntity`, and `AddEntityAt` preserve that handle across a fresh world-bound
+   identity. Each Dragonfly `EntityType.Open` call creates the plugin's actual C# entity object for
+   that transaction. `BBox`, `Close`, `H`, `Position`, `Rotation`, and `TickerEntity.Tick` dispatch
+   to it directly, while `DecodeNBT` and `EncodeNBT` persist the plugin-owned `EntityData.Data`.
+   The transaction defers release of each open C# view until Dragonfly finishes the transaction.
+   There is one exact proxy path; the abandoned family/callback/physics entity DSL is removed.
    The sound slice AST-generates all 87 concrete `server/world/sound` structs as `Sound.*` values
    implementing `World.Sound`. `HandleSound` materialises their exported bool, scalar, block, item,
    liquid, instrument, disc, horn, pitch, and stage fields. Bucket sounds preserve the exact typed
    liquid block state rather than reducing it to a Minecraft identifier or liquid-kind enum.
-   Next entity slices add `EntitySpawnOpts`, `EntityType`, `EntityConfig`, and the
-   remaining `entity.Ent` capabilities and transaction methods.
+   Later entity slices add the remaining concrete `entity.Ent` capabilities and transaction methods.
 9. Convert practice-core and expand parity tests against Dragonfly.
 
 ## FFA parity
@@ -224,11 +231,11 @@ online-player resolution possible without a public manager abstraction. Player-b
 entity-use targets are concrete `Player` values, so killer inventory inspection and refill are
 available too. Functional Nodebuff and Sumo FFA are therefore implementable with the current API.
 
-Remaining raw-Dragonfly parity work is concentrated in the rest of the entity transaction slice
-and advanced world construction:
+Remaining raw-Dragonfly parity work is concentrated in concrete entity capabilities and advanced
+world construction:
 
 - player-capable raw handle transfer and the remaining entity transaction methods;
-- custom providers, generators, and entity-type construction beyond the current NOP/MCDB
+- custom providers and generators beyond the current NOP/MCDB
   `World.Config` surface.
 
 Dragonfly's `HandleTransfer` remains a transfer to another server address. It must not be reused or

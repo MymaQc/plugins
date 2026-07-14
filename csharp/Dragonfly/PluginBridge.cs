@@ -9,7 +9,10 @@ namespace Dragonfly;
 internal static unsafe class PluginBridge
 {
     private static Func<Plugin>? Factory;
+    private static Func<World.EntityType[]>? EntityTypes;
+    private static PluginState? CurrentState;
     private static PluginApi* Descriptor;
+    private static readonly Dictionary<string, nint> EntityTypeStrings = [];
     private static readonly ConcurrentDictionary<ulong, Action<World.Tx>> Scheduled = new();
     private static long NextScheduled;
 
@@ -231,6 +234,81 @@ internal static unsafe class PluginBridge
             return new World.EntityHandle(handle);
         }
 
+        // Entity construction is generated from Dragonfly now, but its managed
+        // type/config lifetime bridge is implemented as a separate milestone.
+        internal static World.EntityHandle NewEntity(
+            World.EntitySpawnOpts opts,
+            World.EntityType type,
+            World.EntityConfig config)
+        {
+            ArgumentNullException.ThrowIfNull(opts);
+            ArgumentNullException.ThrowIfNull(type);
+            ArgumentNullException.ThrowIfNull(config);
+            var api = Api;
+            var state = CurrentState;
+            if (api is null || api->EntityNew == null || Descriptor is null || state is null)
+                throw new InvalidOperationException("entity construction is unavailable");
+            var localType = state.Entities.TypeKey(type);
+            var opaque = state.Entities.Prepare(opts, type, config);
+            try
+            {
+                var data = state.Entities.PreparedData(opaque);
+                var encodedType = Encoding.UTF8.GetBytes(type.EncodeEntity());
+                var nameTag = Encoding.UTF8.GetBytes(data.Name ?? string.Empty);
+                fixed (byte* encodedTypePointer = encodedType)
+                fixed (byte* nameTagPointer = nameTag)
+                {
+                    var view = new EntityNewView
+                    {
+                        Options = new EntitySpawnOptions
+                        {
+                            Position = new Vec3 { X = data.Pos.X, Y = data.Pos.Y, Z = data.Pos.Z },
+                            Rotation = new NativeRotation { Yaw = data.Rot.Yaw, Pitch = data.Rot.Pitch },
+                            Velocity = new Vec3 { X = data.Vel.X, Y = data.Vel.Y, Z = data.Vel.Z },
+                            NameTag = new StringView { Data = nameTagPointer, Length = checked((ulong)nameTag.Length) },
+                        },
+                        EntityType = new StringView { Data = encodedTypePointer, Length = checked((ulong)encodedType.Length) },
+                        Plugin = (ulong)(nuint)Descriptor,
+                        LocalType = localType,
+                        Opaque = opaque,
+                        FireDurationNanoseconds = checked(data.FireDuration.Ticks * 100),
+                        AgeNanoseconds = checked(data.Age.Ticks * 100),
+                    };
+                    if (!opts.ID.TryWriteBytes(new Span<byte>(view.Id.Bytes, 16), bigEndian: true, out _))
+                        throw new InvalidOperationException("entity UUID cannot be encoded");
+                    EntityHandleId handle;
+                    if (api->EntityNew(api->Context, &view, &handle) != Abi.Ok ||
+                        handle.Value == 0 || handle.Generation == 0)
+                        throw new InvalidOperationException("entity could not be created");
+                    return state.Entities.BindHandle(opaque, handle.Value, handle.Generation);
+                }
+            }
+            catch
+            {
+                state.Entities.ReleasePending(opaque);
+                throw;
+            }
+        }
+
+        internal static World.EntityType EntityHandleType(World.EntityHandle handle)
+        {
+            ArgumentNullException.ThrowIfNull(handle);
+            var state = CurrentState ?? throw new InvalidOperationException("entity types are unavailable");
+            try { return state.Entities.HandleType(handle.Id.Value, handle.Id.Generation); }
+            catch (InvalidOperationException) { }
+            var api = Api;
+            if (api is null || api->EntityHandleType == null)
+                throw new InvalidOperationException("entity type is unavailable");
+            const int capacity = 256;
+            byte* bytes = stackalloc byte[capacity];
+            var output = new StringBuffer { Data = bytes, Capacity = capacity };
+            if (api->EntityHandleType(api->Context, handle.Id, &output) != Abi.Ok ||
+                output.Length == 0 || output.Length > capacity)
+                throw new InvalidOperationException("entity handle is no longer available");
+            return state.Entities.TypeByIdentifier(
+                Encoding.UTF8.GetString(new ReadOnlySpan<byte>(bytes, checked((int)output.Length))));
+        }
+
         internal static (World.Entity? Entity, bool Ok) EntityHandleEntity(
             ulong invocation,
             World.EntityHandle handle)
@@ -246,7 +324,8 @@ internal static unsafe class PluginBridge
             if (found == 0) return (null, false);
             if (entity.Generation == 0)
                 throw new InvalidOperationException("entity handle returned an invalid entity");
-            return (ResolveEntityPlayer(invocation, entity) ?? World.HostEntityFrom(invocation, entity), true);
+            var custom = CurrentState?.Entities.OpenedEntity(handle);
+            return (custom ?? ResolveEntityPlayer(invocation, entity) ?? World.HostEntityFrom(invocation, entity), true);
         }
 
         internal static Guid EntityHandleUuid(World.EntityHandle handle)
@@ -312,7 +391,9 @@ internal static unsafe class PluginBridge
             if (api->WorldEntityAdd(api->Context, invocation, handle.Id, positionPointer, &entity) != Abi.Ok ||
                 entity.Generation == 0)
                 throw new InvalidOperationException("entity handle cannot be added to this transaction");
-            return ResolveEntityPlayer(invocation, entity) ?? World.HostEntityFrom(invocation, entity);
+            return CurrentState?.Entities.OpenedEntity(handle) ??
+                   ResolveEntityPlayer(invocation, entity) ??
+                   World.HostEntityFrom(invocation, entity);
         }
 
         internal static World.EntityHandle TransactionRemoveEntity(ulong invocation, World.Entity entity)
@@ -321,11 +402,23 @@ internal static unsafe class PluginBridge
             var api = Api;
             if (api is null || api->WorldEntityRemove == null)
                 throw new InvalidOperationException("world transaction is unavailable");
+            EntityId entityId;
+            if (!World.TryEntityIdOf(entity, out entityId))
+            {
+                if (api->EntityHandleEntity == null)
+                    throw new InvalidOperationException("entity handle is unavailable");
+                var stable = entity.H();
+                byte found;
+                if (api->EntityHandleEntity(api->Context, invocation, stable.Id, &entityId, &found) != Abi.Ok ||
+                    found != 1 || entityId.Generation == 0)
+                    throw new InvalidOperationException("entity is no longer in this transaction");
+            }
             EntityHandleId handle;
-            if (api->WorldEntityRemove(api->Context, invocation, World.EntityIdOf(entity), &handle) != Abi.Ok ||
+            if (api->WorldEntityRemove(api->Context, invocation, entityId, &handle) != Abi.Ok ||
                 handle.Value == 0 || handle.Generation == 0)
                 throw new InvalidOperationException("entity cannot be removed from this transaction");
-            return new World.EntityHandle(handle);
+            var detached = new World.EntityHandle(handle);
+            return CurrentState?.Entities.CanonicalHandle(detached) ?? detached;
         }
 
         internal static World NewWorld(World.Config config)
@@ -2375,10 +2468,15 @@ internal static unsafe class PluginBridge
         }
     }
 
-    internal static PluginApi* Initialize(Func<Plugin> factory, string id, ulong subscriptions)
+    internal static PluginApi* Initialize(
+        Func<Plugin> factory,
+        string id,
+        ulong subscriptions,
+        Func<World.EntityType[]> entityTypes)
     {
         if (Descriptor is not null) return Descriptor;
         Factory = factory;
+        EntityTypes = entityTypes;
         var bytes = Encoding.UTF8.GetBytes(id);
         var idPointer = (byte*)NativeMemory.Alloc((nuint)bytes.Length);
         bytes.CopyTo(new Span<byte>(idPointer, bytes.Length));
@@ -2396,6 +2494,9 @@ internal static unsafe class PluginBridge
             Enable = &Enable,
             Disable = &Disable,
             Commands = &Commands,
+            EntityTypeCount = (void*)(delegate* unmanaged[Cdecl]<void*, ulong>)&EntityTypeCount,
+            EntityTypeAt = (void*)(delegate* unmanaged[Cdecl]<void*, ulong, EntityTypeDescriptorV2*, int>)&EntityTypeAt,
+            HandleEntity = (void*)(delegate* unmanaged[Cdecl]<void*, ulong, uint, ulong, void*, void*, int>)&HandleEntity,
             HandleCommand = &HandleCommand,
             CommandEnumOptions = &CommandEnumOptions,
             SetHost = &SetHost,
@@ -2412,7 +2513,9 @@ internal static unsafe class PluginBridge
         try
         {
             CommandRegistry.Clear();
-            return (void*)GCHandle.ToIntPtr(GCHandle.Alloc(Factory!()));
+            var state = new PluginState(Factory!, EntityTypes!);
+            CurrentState = state;
+            return (void*)GCHandle.ToIntPtr(GCHandle.Alloc(state));
         }
         catch { return null; }
     }
@@ -2453,7 +2556,16 @@ internal static unsafe class PluginBridge
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void Destroy(void* instance)
     {
-        if (instance is not null) GCHandle.FromIntPtr((nint)instance).Free();
+        if (instance is not null)
+        {
+            var handle = GCHandle.FromIntPtr((nint)instance);
+            (handle.Target as PluginState)?.Dispose();
+            handle.Free();
+        }
+        CurrentState = null;
+        foreach (var pointer in EntityTypeStrings.Values)
+            if (pointer != 0) NativeMemory.Free((void*)pointer);
+        EntityTypeStrings.Clear();
         Host.Api = null;
         CommandRegistry.Clear();
         Scheduled.Clear();
@@ -2472,6 +2584,170 @@ internal static unsafe class PluginBridge
             if (count is not null) *count = 0;
             return null;
         }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static ulong EntityTypeCount(void* instance)
+    {
+        try { return instance is null ? 0 : checked((ulong)State(instance).Entities.Count); }
+        catch { return 0; }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static int EntityTypeAt(void* instance, ulong index, EntityTypeDescriptorV2* output)
+    {
+        try
+        {
+            if (instance is null || output is null || index > int.MaxValue) return Abi.Error;
+            var (key, type) = State(instance).Entities.TypeAt((int)index);
+            var identifier = PersistentEntityTypeString(type.EncodeEntity());
+            *output = new EntityTypeDescriptorV2
+            {
+                SaveId = identifier,
+                NetworkId = identifier,
+                TypeKey = key,
+            };
+            return Abi.Ok;
+        }
+        catch { return Abi.Error; }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static int HandleEntity(
+        void* instance,
+        ulong localType,
+        uint operation,
+        ulong entityInstance,
+        void* input,
+        void* state)
+    {
+        try
+        {
+            if (instance is null) return Abi.Error;
+            var entities = State(instance).Entities;
+            if (operation == Abi.EntityOperationAdopt)
+            {
+                if (input is null || state is null || entityInstance != 0) return Abi.Error;
+                *(ulong*)state = entities.Adopt(localType, *(ulong*)input);
+                return Abi.Ok;
+            }
+            if (operation == Abi.EntityOperationDestroy && entityInstance != 0)
+            {
+                entities.Destroy(entityInstance);
+                return Abi.Ok;
+            }
+            if (operation == Abi.EntityOperationDecodeNbt)
+            {
+                if (localType == 0 || entityInstance != 0 || input is null || state is null) return Abi.Error;
+                var value = (EntityExactInput*)input;
+                var result = (EntityExactState*)state;
+                if (value->Data is null || value->Nbt.Length > Nbt.MaxBytes ||
+                    value->Nbt.Length != 0 && value->Nbt.Data is null) return Abi.Error;
+                var data = new World.EntityData();
+                ReadEntityData(data, value->Data);
+                result->Instance = entities.DecodeNBT(
+                    localType,
+                    EntityNbtCodec.Decode(new ReadOnlySpan<byte>(value->Nbt.Data, checked((int)value->Nbt.Length))),
+                    data);
+                return WriteEntityData(data, value->Data) ? Abi.Ok : Abi.Error;
+            }
+            if (entityInstance == 0 || input is null && operation != Abi.EntityOperationReleaseOpen)
+                return Abi.Error;
+            var exactInput = (EntityExactInput*)input;
+            var exactState = (EntityExactState*)state;
+            if (operation == Abi.EntityOperationReleaseOpen)
+            {
+                entities.ReleaseOpen(entityInstance);
+                return Abi.Ok;
+            }
+            if (exactInput->Data is null || exactState is null) return Abi.Error;
+            var entityData = operation is Abi.EntityOperationEncodeNbt or Abi.EntityOperationOpen
+                ? entities.Data(entityInstance)
+                : entities.OpenData(entityInstance);
+            ReadEntityData(entityData, exactInput->Data);
+            switch (operation)
+            {
+                case Abi.EntityOperationEncodeNbt:
+                {
+                    var encoded = EntityNbtCodec.Encode(entities.EncodeNBT(entityInstance));
+                    exactState->Nbt.Length = checked((ulong)encoded.Length);
+                    if ((ulong)encoded.Length > exactState->Nbt.Capacity ||
+                        encoded.Length != 0 && exactState->Nbt.Data is null) return Abi.Error;
+                    encoded.CopyTo(new Span<byte>(exactState->Nbt.Data, encoded.Length));
+                    break;
+                }
+                case Abi.EntityOperationOpen:
+                {
+                    if (exactInput->Invocation == 0 || exactInput->Handle.Value == 0 || exactInput->Handle.Generation == 0)
+                        return Abi.Error;
+                    var handle = entities.BindHandle(entityInstance, exactInput->Handle.Value, exactInput->Handle.Generation);
+                    var opened = entities.Open(
+                        entityInstance,
+                        exactInput->Invocation,
+                        handle);
+                    exactState->Instance = opened.Open;
+                    exactState->Capabilities = opened.Capabilities;
+                    break;
+                }
+                case Abi.EntityOperationBBox:
+                {
+                    var box = entities.BBox(entityInstance, exactInput->Invocation);
+                    var minimum = box.Min();
+                    var maximum = box.Max();
+                    exactState->BBox = new Native.BBox
+                    {
+                        Min = new Vec3 { X = minimum.X, Y = minimum.Y, Z = minimum.Z },
+                        Max = new Vec3 { X = maximum.X, Y = maximum.Y, Z = maximum.Z },
+                    };
+                    break;
+                }
+                case Abi.EntityOperationClose:
+                    entities.DispatchClose(entityInstance, exactInput->Invocation);
+                    break;
+                case Abi.EntityOperationHandle:
+                    exactState->Handle = entities.DispatchHandle(entityInstance, exactInput->Invocation).Id;
+                    break;
+                case Abi.EntityOperationPosition:
+                {
+                    var position = entities.DispatchPosition(entityInstance, exactInput->Invocation);
+                    exactState->Position = new Vec3 { X = position.X, Y = position.Y, Z = position.Z };
+                    break;
+                }
+                case Abi.EntityOperationRotation:
+                {
+                    var rotation = entities.DispatchRotation(entityInstance, exactInput->Invocation);
+                    exactState->Rotation = new NativeRotation { Yaw = rotation.Yaw, Pitch = rotation.Pitch };
+                    break;
+                }
+                case Abi.EntityOperationTickExact:
+                    entities.DispatchTick(entityInstance, exactInput->Invocation, exactInput->Current);
+                    break;
+                default:
+                    return Abi.Error;
+            }
+            return WriteEntityData(entityData, exactInput->Data) ? Abi.Ok : Abi.Error;
+        }
+        catch { return Abi.Error; }
+    }
+
+    private static void ReadEntityData(World.EntityData output, EntityDataState* input)
+    {
+        output.Pos = new Vector3(input->Position.X, input->Position.Y, input->Position.Z);
+        output.Vel = new Vector3(input->Velocity.X, input->Velocity.Y, input->Velocity.Z);
+        output.Rot = new Rotation(input->Rotation.Yaw, input->Rotation.Pitch);
+        output.Name = Utf8(input->Name);
+        output.FireDuration = TimeSpan.FromTicks(input->FireDurationNanoseconds / 100);
+        output.Age = TimeSpan.FromTicks(input->AgeNanoseconds / 100);
+    }
+
+    private static bool WriteEntityData(World.EntityData input, EntityDataState* output)
+    {
+        output->Position = new Vec3 { X = input.Pos.X, Y = input.Pos.Y, Z = input.Pos.Z };
+        output->Velocity = new Vec3 { X = input.Vel.X, Y = input.Vel.Y, Z = input.Vel.Z };
+        output->Rotation = new NativeRotation { Yaw = input.Rot.Yaw, Pitch = input.Rot.Pitch };
+        output->FireDurationNanoseconds = checked(input.FireDuration.Ticks * 100);
+        output->AgeNanoseconds = checked(input.Age.Ticks * 100);
+        return WriteExact(&output->Name, input.Name ?? string.Empty);
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
@@ -3191,7 +3467,44 @@ internal static unsafe class PluginBridge
         catch { return Abi.Error; }
     }
 
-    private static Plugin Get(void* instance) => (Plugin)GCHandle.FromIntPtr((nint)instance).Target!;
+    private static Plugin Get(void* instance) => State(instance).Plugin;
+
+    private static PluginState State(void* instance) =>
+        (PluginState?)GCHandle.FromIntPtr((nint)instance).Target ??
+        throw new InvalidOperationException("plugin instance is unavailable");
+
+    private static StringView PersistentEntityTypeString(string value)
+    {
+        lock (EntityTypeStrings)
+        {
+            if (!EntityTypeStrings.TryGetValue(value, out var pointer))
+            {
+                var bytes = Encoding.UTF8.GetBytes(value);
+                pointer = (nint)NativeMemory.Alloc((nuint)bytes.Length);
+                bytes.CopyTo(new Span<byte>((void*)pointer, bytes.Length));
+                EntityTypeStrings.Add(value, pointer);
+            }
+            return new StringView
+            {
+                Data = (byte*)pointer,
+                Length = checked((ulong)Encoding.UTF8.GetByteCount(value)),
+            };
+        }
+    }
+
+    private sealed class PluginState : IDisposable
+    {
+        internal PluginState(Func<Plugin> plugin, Func<World.EntityType[]> entityTypes)
+        {
+            Plugin = plugin();
+            Entities = new CustomEntityTable(entityTypes());
+        }
+
+        internal Plugin Plugin { get; }
+        internal CustomEntityTable Entities { get; }
+
+        public void Dispose() => Entities.Dispose();
+    }
 
     private static Player SnapshotPlayer(PlayerSnapshot snapshot, ulong invocation) => new(
         snapshot.Player,

@@ -4,10 +4,29 @@ namespace Dragonfly.Native;
 
 public static class Abi
 {
-    public const uint PluginVersion = 8;
-    public const uint HostVersion = 43;
+    public const uint PluginVersion = 9;
+    public const uint HostVersion = 44;
     public const int Ok = 0;
     public const int Error = 1;
+    public const uint EntityOperationAdopt = 0;
+    public const uint EntityOperationLoad = 1;
+    public const uint EntityOperationSave = 2;
+    public const uint EntityOperationTick = 3;
+    public const uint EntityOperationHurt = 4;
+    public const uint EntityOperationHeal = 5;
+    public const uint EntityOperationDeath = 6;
+    public const uint EntityOperationDestroy = 7;
+    public const uint EntityOperationDecodeNbt = 8;
+    public const uint EntityOperationEncodeNbt = 9;
+    public const uint EntityOperationOpen = 10;
+    public const uint EntityOperationBBox = 11;
+    public const uint EntityOperationClose = 12;
+    public const uint EntityOperationHandle = 13;
+    public const uint EntityOperationPosition = 14;
+    public const uint EntityOperationRotation = 15;
+    public const uint EntityOperationTickExact = 16;
+    public const uint EntityOperationReleaseOpen = 17;
+    public const uint EntityCapabilityTicker = 1;
     public const uint WorldDimensionOverworld = 0;
     public const uint WorldDimensionNether = 1;
     public const uint WorldDimensionEnd = 2;
@@ -179,6 +198,21 @@ public unsafe struct StringView
 
 [StructLayout(LayoutKind.Sequential)]
 public unsafe struct StringBuffer
+{
+    public byte* Data;
+    public ulong Length;
+    public ulong Capacity;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct BytesView
+{
+    public byte* Data;
+    public ulong Length;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct BytesBuffer
 {
     public byte* Data;
     public ulong Length;
@@ -377,6 +411,8 @@ public unsafe struct HostApi
     public delegate* unmanaged[Cdecl]<ulong, WorldConfigV1*, WorldId*, int> WorldNew;
     public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, BBox, ulong*, int> WorldEntitiesWithinOpen;
     public delegate* unmanaged[Cdecl]<ulong, StringView, StringView, byte*, BlockData*, int> BlockByName;
+    public delegate* unmanaged[Cdecl]<ulong, EntityNewView*, EntityHandleId*, int> EntityNew;
+    public delegate* unmanaged[Cdecl]<ulong, EntityHandleId, StringBuffer*, int> EntityHandleType;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -397,6 +433,70 @@ public unsafe struct PluginApi
     public delegate* unmanaged[Cdecl]<void*, void> Destroy;
     public delegate* unmanaged[Cdecl]<void*, uint, void*, void*, int> HandleEvent;
     public delegate* unmanaged[Cdecl]<void*, ulong, ulong, byte, int> HandleScheduled;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct EntityTypeDescriptorV2
+{
+    public StringView SaveId;
+    public StringView NetworkId;
+    public ulong TypeKey;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct EntitySpawnOptions
+{
+    public Vec3 Position;
+    public NativeRotation Rotation;
+    public Vec3 Velocity;
+    public StringView NameTag;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct EntityNewView
+{
+    public NativeUuid Id;
+    public EntitySpawnOptions Options;
+    public StringView EntityType;
+    public ulong Plugin;
+    public ulong LocalType;
+    public ulong Opaque;
+    public long FireDurationNanoseconds;
+    public long AgeNanoseconds;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct EntityDataState
+{
+    public Vec3 Position;
+    public Vec3 Velocity;
+    public NativeRotation Rotation;
+    public StringBuffer Name;
+    public long FireDurationNanoseconds;
+    public long AgeNanoseconds;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct EntityExactInput
+{
+    public ulong Invocation;
+    public EntityHandleId Handle;
+    public EntityDataState* Data;
+    public BytesView Nbt;
+    public long Current;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct EntityExactState
+{
+    public ulong Instance;
+    public uint Capabilities;
+    public uint Reserved;
+    public BBox BBox;
+    public EntityHandleId Handle;
+    public Vec3 Position;
+    public NativeRotation Rotation;
+    public BytesBuffer Nbt;
 }
 
 [StructLayout(LayoutKind.Sequential)]

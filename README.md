@@ -191,6 +191,12 @@ materialised as concrete `Player` objects. `EntityHandle.Entity`, `UUID`, `Close
 while the world-bound entity ID changes on remove/re-add. Generic player removal remains blocked;
 use `Player.ChangeWorld` so Dragonfly's session transfer completes safely.
 
+Custom entities use Dragonfly's own high-level contracts. Plugins implement `World.EntityType`,
+optionally return `World.TickerEntity` from `Open`, and construct worldless handles through
+`World.EntitySpawnOpts.New`. `EntityConfig.Apply`, `EntityData`, `BBox`, `DecodeNBT`, and
+`EncodeNBT` keep their Dragonfly roles; the native ABI only carries their calls and state. See
+`/kitchen custom-entity` for a complete create/add/remove/re-add/close example.
+
 Server-wide player access follows Dragonfly's `Server` directly:
 
 ```csharp
@@ -268,7 +274,7 @@ Dragonfly field and cause.
 
 Public block, liquid, biome, particle, colour, instrument, sound, and item types come from Dragonfly's Go AST.
 Live registries feed internal generated codecs, so Minecraft identifiers, state NBT, numeric biome
-IDs, particle kinds, and instrument IDs never enter plugin code. Private host ABI 43 preserves the
+IDs, particle kinds, and instrument IDs never enter plugin code. Private host ABI 44 preserves the
 separate “no liquid” result, nullable liquid removal, signed nanosecond scheduling delays,
 biome/weather queries, particle payloads, registered/custom game-mode capabilities, and full
 callback-scoped player snapshots for form responses. Structurally valid form contexts receive

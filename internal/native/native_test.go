@@ -1,7 +1,6 @@
 package native
 
 import (
-	"math"
 	"strings"
 	"testing"
 	"time"
@@ -128,47 +127,17 @@ func TestCancellablePlayerCallbacksKeepIncomingCancellationOnRuntimeError(t *tes
 func TestValidEntityTypeDefinition(t *testing.T) {
 	base := EntityTypeDefinition{
 		SaveID: "example:marker", NetworkID: "minecraft:armor_stand", TypeKey: 1,
-		Min: Vec3{X: -0.25, Z: -0.25}, Max: Vec3{X: 0.25, Y: 1.0, Z: 0.25},
 	}
-	ticking := base
-	ticking.Family = EntityFamilyTicking
-	ticking.CallbackFlags = EntityCallbackState | EntityCallbackTick
-	ticking.StateVersion = 1
-	ticking.Physics = &EntityPhysics{Gravity: 0.08, Drag: 0.02, DragBeforeGravity: true}
-	living := ticking
-	living.Family = EntityFamilyLiving
-	living.CallbackFlags |= EntityCallbackHurt | EntityCallbackHeal | EntityCallbackDeath
-	living.InitialHealth, living.MaxHealth, living.Speed = 20, 40, 0.1
-
-	for name, definition := range map[string]EntityTypeDefinition{
-		"base": base, "ticking": ticking, "living": living,
-	} {
-		t.Run(name, func(t *testing.T) {
-			if !validEntityTypeDefinition(definition) {
-				t.Fatalf("valid definition rejected: %#v", definition)
-			}
-		})
+	if !validEntityTypeDefinition(base) {
+		t.Fatalf("valid definition rejected: %#v", base)
 	}
 
 	invalid := map[string]EntityTypeDefinition{
-		"zero type key":    func() EntityTypeDefinition { value := base; value.TypeKey = 0; return value }(),
-		"unknown family":   func() EntityTypeDefinition { value := base; value.Family = 99; return value }(),
-		"unknown callback": func() EntityTypeDefinition { value := ticking; value.CallbackFlags |= 1 << 31; return value }(),
-		"base callback":    func() EntityTypeDefinition { value := base; value.CallbackFlags = EntityCallbackTick; return value }(),
-		"base physics":     func() EntityTypeDefinition { value := base; value.Physics = &EntityPhysics{}; return value }(),
-		"ticking hurt":     func() EntityTypeDefinition { value := ticking; value.CallbackFlags |= EntityCallbackHurt; return value }(),
-		"state version unused": func() EntityTypeDefinition {
-			value := ticking
-			value.CallbackFlags &^= EntityCallbackState
-			return value
-		}(),
-		"living no health": func() EntityTypeDefinition { value := living; value.MaxHealth = 0; return value }(),
-		"health over max":  func() EntityTypeDefinition { value := living; value.InitialHealth = 41; return value }(),
-		"negative speed":   func() EntityTypeDefinition { value := living; value.Speed = -0.1; return value }(),
-		"infinite physics": func() EntityTypeDefinition { value := ticking; value.Physics.Gravity = math.Inf(1); return value }(),
-		"invalid drag": func() EntityTypeDefinition {
-			value := ticking
-			value.Physics = &EntityPhysics{Gravity: 0.08, Drag: 1.1}
+		"zero type key": func() EntityTypeDefinition { value := base; value.TypeKey = 0; return value }(),
+		"empty save id": func() EntityTypeDefinition { value := base; value.SaveID = ""; return value }(),
+		"empty network id": func() EntityTypeDefinition {
+			value := base
+			value.NetworkID = ""
 			return value
 		}(),
 	}
