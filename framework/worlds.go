@@ -596,6 +596,64 @@ func (m *WorldManager) WorldBlock(invocation native.InvocationID, id native.Worl
 	})
 }
 
+func (m *WorldManager) WorldBlockLoaded(invocation native.InvocationID, id native.WorldID, position native.BlockPos) (native.WorldBlock, bool, bool) {
+	entry, ok := m.entryForInvocation(invocation, id)
+	if !ok {
+		return native.WorldBlock{}, false, false
+	}
+	entry.lifecycle.RLock()
+	defer entry.lifecycle.RUnlock()
+	if entry.closed {
+		return native.WorldBlock{}, false, false
+	}
+	read := func(tx *world.Tx) (native.WorldBlock, bool, bool) {
+		value, ok := tx.BlockLoaded(blockPosition(position))
+		if !ok {
+			return native.WorldBlock{}, false, true
+		}
+		name, properties := value.EncodeBlock()
+		encoded, ok := encodeBlockProperties(properties)
+		return native.WorldBlock{Identifier: name, PropertiesNBT: encoded}, true, ok
+	}
+	if tx := m.currentTx(invocation, entry.world); tx != nil {
+		return read(tx)
+	}
+	if invocation != 0 {
+		return native.WorldBlock{}, false, false
+	}
+	type loadedResult struct {
+		block  native.WorldBlock
+		loaded bool
+	}
+	result, err := world.Call(context.Background(), entry.world, func(tx *world.Tx) (loadedResult, error) {
+		block, loaded, ok := read(tx)
+		if !ok {
+			return loadedResult{}, errors.New("world block-loaded operation failed")
+		}
+		return loadedResult{block: block, loaded: loaded}, nil
+	})
+	return result.block, result.loaded, err == nil
+}
+
+func (m *WorldManager) WorldRange(invocation native.InvocationID, id native.WorldID) (native.BlockRange, bool) {
+	entry, ok := m.entryForInvocation(invocation, id)
+	if !ok {
+		return native.BlockRange{}, false
+	}
+	entry.lifecycle.RLock()
+	defer entry.lifecycle.RUnlock()
+	if entry.closed {
+		return native.BlockRange{}, false
+	}
+	return readManagedWorld(m, invocation, entry, func(tx *world.Tx) (native.BlockRange, bool) {
+		value := tx.Range()
+		if value.Min() < math.MinInt32 || value.Min() > math.MaxInt32 || value.Max() < math.MinInt32 || value.Max() > math.MaxInt32 {
+			return native.BlockRange{}, false
+		}
+		return native.BlockRange{Min: int32(value.Min()), Max: int32(value.Max())}, true
+	})
+}
+
 func (m *WorldManager) WorldLiquid(invocation native.InvocationID, id native.WorldID, position native.BlockPos) (native.WorldBlock, bool) {
 	entry, ok := m.entryForInvocation(invocation, id)
 	if !ok {

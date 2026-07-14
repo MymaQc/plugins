@@ -5,7 +5,7 @@ namespace Dragonfly.Native;
 public static class Abi
 {
     public const uint PluginVersion = 5;
-    public const uint HostVersion = 21;
+    public const uint HostVersion = 22;
     public const int Ok = 0;
     public const int Error = 1;
     public const uint PlayerMoveEvent = 1;
@@ -136,6 +136,33 @@ public unsafe struct HostApi
     public void* WorldSave;
     public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, BlockPos, BlockData*, int> WorldBlockGet;
     public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, BlockPos, BlockView*, uint, int> WorldBlockSet;
+    public void* WorldTimeGet;
+    public void* WorldTimeSet;
+    public void* WorldSpawnGet;
+    public void* WorldSpawnSet;
+    public void* WorldEntitySpawn;
+    public void* WorldEntities;
+    public void* WorldPlayers;
+    public void* EntityState;
+    public void* EntityTeleport;
+    public void* EntityVelocitySet;
+    public void* EntityNameTagSet;
+    public void* EntityDespawn;
+    public void* WorldParticleAdd;
+    public void* WorldSoundPlay;
+    public void* PlayerSoundPlay;
+    public void* PlayerHeal;
+    public void* PlayerHurt;
+    public void* SkinSnapshotInfo;
+    public void* SkinSnapshotSet;
+    public void* WorldOpenSpec;
+    public void* PlayerTransfer;
+    public void* PlayerEffects;
+    public void* PlayerEffectsClear;
+    public void* WorldLiquidGet;
+    public void* PlayerExperienceSet;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, BlockRange*, int> WorldRange;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, BlockPos, byte*, BlockData*, int> WorldBlockLoaded;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -178,6 +205,13 @@ public struct BlockPos
     public int X;
     public int Y;
     public int Z;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct BlockRange
+{
+    public int Min;
+    public int Max;
 }
 
 [StructLayout(LayoutKind.Sequential)]

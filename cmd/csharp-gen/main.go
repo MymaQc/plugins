@@ -94,6 +94,13 @@ var selectedPlayerTextMethods = []string{
 	"Disconnect",
 }
 
+var selectedWorldTxMethods = []string{
+	"Range",
+	"SetBlock",
+	"Block",
+	"BlockLoaded",
+}
+
 func main() {
 	root := flag.String("root", ".", "repository root")
 	dragonfly := flag.String("dragonfly", "", "Dragonfly module directory")
@@ -130,6 +137,10 @@ func main() {
 	if err != nil {
 		fatal(err)
 	}
+	worldTx, err := inspectWorldTx(filepath.Join(directory, "server", "world", "tx.go"))
+	if err != nil {
+		fatal(err)
+	}
 	blocks, err := inspectBlocks(filepath.Join(directory, "server", "block"))
 	if err != nil {
 		fatal(err)
@@ -153,7 +164,7 @@ func main() {
 		},
 		{
 			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "World.Block.g.cs"),
-			Content: generateWorldBlock(setOpts),
+			Content: generateWorldBlock(setOpts, worldTx),
 		},
 		{
 			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "Block.Types.g.cs"),
@@ -345,6 +356,147 @@ func inspectSetOpts(path string) ([]string, error) {
 		}
 	}
 	return nil, fmt.Errorf("world.SetOpts not found")
+}
+
+func inspectWorldTx(path string) ([]commandMethod, error) {
+	file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+	if err != nil {
+		return nil, err
+	}
+	found := map[string]commandMethod{}
+	for _, declaration := range file.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if !ok || !selectedWorldTxMethod(function.Name.Name) || !pointerReceiver(function, "Tx") {
+			continue
+		}
+		parameters, err := translateWorldTxParameters(function.Type.Params)
+		if err != nil {
+			return nil, fmt.Errorf("world.Tx.%s: %w", function.Name.Name, err)
+		}
+		result, err := translateWorldTxResult(function.Name.Name, function.Type.Results)
+		if err != nil {
+			return nil, fmt.Errorf("world.Tx.%s: %w", function.Name.Name, err)
+		}
+		found[function.Name.Name] = commandMethod{
+			Name: function.Name.Name, Parameters: parameters, ReturnType: result,
+		}
+	}
+	methods := make([]commandMethod, 0, len(selectedWorldTxMethods))
+	for _, name := range selectedWorldTxMethods {
+		definition, ok := found[name]
+		if !ok {
+			return nil, fmt.Errorf("Dragonfly world.Tx has no supported %s method", name)
+		}
+		methods = append(methods, definition)
+	}
+	return methods, nil
+}
+
+func selectedWorldTxMethod(name string) bool {
+	for _, selected := range selectedWorldTxMethods {
+		if name == selected {
+			return true
+		}
+	}
+	return false
+}
+
+func pointerReceiver(function *ast.FuncDecl, name string) bool {
+	if function.Recv == nil || len(function.Recv.List) != 1 {
+		return false
+	}
+	pointer, ok := function.Recv.List[0].Type.(*ast.StarExpr)
+	if !ok {
+		return false
+	}
+	receiver, ok := pointer.X.(*ast.Ident)
+	return ok && receiver.Name == name
+}
+
+func translateWorldTxParameters(fields *ast.FieldList) ([]parameter, error) {
+	var parameters []parameter
+	if fields == nil {
+		return parameters, nil
+	}
+	for _, field := range fields.List {
+		typeName, ok := worldTxCSharpType(field.Type, true)
+		if !ok {
+			return nil, fmt.Errorf("unsupported parameter type %s", formatGoExpression(field.Type))
+		}
+		if len(field.Names) == 0 {
+			return nil, fmt.Errorf("unnamed parameter of type %s", formatGoExpression(field.Type))
+		}
+		for _, name := range field.Names {
+			parameters = append(parameters, parameter{Name: name.Name, Type: typeName})
+		}
+	}
+	return parameters, nil
+}
+
+func translateWorldTxResult(method string, fields *ast.FieldList) (string, error) {
+	if fields == nil || len(fields.List) == 0 {
+		return "void", nil
+	}
+	var results []string
+	for _, field := range fields.List {
+		typeName, ok := worldTxCSharpType(field.Type, false)
+		if !ok {
+			return "", fmt.Errorf("unsupported return type %s", formatGoExpression(field.Type))
+		}
+		count := len(field.Names)
+		if count == 0 {
+			count = 1
+		}
+		for range count {
+			results = append(results, typeName)
+		}
+	}
+	if len(results) == 1 {
+		return results[0], nil
+	}
+	if method == "BlockLoaded" {
+		if !reflect.DeepEqual(results, []string{"Block", "bool"}) {
+			return "", fmt.Errorf("expected (Block, bool), got (%s)", strings.Join(results, ", "))
+		}
+		return "(Block? Block, bool Ok)", nil
+	}
+	return "(" + strings.Join(results, ", ") + ")", nil
+}
+
+func worldTxCSharpType(expression ast.Expr, parameter bool) (string, bool) {
+	switch value := expression.(type) {
+	case *ast.StarExpr:
+		typeName, ok := worldTxCSharpType(value.X, parameter)
+		if !ok {
+			return "", false
+		}
+		return strings.TrimSuffix(typeName, "?") + "?", true
+	case *ast.Ident:
+		typeName, ok := map[string]string{
+			"Block":   "Block",
+			"SetOpts": "SetOpts",
+			"bool":    "bool",
+		}[value.Name]
+		if !ok {
+			return "", false
+		}
+		if parameter && value.Name == "Block" {
+			return typeName + "?", true
+		}
+		return typeName, true
+	case *ast.SelectorExpr:
+		packageName, ok := value.X.(*ast.Ident)
+		if !ok {
+			return "", false
+		}
+		typeName, ok := map[string]string{
+			"cube.Pos":   "Cube.Pos",
+			"cube.Range": "Cube.Range",
+		}[packageName.Name+"."+value.Sel.Name]
+		return typeName, ok
+	default:
+		return "", false
+	}
 }
 
 func inspectBlocks(directory string) (blockSpec, error) {
@@ -944,7 +1096,7 @@ func generateCube(spec cubeSpec) []byte {
 	return output.Bytes()
 }
 
-func generateWorldBlock(setOpts []string) []byte {
+func generateWorldBlock(setOpts []string, methods []commandMethod) []byte {
 	var output bytes.Buffer
 	output.WriteString("// Code generated from Dragonfly server/world Go AST. DO NOT EDIT.\n")
 	output.WriteString("#nullable enable\n\n")
@@ -956,15 +1108,35 @@ func generateWorldBlock(setOpts []string) []byte {
 		fmt.Fprintf(&output, "        public bool %s;\n", field)
 	}
 	output.WriteString("    }\n\n")
-	output.WriteString(`    public partial class Tx
-    {
-        public Block Block(Cube.Pos position) => PluginBridge.Host.WorldBlock(Invocation, position);
-
-        public void SetBlock(Cube.Pos position, Block? block, SetOpts? options = null) =>
-            PluginBridge.Host.SetWorldBlock(Invocation, position, block, options);
-    }
-}
-`)
+	output.WriteString("    public partial class Tx\n    {\n")
+	for index, method := range methods {
+		parameters := formatParameters(method.Parameters)
+		if method.Name == "SetBlock" && len(method.Parameters) != 0 {
+			last := method.Parameters[len(method.Parameters)-1]
+			if last.Name != "opts" || last.Type != "SetOpts?" {
+				panic("world.Tx.SetBlock final parameter is not opts *SetOpts")
+			}
+			parameters = strings.TrimSuffix(parameters, last.Type+" "+last.Name) + last.Type + " " + last.Name + " = null"
+		}
+		fmt.Fprintf(&output, "        public %s %s(%s) =>\n", method.ReturnType, method.Name, parameters)
+		switch method.Name {
+		case "Range":
+			output.WriteString("            PluginBridge.Host.WorldRange(Invocation);\n")
+		case "SetBlock":
+			fmt.Fprintf(&output, "            PluginBridge.Host.SetWorldBlock(Invocation, %s, %s, %s);\n",
+				method.Parameters[0].Name, method.Parameters[1].Name, method.Parameters[2].Name)
+		case "Block":
+			fmt.Fprintf(&output, "            PluginBridge.Host.WorldBlock(Invocation, %s);\n", method.Parameters[0].Name)
+		case "BlockLoaded":
+			fmt.Fprintf(&output, "            PluginBridge.Host.WorldBlockLoaded(Invocation, %s);\n", method.Parameters[0].Name)
+		default:
+			panic("unsupported world.Tx method: " + method.Name)
+		}
+		if index != len(methods)-1 {
+			output.WriteByte('\n')
+		}
+	}
+	output.WriteString("    }\n}\n")
 	return output.Bytes()
 }
 

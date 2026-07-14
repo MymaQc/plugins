@@ -145,13 +145,29 @@ func TestSyncGeneratedFilesChecksEveryOutput(t *testing.T) {
 }
 
 func TestGeneratedWorldBlockSurfaceKeepsTransportPrivate(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "tx.go")
+	source := `package world
+func (tx *Tx) Range() cube.Range { return cube.Range{} }
+func (tx *Tx) SetBlock(pos cube.Pos, b Block, opts *SetOpts) {}
+func (tx *Tx) Block(pos cube.Pos) Block { return nil }
+func (tx *Tx) BlockLoaded(pos cube.Pos) (Block, bool) { return nil, false }
+func (tx *Tx) Liquid(pos cube.Pos) (Liquid, bool) { return nil, false }`
+	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	methods, err := inspectWorldTx(path)
+	if err != nil {
+		t.Fatal(err)
+	}
 	worldOutput := string(generateWorldBlock([]string{
 		"DisableBlockUpdates", "DisableLiquidDisplacement", "DisableRedstoneUpdates",
-	}))
+	}, methods))
 	for _, expected := range []string{
 		"public interface Block { }",
-		"public Block Block(Cube.Pos position)",
-		"public void SetBlock(Cube.Pos position, Block? block, SetOpts? options = null)",
+		"public Cube.Range Range()",
+		"public void SetBlock(Cube.Pos pos, Block? b, SetOpts? opts = null)",
+		"public Block Block(Cube.Pos pos)",
+		"public (Block? Block, bool Ok) BlockLoaded(Cube.Pos pos)",
 		"public bool DisableRedstoneUpdates;",
 	} {
 		if !strings.Contains(worldOutput, expected) {
@@ -182,5 +198,21 @@ func TestGeneratedWorldBlockSurfaceKeepsTransportPrivate(t *testing.T) {
 	}
 	if strings.Contains(blockOutput, "public (string") || strings.Contains(blockOutput, "EncodeBlock()") {
 		t.Fatalf("typed blocks expose encoded state:\n%s", blockOutput)
+	}
+}
+
+func TestInspectWorldTxRejectsChangedSelectedSignature(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "tx.go")
+	source := `package world
+func (tx *Tx) Range() cube.Range { return cube.Range{} }
+func (tx *Tx) SetBlock(pos cube.Pos, b Block, opts *SetOpts) {}
+func (tx *Tx) Block(pos cube.Pos) Block { return nil }
+func (tx *Tx) BlockLoaded(pos cube.Pos) (Block, error) { return nil, nil }`
+	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := inspectWorldTx(path)
+	if err == nil || !strings.Contains(err.Error(), "world.Tx.BlockLoaded: unsupported return type error") {
+		t.Fatalf("expected changed BlockLoaded signature error, got %v", err)
 	}
 }

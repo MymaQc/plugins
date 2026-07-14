@@ -115,6 +115,10 @@ func TestWorldManagerBlockAndStateOperationsUseActiveTx(t *testing.T) {
 	if err := w.Do(func(tx *world.Tx) {
 		invocation, leave := players.BeginInvocation(tx)
 		defer leave()
+		worldRange, ok := manager.WorldRange(invocation, 0)
+		if !ok || worldRange.Min != int32(tx.Range().Min()) || worldRange.Max != int32(tx.Range().Max()) {
+			t.Fatalf("WorldRange() = %#v, %v", worldRange, ok)
+		}
 		properties, ok := encodeBlockProperties(map[string]any{
 			"bool": true, "byte": uint8(4), "int": int32(-9), "string": "north",
 		})
@@ -141,6 +145,13 @@ func TestWorldManagerBlockAndStateOperationsUseActiveTx(t *testing.T) {
 		if !ok || got.Identifier != name {
 			t.Fatalf("WorldBlock() = %#v, %v", got, ok)
 		}
+		loadedBlock, loaded, valid := manager.WorldBlockLoaded(invocation, 0, native.BlockPos{X: 2, Y: 3, Z: 4})
+		if !valid || !loaded || loadedBlock.Identifier != name {
+			t.Fatalf("WorldBlockLoaded() = %#v, %v, %v", loadedBlock, loaded, valid)
+		}
+		if _, loaded, valid := manager.WorldBlockLoaded(invocation, 0, native.BlockPos{X: 30_000_000, Y: 3, Z: 30_000_000}); !valid || loaded {
+			t.Fatalf("WorldBlockLoaded(unloaded) = loaded %v, valid %v", loaded, valid)
+		}
 		bars := block.IronBars{}
 		tx.SetBlock(cube.Pos{2, 3, 4}, bars, nil)
 		tx.SetLiquid(cube.Pos{2, 3, 4}, block.Water{Still: true, Depth: 8})
@@ -161,6 +172,12 @@ func TestWorldManagerBlockAndStateOperationsUseActiveTx(t *testing.T) {
 	}
 	if _, ok := manager.WorldBlock(9999, 0, native.BlockPos{}); ok {
 		t.Fatal("stale invocation resolved current world")
+	}
+	if _, _, valid := manager.WorldBlockLoaded(9999, 0, native.BlockPos{}); valid {
+		t.Fatal("stale invocation resolved a loaded block")
+	}
+	if _, ok := manager.WorldRange(9999, 0); ok {
+		t.Fatal("stale invocation resolved a world range")
 	}
 	if !manager.SetWorldTime(0, id, 6000) {
 		t.Fatal("SetWorldTime failed")

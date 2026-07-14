@@ -16,9 +16,16 @@ public sealed partial class World
 
     public partial class Tx
     {
-        public Block Block(Cube.Pos position) => PluginBridge.Host.WorldBlock(Invocation, position);
+        public Cube.Range Range() =>
+            PluginBridge.Host.WorldRange(Invocation);
 
-        public void SetBlock(Cube.Pos position, Block? block, SetOpts? options = null) =>
-            PluginBridge.Host.SetWorldBlock(Invocation, position, block, options);
+        public void SetBlock(Cube.Pos pos, Block? b, SetOpts? opts = null) =>
+            PluginBridge.Host.SetWorldBlock(Invocation, pos, b, opts);
+
+        public Block Block(Cube.Pos pos) =>
+            PluginBridge.Host.WorldBlock(Invocation, pos);
+
+        public (Block? Block, bool Ok) BlockLoaded(Cube.Pos pos) =>
+            PluginBridge.Host.WorldBlockLoaded(Invocation, pos);
     }
 }

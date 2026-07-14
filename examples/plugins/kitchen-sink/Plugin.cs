@@ -208,14 +208,23 @@ public sealed class KitchenSink : Plugin
                 return;
             }
             var position = Cube.PosFromVec3(source.Position()).Side(Cube.Face.Down);
-            var wasSand = tx.Block(position) is Block.Sand;
+            var range = tx.Range();
+            var (block, loaded) = tx.BlockLoaded(position);
+            var previous = loaded ? block : tx.Block(position);
+            var wasSand = previous is Block.Sand;
             tx.SetBlock(position, new Block.Sand(), new World.SetOpts
             {
                 DisableBlockUpdates = true,
                 DisableLiquidDisplacement = true,
                 DisableRedstoneUpdates = true,
             });
-            output.Printf("block={0}, was_sand={1}", position, wasSand ? "true" : "false");
+            output.Printf(
+                "block={0}, range={1}..{2}, loaded={3}, was_sand={4}",
+                position,
+                range.Min(),
+                range.Max(),
+                loaded ? "true" : "false",
+                wasSand ? "true" : "false");
         }
     }
 }

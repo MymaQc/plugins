@@ -112,6 +112,41 @@ func bg_go_world_block_get(context C.uint64_t, invocation C.DfInvocationId, worl
 	return writeWorldBlock(output, block, ok)
 }
 
+//export bg_go_world_block_loaded
+func bg_go_world_block_loaded(context C.uint64_t, invocation C.DfInvocationId, world C.DfWorldId, position C.DfBlockPos, loaded *C.uint8_t, output *C.DfBlockData) C.DfStatus {
+	host, ok := resolveHost(uint64(context))
+	if !ok || loaded == nil || output == nil {
+		return C.DF_STATUS_ERROR
+	}
+	*loaded = 0
+	output.identifier.len = 0
+	output.properties_nbt.len = 0
+	block, found, valid := host.WorldBlockLoaded(InvocationID(invocation), WorldID(world.value), nativeBlockPosition(position))
+	if !valid {
+		return C.DF_STATUS_ERROR
+	}
+	if !found {
+		return C.DF_STATUS_OK
+	}
+	*loaded = 1
+	return writeWorldBlock(output, block, true)
+}
+
+//export bg_go_world_range
+func bg_go_world_range(context C.uint64_t, invocation C.DfInvocationId, world C.DfWorldId, output *C.DfBlockRange) C.DfStatus {
+	host, ok := resolveHost(uint64(context))
+	if !ok || output == nil {
+		return C.DF_STATUS_ERROR
+	}
+	value, ok := host.WorldRange(InvocationID(invocation), WorldID(world.value))
+	if !ok || value.Min > value.Max {
+		return C.DF_STATUS_ERROR
+	}
+	output.min = C.int32_t(value.Min)
+	output.max = C.int32_t(value.Max)
+	return C.DF_STATUS_OK
+}
+
 //export bg_go_world_liquid_get
 func bg_go_world_liquid_get(context C.uint64_t, invocation C.DfInvocationId, world C.DfWorldId, position C.DfBlockPos, output *C.DfBlockData) C.DfStatus {
 	host, ok := resolveHost(uint64(context))

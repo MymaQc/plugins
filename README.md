@@ -46,12 +46,15 @@ Current C# slice: loading, lifecycle, reflected commands, player text actions, g
 
 World callbacks now carry Dragonfly-shaped transactions. `Player.Context` inherits
 `World.Context`, which inherits `World.Tx`; commands receive the same `World.Tx`. `Cube.Pos`,
-`World.Block`, `World.SetOpts`, `World.Tx.Block`, `World.Tx.SetBlock`, 79 stateless concrete block
-types, and `Block.Sand` are generated from Dragonfly source and its registered states:
+`World.Block`, `World.SetOpts`, `World.Tx.Range`, `World.Tx.Block`, `World.Tx.BlockLoaded`,
+`World.Tx.SetBlock`, 79 stateless concrete block types, and `Block.Sand` are generated from
+Dragonfly source and its registered states:
 
 ```csharp
 var pos = Cube.PosFromVec3(source.Position()).Side(Cube.Face.Down);
-World.Block previous = tx.Block(pos);
+var (block, loaded) = tx.BlockLoaded(pos);
+World.Block? previous = loaded ? block : tx.Block(pos);
+Cube.Range bounds = tx.Range();
 tx.SetBlock(pos, new Block.Sand());
 ```
 

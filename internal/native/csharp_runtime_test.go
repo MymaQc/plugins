@@ -78,8 +78,45 @@ func TestCSharpVanillaGameModeCommand(t *testing.T) {
 	}
 }
 
+type csharpWorldHost struct {
+	*recordingHost
+	worldRange                 BlockRange
+	worldRangeInvocation       InvocationID
+	worldRangeWorld            WorldID
+	worldRangeCalls            int
+	worldBlockLoaded           WorldBlock
+	worldBlockLoadedInvocation InvocationID
+	worldBlockLoadedWorld      WorldID
+	worldBlockLoadedPos        BlockPos
+	worldBlockLoadedCalls      int
+	worldBlockLoadedOK         bool
+	worldBlockCalls            int
+}
+
+func (h *csharpWorldHost) WorldRange(invocation InvocationID, world WorldID) (BlockRange, bool) {
+	h.worldRangeInvocation, h.worldRangeWorld = invocation, world
+	h.worldRangeCalls++
+	return h.worldRange, true
+}
+
+func (h *csharpWorldHost) WorldBlockLoaded(invocation InvocationID, world WorldID, position BlockPos) (WorldBlock, bool, bool) {
+	h.worldBlockLoadedInvocation, h.worldBlockLoadedWorld, h.worldBlockLoadedPos = invocation, world, position
+	h.worldBlockLoadedCalls++
+	return h.worldBlockLoaded, h.worldBlockLoadedOK, true
+}
+
+func (h *csharpWorldHost) WorldBlock(invocation InvocationID, world WorldID, position BlockPos) (WorldBlock, bool) {
+	h.worldBlockCalls++
+	return h.recordingHost.WorldBlock(invocation, world, position)
+}
+
 func TestCSharpReflectedCommands(t *testing.T) {
-	host := &recordingHost{}
+	host := &csharpWorldHost{
+		recordingHost:      &recordingHost{},
+		worldRange:         BlockRange{Min: -64, Max: 319},
+		worldBlockLoaded:   WorldBlock{Identifier: "minecraft:sand"},
+		worldBlockLoadedOK: true,
+	}
 	pluginRuntime := openCSharpRuntimeWithHost(t, host)
 	commands, err := pluginRuntime.Commands()
 	if err != nil {
@@ -170,18 +207,36 @@ func TestCSharpReflectedCommands(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	host.worldBlock = WorldBlock{Identifier: "minecraft:sand", PropertiesNBT: properties}
-	host.worldBlockOK = true
+	host.worldBlockLoaded.PropertiesNBT = properties
 	input := base
 	input.Overload = 7
 	input.Arguments = []string{"block"}
 	output, err = pluginRuntime.HandleCommand(kitchen.Index, input)
-	if err != nil || output.Failed || output.Message != "block=(1,63,2), was_sand=true" {
+	if err != nil || output.Failed || output.Message != "block=(1,63,2), range=-64..319, loaded=true, was_sand=true" {
 		t.Fatalf("block output=%#v error=%v", output, err)
+	}
+	if host.worldRangeCalls != 1 || host.worldRangeInvocation != 42 || host.worldRangeWorld != 0 {
+		t.Fatalf("range host calls: calls=%d invocation=%d world=%d", host.worldRangeCalls, host.worldRangeInvocation, host.worldRangeWorld)
+	}
+	if host.worldBlockLoadedCalls != 2 || host.worldBlockLoadedInvocation != 42 || host.worldBlockLoadedWorld != 0 ||
+		host.worldBlockLoadedPos != (BlockPos{X: 1, Y: 63, Z: 2}) {
+		t.Fatalf("loaded block host calls: calls=%d invocation=%d world=%d position=%+v",
+			host.worldBlockLoadedCalls, host.worldBlockLoadedInvocation, host.worldBlockLoadedWorld, host.worldBlockLoadedPos)
 	}
 	if host.worldBlockPos != (BlockPos{X: 1, Y: 63, Z: 2}) || host.worldBlockSet.Identifier != "minecraft:sand" ||
 		!host.worldSetOpts.DisableBlockUpdates || !host.worldSetOpts.DisableLiquidDisplacement || !host.worldSetOpts.DisableRedstoneUpdates {
 		t.Fatalf("block host call: position=%+v block=%+v options=%+v", host.worldBlockPos, host.worldBlockSet, host.worldSetOpts)
+	}
+
+	host.worldBlockLoadedOK = false
+	host.worldBlock, host.worldBlockOK = host.worldBlockLoaded, true
+	output, err = pluginRuntime.HandleCommand(kitchen.Index, input)
+	if err != nil || output.Failed || output.Message != "block=(1,63,2), range=-64..319, loaded=false, was_sand=true" {
+		t.Fatalf("unloaded block output=%#v error=%v", output, err)
+	}
+	if host.worldRangeCalls != 2 || host.worldBlockLoadedCalls != 3 || host.worldBlockCalls != 2 {
+		t.Fatalf("unloaded fallback host calls: range=%d loaded=%d block=%d",
+			host.worldRangeCalls, host.worldBlockLoadedCalls, host.worldBlockCalls)
 	}
 
 	options, err := pluginRuntime.CommandEnumOptions(kitchen.Index, 5, 1, CommandEnumContext{
