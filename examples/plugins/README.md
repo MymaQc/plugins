@@ -1,7 +1,3 @@
-# Example plugin output
+# Plugins
 
-Each plugin owns its `Cargo.toml`, `Cargo.lock`, source, and target directory. `make run` builds each plugin manifest and stages native libraries in this directory.
-
-Precompiled native plugin libraries may also be placed in this directory. Runtime loads both compiled examples and compatible precompiled plugins.
-
-Included examples cover movement cancellation, chat mutation, lifecycle and mutable skin-change hooks, Dragonfly command registration, player latency and active-effect snapshots, typed items, scoreboards, all Dragonfly form families, managed worlds, typed entity/projectile operations, and all built-in world particles.
+Each source plugin owns its `.csproj`. `make run` publishes NativeAOT shared libraries here before starting the server. Compatible precompiled `.so` files may also be placed here.

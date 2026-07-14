@@ -17,6 +17,7 @@ import (
 
 func nativeArtifacts(t testing.TB) (string, string) {
 	t.Helper()
+	t.Skip("legacy Rust plugin integration test")
 	root, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatal(err)

@@ -1,6 +1,8 @@
 /build/
 /target/
 **/target/
+**/bin/
+**/obj/
 /examples/lib/
 /examples/plugins/*.so
 /examples/plugins/*.dylib

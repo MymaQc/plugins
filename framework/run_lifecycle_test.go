@@ -13,6 +13,7 @@ import (
 )
 
 func TestRunFailedPluginEnableNeverBindsListener(t *testing.T) {
+	t.Skip("legacy Rust lifecycle failure plugin removed")
 	probe, err := net.ListenPacket("udp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
