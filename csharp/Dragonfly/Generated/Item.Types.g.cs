@@ -146,6 +146,49 @@ namespace Dragonfly
         public static Colour ColourRed() => new(14);
         public static Colour ColourBlack() => new(15);
 
+        public readonly record struct FireworkShape
+        {
+            private readonly int _value;
+            internal FireworkShape(int value) => _value = value;
+            internal int Id => _value;
+
+            public byte Uint8() => _value switch
+            {
+                0 => 0,
+                1 => 1,
+                2 => 2,
+                3 => 3,
+                4 => 4,
+                _ => throw new InvalidOperationException("Invalid FireworkShape value."),
+            };
+
+            public string Name() => _value switch
+            {
+                0 => "Small Sphere",
+                1 => "Huge Sphere",
+                2 => "Star",
+                3 => "Creeper Head",
+                4 => "Burst",
+                _ => throw new InvalidOperationException("Invalid FireworkShape value."),
+            };
+
+            public string String() => _value switch
+            {
+                0 => "small_sphere",
+                1 => "huge_sphere",
+                2 => "star",
+                3 => "creeper_head",
+                4 => "burst",
+                _ => throw new InvalidOperationException("Invalid FireworkShape value."),
+            };
+        }
+
+        public static FireworkShape FireworkShapeSmallSphere() => new(0);
+        public static FireworkShape FireworkShapeHugeSphere() => new(1);
+        public static FireworkShape FireworkShapeStar() => new(2);
+        public static FireworkShape FireworkShapeCreeperHead() => new(3);
+        public static FireworkShape FireworkShapeBurst() => new(4);
+
         public readonly record struct SmithingTemplateType
         {
             private readonly int _value;
@@ -398,6 +441,16 @@ namespace Dragonfly
         public static WrittenBookGeneration CopyGeneration() => new(1);
         public static WrittenBookGeneration CopyOfCopyGeneration() => new(2);
 
+        public readonly record struct FireworkExplosion
+        {
+            public FireworkShape Shape { get; init; }
+            public Colour Colour { get; init; }
+            public Colour Fade { get; init; }
+            public bool Fades { get; init; }
+            public bool Twinkle { get; init; }
+            public bool Trail { get; init; }
+        }
+
         public readonly record struct AmethystShard : World.Item;
         public readonly record struct Apple : World.Item;
         public readonly record struct Arrow(global::Dragonfly.Potion.Value Tip) : World.Item;
@@ -506,6 +559,24 @@ namespace Dragonfly
         public readonly record struct Feather : World.Item;
         public readonly record struct FermentedSpiderEye : World.Item;
         public readonly record struct FireCharge : World.Item;
+        public readonly struct Firework : World.Item
+        {
+            public Firework(TimeSpan Duration = default, params FireworkExplosion[] Explosions)
+            {
+                ArgumentNullException.ThrowIfNull(Explosions);
+                this.Duration = Duration;
+                _explosions = Explosions;
+            }
+
+            private readonly FireworkExplosion[]? _explosions;
+            public TimeSpan Duration { get; }
+            public FireworkExplosion[] Explosions => _explosions ?? [];
+            public TimeSpan RandomisedDuration() => Duration + TimeSpan.FromTicks(Random.Shared.NextInt64(6_000_000));
+            public bool OffHand() => true;
+        }
+
+        public readonly record struct FireworkStar(FireworkExplosion FireworkExplosion) : World.Item;
+
         public readonly record struct Flint : World.Item;
         public readonly record struct FlintAndSteel : World.Item;
         public readonly record struct GhastTear : World.Item;
@@ -1142,6 +1213,40 @@ namespace Dragonfly
                     identifier = "minecraft:fermented_spider_eye"; metadata = 0; return true;
                 case Item.FireCharge _:
                     identifier = "minecraft:fire_charge"; metadata = 0; return true;
+                case Item.Firework _:
+                    identifier = "minecraft:firework_rocket"; metadata = 0; return true;
+                case Item.FireworkStar value when value.FireworkExplosion.Colour == Item.ColourWhite():
+                    identifier = "minecraft:firework_star"; metadata = 15; return true;
+                case Item.FireworkStar value when value.FireworkExplosion.Colour == Item.ColourOrange():
+                    identifier = "minecraft:firework_star"; metadata = 14; return true;
+                case Item.FireworkStar value when value.FireworkExplosion.Colour == Item.ColourMagenta():
+                    identifier = "minecraft:firework_star"; metadata = 13; return true;
+                case Item.FireworkStar value when value.FireworkExplosion.Colour == Item.ColourLightBlue():
+                    identifier = "minecraft:firework_star"; metadata = 12; return true;
+                case Item.FireworkStar value when value.FireworkExplosion.Colour == Item.ColourYellow():
+                    identifier = "minecraft:firework_star"; metadata = 11; return true;
+                case Item.FireworkStar value when value.FireworkExplosion.Colour == Item.ColourLime():
+                    identifier = "minecraft:firework_star"; metadata = 10; return true;
+                case Item.FireworkStar value when value.FireworkExplosion.Colour == Item.ColourPink():
+                    identifier = "minecraft:firework_star"; metadata = 9; return true;
+                case Item.FireworkStar value when value.FireworkExplosion.Colour == Item.ColourGrey():
+                    identifier = "minecraft:firework_star"; metadata = 8; return true;
+                case Item.FireworkStar value when value.FireworkExplosion.Colour == Item.ColourLightGrey():
+                    identifier = "minecraft:firework_star"; metadata = 7; return true;
+                case Item.FireworkStar value when value.FireworkExplosion.Colour == Item.ColourCyan():
+                    identifier = "minecraft:firework_star"; metadata = 6; return true;
+                case Item.FireworkStar value when value.FireworkExplosion.Colour == Item.ColourPurple():
+                    identifier = "minecraft:firework_star"; metadata = 5; return true;
+                case Item.FireworkStar value when value.FireworkExplosion.Colour == Item.ColourBlue():
+                    identifier = "minecraft:firework_star"; metadata = 4; return true;
+                case Item.FireworkStar value when value.FireworkExplosion.Colour == Item.ColourBrown():
+                    identifier = "minecraft:firework_star"; metadata = 3; return true;
+                case Item.FireworkStar value when value.FireworkExplosion.Colour == Item.ColourGreen():
+                    identifier = "minecraft:firework_star"; metadata = 2; return true;
+                case Item.FireworkStar value when value.FireworkExplosion.Colour == Item.ColourRed():
+                    identifier = "minecraft:firework_star"; metadata = 1; return true;
+                case Item.FireworkStar value when value.FireworkExplosion.Colour == Item.ColourBlack():
+                    identifier = "minecraft:firework_star"; metadata = 0; return true;
                 case Item.Flint _:
                     identifier = "minecraft:flint"; metadata = 0; return true;
                 case Item.FlintAndSteel _:
@@ -1893,6 +1998,23 @@ namespace Dragonfly
             if (identifier == "minecraft:feather" && metadata == 0) return new Item.Feather();
             if (identifier == "minecraft:fermented_spider_eye" && metadata == 0) return new Item.FermentedSpiderEye();
             if (identifier == "minecraft:fire_charge" && metadata == 0) return new Item.FireCharge();
+            if (identifier == "minecraft:firework_rocket" && metadata == 0) return new Item.Firework();
+            if (identifier == "minecraft:firework_star" && metadata == 15) return new Item.FireworkStar(new Item.FireworkExplosion { Colour = Item.ColourWhite() });
+            if (identifier == "minecraft:firework_star" && metadata == 14) return new Item.FireworkStar(new Item.FireworkExplosion { Colour = Item.ColourOrange() });
+            if (identifier == "minecraft:firework_star" && metadata == 13) return new Item.FireworkStar(new Item.FireworkExplosion { Colour = Item.ColourMagenta() });
+            if (identifier == "minecraft:firework_star" && metadata == 12) return new Item.FireworkStar(new Item.FireworkExplosion { Colour = Item.ColourLightBlue() });
+            if (identifier == "minecraft:firework_star" && metadata == 11) return new Item.FireworkStar(new Item.FireworkExplosion { Colour = Item.ColourYellow() });
+            if (identifier == "minecraft:firework_star" && metadata == 10) return new Item.FireworkStar(new Item.FireworkExplosion { Colour = Item.ColourLime() });
+            if (identifier == "minecraft:firework_star" && metadata == 9) return new Item.FireworkStar(new Item.FireworkExplosion { Colour = Item.ColourPink() });
+            if (identifier == "minecraft:firework_star" && metadata == 8) return new Item.FireworkStar(new Item.FireworkExplosion { Colour = Item.ColourGrey() });
+            if (identifier == "minecraft:firework_star" && metadata == 7) return new Item.FireworkStar(new Item.FireworkExplosion { Colour = Item.ColourLightGrey() });
+            if (identifier == "minecraft:firework_star" && metadata == 6) return new Item.FireworkStar(new Item.FireworkExplosion { Colour = Item.ColourCyan() });
+            if (identifier == "minecraft:firework_star" && metadata == 5) return new Item.FireworkStar(new Item.FireworkExplosion { Colour = Item.ColourPurple() });
+            if (identifier == "minecraft:firework_star" && metadata == 4) return new Item.FireworkStar(new Item.FireworkExplosion { Colour = Item.ColourBlue() });
+            if (identifier == "minecraft:firework_star" && metadata == 3) return new Item.FireworkStar(new Item.FireworkExplosion { Colour = Item.ColourBrown() });
+            if (identifier == "minecraft:firework_star" && metadata == 2) return new Item.FireworkStar(new Item.FireworkExplosion { Colour = Item.ColourGreen() });
+            if (identifier == "minecraft:firework_star" && metadata == 1) return new Item.FireworkStar(new Item.FireworkExplosion { Colour = Item.ColourRed() });
+            if (identifier == "minecraft:firework_star" && metadata == 0) return new Item.FireworkStar(new Item.FireworkExplosion { Colour = Item.ColourBlack() });
             if (identifier == "minecraft:flint" && metadata == 0) return new Item.Flint();
             if (identifier == "minecraft:flint_and_steel" && metadata == 0) return new Item.FlintAndSteel();
             if (identifier == "minecraft:ghast_tear" && metadata == 0) return new Item.GhastTear();

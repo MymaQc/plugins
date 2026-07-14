@@ -554,6 +554,48 @@ public sealed class KitchenSink : Plugin
                     output.Error("Written book round-trip failed.");
                     return;
                 }
+
+                var explosion = new Dragonfly.Item.FireworkExplosion
+                {
+                    Shape = Dragonfly.Item.FireworkShapeStar(),
+                    Colour = Dragonfly.Item.ColourBlack(),
+                    Fade = Dragonfly.Item.ColourRed(),
+                    Fades = true,
+                    Twinkle = true,
+                    Trail = true,
+                };
+                var firework = new Dragonfly.Item.Firework(TimeSpan.FromMilliseconds(1500), explosion);
+                var randomisedDuration = firework.RandomisedDuration();
+                var otherFirework = new Dragonfly.Item.Firework(TimeSpan.FromMilliseconds(2000), explosion);
+                if (!firework.OffHand() || explosion.Shape.Name() != "Star" || explosion.Shape.String() != "star" ||
+                    randomisedDuration < firework.Duration ||
+                    randomisedDuration >= firework.Duration + TimeSpan.FromMilliseconds(600) ||
+                    Dragonfly.Item.NewStack(firework, 1).Comparable(Dragonfly.Item.NewStack(otherFirework, 1)))
+                {
+                    output.Error("Firework behavior failed.");
+                    return;
+                }
+                inventory.SetItem(0, Dragonfly.Item.NewStack(firework, 1));
+                if (inventory.Item(0).Item() is not Dragonfly.Item.Firework storedFirework ||
+                    storedFirework.Duration != firework.Duration || storedFirework.Explosions.Length != 1 ||
+                    storedFirework.Explosions[0] != explosion)
+                {
+                    output.Error("Firework round-trip failed.");
+                    return;
+                }
+
+                var starExplosion = new Dragonfly.Item.FireworkExplosion
+                {
+                    Shape = Dragonfly.Item.FireworkShapeBurst(),
+                    Colour = Dragonfly.Item.ColourCyan(),
+                };
+                inventory.SetItem(0, Dragonfly.Item.NewStack(new Dragonfly.Item.FireworkStar(starExplosion), 1));
+                if (inventory.Item(0).Item() is not Dragonfly.Item.FireworkStar storedStar ||
+                    storedStar.FireworkExplosion != starExplosion)
+                {
+                    output.Error("Firework star round-trip failed.");
+                    return;
+                }
                 output.Printf(
                     "item=Sword, tier={0}, count={1}, held={2}, armour_slots={3}, added_empty={4}, variants={5}",
                     typed.Tier.Name,
@@ -561,7 +603,7 @@ public sealed class KitchenSink : Plugin
                     held.Item() is Dragonfly.Item.Sword ? "true" : "false",
                     armour.Inventory().Size(),
                     addedEmpty,
-                    variants.Length + 2);
+                    variants.Length + 4);
             }
             finally
             {

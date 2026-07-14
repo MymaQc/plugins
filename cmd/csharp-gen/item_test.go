@@ -18,7 +18,7 @@ func TestInspectItemsUsesASTAndRegistry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if spec.AirIdentifier != "minecraft:air" || len(spec.ToolTiers) != 7 || len(spec.ValueTypes) != 9 || len(spec.Types) != 123 {
+	if spec.AirIdentifier != "minecraft:air" || len(spec.ToolTiers) != 7 || len(spec.ValueTypes) != 10 || len(spec.Types) != 125 {
 		t.Fatalf("item spec has air=%q tiers=%d types=%d", spec.AirIdentifier, len(spec.ToolTiers), len(spec.Types))
 	}
 	generated := string(generateItems(spec))
@@ -39,6 +39,17 @@ func TestInspectItemsUsesASTAndRegistry(t *testing.T) {
 		"public static DiscType DiscLavaChicken() => new(20)",
 		`20 => "Lava Chicken"`,
 		`20 => "Hyper Potions"`,
+		"public static FireworkShape FireworkShapeBurst() => new(4)",
+		`4 => "Burst"`,
+		`4 => "burst"`,
+		"public readonly record struct FireworkExplosion",
+		"public readonly struct Firework : World.Item",
+		"public TimeSpan RandomisedDuration()",
+		"public bool OffHand() => true",
+		"public readonly record struct FireworkStar(FireworkExplosion FireworkExplosion) : World.Item",
+		`identifier = "minecraft:firework_rocket"; metadata = 0`,
+		`identifier = "minecraft:firework_star"; metadata = 0`,
+		`identifier = "minecraft:firework_star"; metadata = 15`,
 		"public static WrittenBookGeneration CopyOfCopyGeneration() => new(2)",
 		`2 => "copy of copy"`,
 		"public readonly struct BookAndQuill : World.Item",

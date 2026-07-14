@@ -64,7 +64,7 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    a null response preserves Dragonfly's close signal. `Element` and `MenuElement` retain their
    public JSON-marshalling contract too.
 6. Items. The current item slice generates `World.Item`, `Item.ToolTier`, all seven tier values,
-   five tiered tools, and 123 concrete item structs. Finite stateful families now include typed
+   five tiered tools, and 125 concrete item structs. Finite stateful families now include typed
    colours, potions and tipped arrows, banner patterns, smithing templates, suspicious stews,
    pottery sherds, goat horns, and music discs. Dependency factories and encoded states are
    derived from Dragonfly's Go AST and live registries rather than a handwritten schema. Their
@@ -73,6 +73,9 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    Generated `BookAndQuill`, `WrittenBook`, and `WrittenBookGeneration` mirror Dragonfly's fields,
    page operations, and UTF-8 byte limits. A private bounded LittleEndian NBT codec carries their
    typed state; raw NBT remains absent from the plugin API.
+   Generated `Firework`, `FireworkStar`, `FireworkExplosion`, and `FireworkShape` expose typed
+   duration, explosion, colour, fade, twinkle, trail, and shape behavior. Their rocket and star
+   state uses the same private NBT transport.
    Dragonfly's live item registry supplies the private identifier/metadata and capability codecs.
    `Item.Stack` exposes `NewStack`, count/growth/max-count, durability/damage/unbreakable,
    attack damage, custom names, lore, anvil cost, comparison/equality, and stack merging.
@@ -84,7 +87,7 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    with one host read. Bounded open/read/close item snapshots preserve damage, unbreakable state, anvil cost, custom
    names, lore, item NBT, plugin values, and enchantments internally. Unknown registered stateful
    NBT-backed items decode to a private opaque item and round-trip losslessly. Bucket content,
-   bucket content, armour and trims, fireworks, charged crossbows, enchantments and values, `WithItem`,
+   armour and trims, charged crossbows, enchantments and values, `WithItem`,
    ender chests, custom items, and item events remain next; no public identifier fallback is added.
 7. Entities, remaining sounds, and remaining world/block methods.
 8. Convert practice-core and expand parity tests against Dragonfly.
@@ -110,7 +113,9 @@ instruments through the transaction-owned `AddParticle` call.
 game mode.
 `/kitchen item` exercises stack count, durability, unbreakable, attack damage, anvil cost,
 comparison and merging, then round-trips all eleven finite stateful item families plus both typed
-book families through player inventory before restoring all changed player state.
+book and firework item families through player inventory before restoring all changed player
+state. Its firework coverage also exercises typed explosion shapes, colours, fades, twinkle,
+trail, off-hand support, and randomised duration.
 `/kitchen form` exercises reflected menu, custom, and modal forms, every built-in element,
 submitted values, closers, and nested sends. `/kitchen raw-form` exercises the open `Form.Value`
 contract plus public element/menu-element JSON marshalling.

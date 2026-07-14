@@ -9,6 +9,8 @@ testing binary-only delivery.
 
 `kitchen-sink` uses every exposed C# API and grows with each parity slice. Its `block` overload
 demonstrates `World.Tx`, `Cube.Pos`, typed `Block.Sand`, and `World.SetOpts` without exposing block
-identifiers or NBT.
+identifiers or NBT. Its `item` overload round-trips typed finite-state items, books, fireworks,
+explosions, and firework stars through player inventory while the private transport keeps item
+identifiers and NBT out of plugin code.
 
 `vanilla-commands` keeps each command in its own file and grows as more of Dragonfly's gameplay API is exposed.

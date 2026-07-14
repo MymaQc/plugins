@@ -1624,6 +1624,14 @@ func inspectItems(directory string) (itemSpec, error) {
 			result.Types = append(result.Types, definition)
 			continue
 		}
+		if typeOf.Name() == "Firework" || typeOf.Name() == "FireworkStar" {
+			definition, err := inspectFireworkItemType(typeOf, values, declaration, types, methods, liveTiers, valueTypes)
+			if err != nil {
+				return itemSpec{}, err
+			}
+			result.Types = append(result.Types, definition)
+			continue
+		}
 		fields, supported, err := inspectItemFields(declaration, typeOf.Name(), valueTypes)
 		if err != nil {
 			return itemSpec{}, err
@@ -1679,6 +1687,127 @@ func inspectItems(directory string) (itemSpec, error) {
 		return itemSpec{}, fmt.Errorf("no safely representable Dragonfly items found")
 	}
 	return result, nil
+}
+
+func inspectFireworkItemType(
+	typeOf reflect.Type,
+	values []world.Item,
+	declaration *ast.TypeSpec,
+	types map[string]*ast.TypeSpec,
+	methods map[string]map[string]*ast.FuncDecl,
+	tiers []dfitem.ToolTier,
+	valueTypes []itemValueTypeSpec,
+) (itemTypeSpec, error) {
+	name := typeOf.Name()
+	if err := validateFireworkItemTypes(declaration, name, types, methods); err != nil {
+		return itemTypeSpec{}, err
+	}
+	definition := itemTypeSpec{Name: name, NBT: true}
+	if name == "Firework" {
+		if len(values) != 1 {
+			return itemTypeSpec{}, fmt.Errorf("Dragonfly item.Firework registry states changed: %d", len(values))
+		}
+		state, err := inspectItemState(typeOf, values[0], nil, tiers, valueTypes)
+		if err != nil {
+			return itemTypeSpec{}, err
+		}
+		definition.States = []itemStateSpec{state}
+		return definition, nil
+	}
+
+	colours := findItemValueType(valueTypes, "Colour")
+	if colours == nil || len(values) != len(colours.Values) {
+		return itemTypeSpec{}, fmt.Errorf("Dragonfly item.FireworkStar registry states changed: %d", len(values))
+	}
+	definition.Fields = []itemFieldSpec{{Name: "Colour", Kind: itemFieldValue, ValueType: "Colour"}}
+	for index, raw := range colours.Values {
+		colour, ok := raw.(dfitem.Colour)
+		if !ok {
+			return itemTypeSpec{}, fmt.Errorf("Dragonfly item.Colour value %d has type %T", index, raw)
+		}
+		value := dfitem.FireworkStar{FireworkExplosion: dfitem.FireworkExplosion{Colour: colour}}
+		state, err := inspectItemState(typeOf, value, nil, tiers, valueTypes)
+		if err != nil {
+			return itemTypeSpec{}, err
+		}
+		state.Values = []int{index}
+		definition.States = append(definition.States, state)
+	}
+	return definition, nil
+}
+
+func validateFireworkItemTypes(
+	spec *ast.TypeSpec,
+	name string,
+	types map[string]*ast.TypeSpec,
+	methods map[string]map[string]*ast.FuncDecl,
+) error {
+	wantFields := map[string][]string{
+		"Firework":     {"Duration time.Duration", "Explosions []FireworkExplosion"},
+		"FireworkStar": {"FireworkExplosion"},
+	}[name]
+	if fields := exportedItemFields(spec); !reflect.DeepEqual(fields, wantFields) {
+		return fmt.Errorf("Dragonfly item.%s fields changed: %v", name, fields)
+	}
+	if fields := exportedItemFields(types["FireworkExplosion"]); !reflect.DeepEqual(fields, []string{
+		"Shape FireworkShape", "Colour Colour", "Fade Colour", "Fades bool", "Twinkle bool", "Trail bool",
+	}) {
+		return fmt.Errorf("Dragonfly item.FireworkExplosion fields changed: %v", fields)
+	}
+	wantMethods := map[string]map[string]goSignature{
+		"Firework": {
+			"EncodeNBT":          {Results: "map[string]any"},
+			"DecodeNBT":          {Parameters: "map[string]any", Results: "any"},
+			"RandomisedDuration": {Results: "time.Duration"},
+			"OffHand":            {Results: "bool"},
+			"EncodeItem":         {Results: "string,int16"},
+		},
+		"FireworkStar": {
+			"EncodeNBT":  {Results: "map[string]any"},
+			"DecodeNBT":  {Parameters: "map[string]any", Results: "any"},
+			"EncodeItem": {Results: "string,int16"},
+		},
+	}[name]
+	for methodName, signature := range wantMethods {
+		method := methods[name][methodName]
+		if method == nil || !valueReceiver(method, name) ||
+			rawParameterTypes(method.Type.Params) != signature.Parameters || rawResultTypes(method.Type.Results) != signature.Results {
+			return fmt.Errorf("Dragonfly item.%s.%s signature changed", name, methodName)
+		}
+	}
+	for methodName, signature := range map[string]goSignature{
+		"EncodeNBT": {Results: "map[string]any"},
+		"DecodeNBT": {Parameters: "map[string]any", Results: "any"},
+	} {
+		method := methods["FireworkExplosion"][methodName]
+		if method == nil || !valueReceiver(method, "FireworkExplosion") ||
+			rawParameterTypes(method.Type.Params) != signature.Parameters || rawResultTypes(method.Type.Results) != signature.Results {
+			return fmt.Errorf("Dragonfly item.FireworkExplosion.%s signature changed", methodName)
+		}
+	}
+	return nil
+}
+
+func exportedItemFields(spec *ast.TypeSpec) []string {
+	structure, ok := biomeEmptyStruct(spec)
+	if !ok {
+		return nil
+	}
+	var fields []string
+	for _, field := range structure.Fields.List {
+		if len(field.Names) == 0 {
+			if name, ok := field.Type.(*ast.Ident); ok && name.IsExported() {
+				fields = append(fields, name.Name)
+			}
+			continue
+		}
+		for _, name := range field.Names {
+			if name.IsExported() {
+				fields = append(fields, name.Name+" "+formatGoExpression(field.Type))
+			}
+		}
+	}
+	return fields
 }
 
 func validateBookItemType(spec *ast.TypeSpec, name string, methods map[string]*ast.FuncDecl) error {
@@ -1746,6 +1875,7 @@ func inspectItemValueTypes(directory string, itemFunctions map[string]*ast.FuncD
 	}
 	specs := []itemValueTypeSpec{
 		{GoType: "Colour", CSharpType: "Colour", Container: "Item", Name: "Colour", Values: anySlice(dfitem.Colours())},
+		{GoType: "FireworkShape", CSharpType: "FireworkShape", Container: "Item", Name: "FireworkShape", Values: anySlice(dfitem.FireworkShapes())},
 		{GoType: "SmithingTemplateType", CSharpType: "SmithingTemplateType", Container: "Item", Name: "SmithingTemplateType", Values: anySlice(dfitem.SmithingTemplates())},
 		{GoType: "BannerPatternType", CSharpType: "BannerPatternType", Container: "Item", Name: "BannerPatternType", Values: anySlice(dfitem.BannerPatterns())},
 		{GoType: "StewType", CSharpType: "StewType", Container: "Item", Name: "StewType", Values: anySlice(dfitem.StewTypes())},
@@ -1760,6 +1890,7 @@ func inspectItemValueTypes(directory string, itemFunctions map[string]*ast.FuncD
 		name      string
 	}{
 		"Colour":               {itemFunctions, "Colours"},
+		"FireworkShape":        {itemFunctions, "FireworkShapes"},
 		"SmithingTemplateType": {itemFunctions, "SmithingTemplates"},
 		"BannerPatternType":    {itemFunctions, "BannerPatterns"},
 		"StewType":             {itemFunctions, "StewTypes"},
@@ -1839,6 +1970,11 @@ func inspectItemValueMethods(spec itemValueTypeSpec) ([]itemValueMethodSpec, err
 			{Name: "String", ReturnType: "string"},
 			{Name: "SilverString", ReturnType: "string"},
 			{Name: "Uint8", ReturnType: "byte"},
+		},
+		"FireworkShape": {
+			{Name: "Uint8", ReturnType: "byte"},
+			{Name: "Name", ReturnType: "string"},
+			{Name: "String", ReturnType: "string"},
 		},
 		"SmithingTemplateType": {{Name: "String", ReturnType: "string"}},
 		"BannerPatternType": {
@@ -3682,9 +3818,12 @@ func generateItems(spec itemSpec) []byte {
 		}
 		generateItemValueType(&output, valueType, "        ")
 	}
+	if itemTypeByName(spec.Types, "Firework") != nil {
+		generateFireworkExplosionType(&output)
+	}
 	for _, definition := range spec.Types {
 		if definition.NBT {
-			generateBookItemType(&output, definition.Name)
+			generateNBTItemType(&output, definition.Name)
 			continue
 		}
 		if len(definition.Fields) == 0 {
@@ -3721,6 +3860,9 @@ func generateItems(spec itemSpec) []byte {
 		for _, state := range definition.States {
 			fmt.Fprintf(&output, "                case Item.%s", definition.Name)
 			switch {
+			case definition.Name == "FireworkStar":
+				valueType := findItemValueType(spec.ValueTypes, "Colour")
+				fmt.Fprintf(&output, " value when value.FireworkExplosion.Colour == %s:\n", itemValueFactory(*valueType, state.Values[0]))
 			case len(definition.Fields) == 0:
 				output.WriteString(" _:\n")
 			case definition.Fields[0].Kind == itemFieldToolTier:
@@ -3748,6 +3890,9 @@ func generateItems(spec itemSpec) []byte {
 		for _, state := range definition.States {
 			fmt.Fprintf(&output, "            if (identifier == %s && metadata == %d) return new Item.%s(", strconv.Quote(state.Identifier), state.Metadata, definition.Name)
 			switch {
+			case definition.Name == "FireworkStar":
+				valueType := findItemValueType(spec.ValueTypes, "Colour")
+				fmt.Fprintf(&output, "new Item.FireworkExplosion { Colour = %s }", itemValueFactory(*valueType, state.Values[0]))
 			case len(definition.Fields) == 0:
 			case definition.Fields[0].Kind == itemFieldToolTier:
 				output.WriteString("Item." + spec.ToolTiers[state.ToolTier].Variable)
@@ -3774,7 +3919,56 @@ func generateItems(spec itemSpec) []byte {
 	return output.Bytes()
 }
 
-func generateBookItemType(output *bytes.Buffer, name string) {
+func itemTypeByName(types []itemTypeSpec, name string) *itemTypeSpec {
+	for index := range types {
+		if types[index].Name == name {
+			return &types[index]
+		}
+	}
+	return nil
+}
+
+func generateFireworkExplosionType(output *bytes.Buffer) {
+	output.WriteString(`        public readonly record struct FireworkExplosion
+        {
+            public FireworkShape Shape { get; init; }
+            public Colour Colour { get; init; }
+            public Colour Fade { get; init; }
+            public bool Fades { get; init; }
+            public bool Twinkle { get; init; }
+            public bool Trail { get; init; }
+        }
+
+`)
+}
+
+func generateNBTItemType(output *bytes.Buffer, name string) {
+	if name == "Firework" {
+		output.WriteString(`        public readonly struct Firework : World.Item
+        {
+            public Firework(TimeSpan Duration = default, params FireworkExplosion[] Explosions)
+            {
+                ArgumentNullException.ThrowIfNull(Explosions);
+                this.Duration = Duration;
+                _explosions = Explosions;
+            }
+
+            private readonly FireworkExplosion[]? _explosions;
+            public TimeSpan Duration { get; }
+            public FireworkExplosion[] Explosions => _explosions ?? [];
+            public TimeSpan RandomisedDuration() => Duration + TimeSpan.FromTicks(Random.Shared.NextInt64(6_000_000));
+            public bool OffHand() => true;
+        }
+
+`)
+		return
+	}
+	if name == "FireworkStar" {
+		output.WriteString(`        public readonly record struct FireworkStar(FireworkExplosion FireworkExplosion) : World.Item;
+
+`)
+		return
+	}
 	if name == "BookAndQuill" {
 		output.WriteString(`        public readonly struct BookAndQuill : World.Item
         {
@@ -3921,6 +4115,10 @@ func generateItemCapabilities(output *bytes.Buffer, spec itemSpec) {
 }
 
 func csharpItemPattern(definition itemTypeSpec, state itemStateSpec, spec itemSpec) string {
+	if definition.Name == "FireworkStar" {
+		valueType := findItemValueType(spec.ValueTypes, "Colour")
+		return fmt.Sprintf("Item.FireworkStar value when value.FireworkExplosion.Colour == %s", itemValueFactory(*valueType, state.Values[0]))
+	}
 	if len(definition.Fields) == 0 {
 		return "Item." + definition.Name + " _"
 	}

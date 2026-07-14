@@ -129,14 +129,14 @@ func TestCSharpTypedItemInventoryFlow(t *testing.T) {
 			Overload: uint64(overload), Arguments: []string{"item"},
 			OnlinePlayers: []CommandPlayer{{Player: player, Name: "ItemTester"}},
 		})
-		if err != nil || output.Failed || output.Message != "item=Sword, tier=diamond, count=1, held=true, armour_slots=4, added_empty=0, variants=13" {
+		if err != nil || output.Failed || output.Message != "item=Sword, tier=diamond, count=1, held=true, armour_slots=4, added_empty=0, variants=15" {
 			t.Fatalf("iteration %d: output=%#v error=%v", iteration, output, err)
 		}
 	}
 	if !reflect.DeepEqual(host.inventory, previous) || !reflect.DeepEqual(host.held, [2]ItemStack{mainHand, offHand}) {
 		t.Fatalf("command did not restore items: inventory=%#v held=%#v", host.inventory, host.held)
 	}
-	if len(host.sets) != 1050 || len(host.heldSets) != 140 {
+	if len(host.sets) != 1190 || len(host.heldSets) != 140 {
 		t.Fatalf("item writes=%d held writes=%d", len(host.sets), len(host.heldSets))
 	}
 	if len(host.armourSets) != 70 || len(host.adds) != 70 || host.adds[0].Identifier != "" || host.adds[0].Count != 0 {
@@ -186,6 +186,31 @@ func TestCSharpTypedItemInventoryFlow(t *testing.T) {
 		writtenNBT["title"] != "Kitchen" || writtenNBT["author"] != "bedrock-gophers" ||
 		writtenNBT["generation"] != uint8(1) {
 		t.Fatalf("typed written book transport=%#v nbt=%#v", written, writtenNBT)
+	}
+	firework := host.sets[14]
+	fireworkNBT, ok := decodeTestItemNBT(firework.NBT)
+	fireworks, fireworksOK := fireworkNBT["Fireworks"].(map[string]any)
+	explosions, explosionsOK := fireworks["Explosions"].([]any)
+	var explosion map[string]any
+	if explosionsOK && len(explosions) == 1 {
+		explosion, explosionsOK = explosions[0].(map[string]any)
+	}
+	if !ok || firework.Identifier != "minecraft:firework_rocket" || firework.Metadata != 0 || firework.Count != 1 ||
+		!fireworksOK || fireworks["Flight"] != uint8(2) || !explosionsOK ||
+		explosion["FireworkType"] != uint8(2) || explosion["FireworkColor"] != [1]byte{0} ||
+		explosion["FireworkFade"] != [1]byte{1} || explosion["FireworkFlicker"] != uint8(1) ||
+		explosion["FireworkTrail"] != uint8(1) {
+		t.Fatalf("typed firework transport=%#v nbt=%#v", firework, fireworkNBT)
+	}
+	star := host.sets[15]
+	starNBT, ok := decodeTestItemNBT(star.NBT)
+	starExplosion, starExplosionOK := starNBT["FireworksItem"].(map[string]any)
+	if !ok || star.Identifier != "minecraft:firework_star" || star.Metadata != 6 || star.Count != 1 ||
+		!starExplosionOK || starExplosion["FireworkType"] != uint8(4) ||
+		starExplosion["FireworkColor"] != [1]byte{6} || starExplosion["FireworkFade"] != [0]byte{} ||
+		starExplosion["FireworkFlicker"] != uint8(0) || starExplosion["FireworkTrail"] != uint8(0) ||
+		starNBT["customColor"] != int32(-15295332) {
+		t.Fatalf("typed firework star transport=%#v nbt=%#v", star, starNBT)
 	}
 	host.failWrites = true
 	failed, err := runtime.HandleCommand(kitchen.Index, CommandInput{
