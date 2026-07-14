@@ -1,3 +1,11 @@
 # Kitchen sink
 
-Compile-time parity canary. It uses every public C# API exposed by the framework. New handlers, commands, worlds, items, blocks, forms, and entity APIs must be exercised here when added.
+Runnable parity showcase. Each file demonstrates one coherent part of the public C# API:
+
+- movement validation and cancellation;
+- chat and food-state mutation;
+- player-action telemetry;
+- plugin lifecycle.
+
+New commands, worlds, items, blocks, forms, entities, and handlers belong here only when the
+example can do something real with them. This plugin is not a compile-time API dumping ground.
