@@ -409,10 +409,12 @@ func (tx *Tx) AddParticle(pos mgl64.Vec3, p Particle) {}`
 	}
 
 	blockOutput := string(generateBlocks(blockSpec{
-		Stateless: []encodedBlock{{Name: "Air", Identifier: "minecraft:air", PropertiesNBT: []byte{10, 0, 0, 0}}},
-		Sand: [2]encodedBlock{
-			{Name: "Sand", Identifier: "minecraft:sand", PropertiesNBT: []byte{10, 0, 0, 0}},
-			{Name: "Sand", Identifier: "minecraft:red_sand", PropertiesNBT: []byte{10, 0, 0, 0}},
+		Types: []blockTypeSpec{
+			{Name: "Air", States: []encodedBlockState{{encodedBlock: encodedBlock{Name: "Air", Identifier: "minecraft:air", PropertiesNBT: []byte{10, 0, 0, 0}}}}},
+			{Name: "Sand", Fields: []blockField{{Name: "Red", Type: "bool"}}, States: []encodedBlockState{
+				{encodedBlock: encodedBlock{Name: "Sand", Identifier: "minecraft:sand", PropertiesNBT: []byte{10, 0, 0, 0}}, Values: []blockFieldValue{{}}},
+				{encodedBlock: encodedBlock{Name: "Sand", Identifier: "minecraft:red_sand", PropertiesNBT: []byte{10, 0, 0, 0}}, Values: []blockFieldValue{{Bool: true}}},
+			}},
 		},
 		Liquids: []liquidSpec{
 			{Name: "Water", LiquidType: "water", States: []encodedLiquid{{

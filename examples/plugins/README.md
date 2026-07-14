@@ -2,6 +2,8 @@
 
 Each source plugin owns its `.csproj`. `make run` regenerates the C# API, publishes every source
 project as NativeAOT, replaces staged example `.so` files, then starts the server.
+It does not hot-reload an existing server process; stop that process and reconnect after rerunning
+`make run` so Bedrock receives the new command metadata.
 
 The loader accepts compatible precompiled `.so` files, but `make run` is source-owned and cleans
 its staged binaries. Stage a precompiled file after the build and start the server directly when
@@ -9,7 +11,8 @@ testing binary-only delivery.
 
 `kitchen-sink` uses every exposed C# API and grows with each parity slice. Its `block` overload
 demonstrates `World.Tx`, `Cube.Pos`, typed `Block.Sand`, and `World.SetOpts` without exposing block
-identifiers or NBT. Its `item` overload round-trips typed finite-state items, books, fireworks,
+identifiers or NBT. Its `crop` overload round-trips the promoted `Growth` field as a typed
+`Block.WheatSeeds`. Its `item` overload round-trips typed finite-state items, books, fireworks,
 and all 28 tiered armour states through player inventory while the private transport keeps item
 identifiers and NBT out of plugin code, including dyed leather and armour trims.
 

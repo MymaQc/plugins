@@ -67,6 +67,33 @@ type encodedBlock struct {
 	PropertiesNBT []byte
 }
 
+type blockField struct {
+	Name string
+	Type string
+}
+
+type blockFieldValue struct {
+	Bool bool
+	Int  int
+}
+
+type encodedBlockState struct {
+	encodedBlock
+	Values []blockFieldValue
+}
+
+type blockTypeSpec struct {
+	Name   string
+	Fields []blockField
+	States []encodedBlockState
+}
+
+type blockDecodeCase struct {
+	Identifier  string
+	State       int
+	Constructor string
+}
+
 type encodedLiquid struct {
 	encodedBlock
 	Still   bool
@@ -81,9 +108,8 @@ type liquidSpec struct {
 }
 
 type blockSpec struct {
-	Stateless []encodedBlock
-	Sand      [2]encodedBlock
-	Liquids   []liquidSpec
+	Types   []blockTypeSpec
+	Liquids []liquidSpec
 }
 
 type encodedBiome struct {
@@ -1458,7 +1484,7 @@ func inspectBlocks(directory string) (blockSpec, error) {
 			}
 			for _, raw := range gen.Specs {
 				typeSpec, ok := raw.(*ast.TypeSpec)
-				if ok && typeSpec.Name.IsExported() {
+				if ok {
 					declarations[typeSpec.Name.Name] = typeSpec
 				}
 			}
@@ -1481,54 +1507,100 @@ func inspectBlocks(directory string) (blockSpec, error) {
 	}
 
 	var result blockSpec
-	for typeOf, states := range registered {
-		if declarations[typeOf.Name()] == nil {
+	types := make([]reflect.Type, 0, len(registered))
+	for typeOf := range registered {
+		types = append(types, typeOf)
+	}
+	sort.Slice(types, func(i, j int) bool { return types[i].Name() < types[j].Name() })
+	for _, typeOf := range types {
+		if typeOf.Name() == "Water" || typeOf.Name() == "Lava" {
+			continue
+		}
+		declaration := declarations[typeOf.Name()]
+		if declaration == nil || !declaration.Name.IsExported() {
 			return blockSpec{}, fmt.Errorf("registered block %s has no exported AST declaration", typeOf.Name())
 		}
-		exported := 0
-		for index := 0; index < typeOf.NumField(); index++ {
-			if typeOf.Field(index).IsExported() {
-				exported++
+		visible := reflect.VisibleFields(typeOf)
+		definition := blockTypeSpec{Name: typeOf.Name()}
+		indexes := make([][]int, 0, len(visible))
+		primitive := true
+		for _, field := range visible {
+			if !field.IsExported() {
+				continue
 			}
+			fieldType := ""
+			switch {
+			case field.Type.PkgPath() == "" && field.Type.Name() == "bool":
+				fieldType = "bool"
+			case field.Type.PkgPath() == "" && field.Type.Name() == "int":
+				fieldType = "int"
+			default:
+				primitive = false
+			}
+			if !primitive {
+				break
+			}
+			if !blockFieldVaries(registered[typeOf], field.Index, fieldType) {
+				continue
+			}
+			astField, err := blockFieldAtASTPath(typeOf.Name(), field.Index, declarations)
+			if err != nil {
+				return blockSpec{}, err
+			}
+			if astField.Name != field.Name || astField.Type != fieldType {
+				return blockSpec{}, fmt.Errorf("Dragonfly block.%s promoted field %s differs between AST and reflection: got %#v", typeOf.Name(), field.Name, astField)
+			}
+			definition.Fields = append(definition.Fields, astField)
+			indexes = append(indexes, field.Index)
 		}
-		if exported != 0 {
+		if !primitive {
 			continue
 		}
-		zero, ok := reflect.Zero(typeOf).Interface().(world.Block)
-		if !ok {
-			continue
+		seen := map[string]encodedBlock{}
+		for _, state := range registered[typeOf] {
+			value := reflect.ValueOf(state)
+			if value.Kind() == reflect.Pointer {
+				value = value.Elem()
+			}
+			encoded, err := encodeRegisteredBlock(typeOf.Name(), state, registered[typeOf])
+			if err != nil {
+				return blockSpec{}, err
+			}
+			generated := encodedBlockState{encodedBlock: encoded}
+			var key strings.Builder
+			for index, path := range indexes {
+				field := value.FieldByIndex(path)
+				fieldValue := blockFieldValue{}
+				switch definition.Fields[index].Type {
+				case "bool":
+					fieldValue.Bool = field.Bool()
+					fmt.Fprintf(&key, "b:%t;", fieldValue.Bool)
+				case "int":
+					integer := field.Int()
+					if integer < math.MinInt32 || integer > math.MaxInt32 {
+						return blockSpec{}, fmt.Errorf("Dragonfly block.%s.%s value %d does not fit C# int", typeOf.Name(), definition.Fields[index].Name, integer)
+					}
+					fieldValue.Int = int(integer)
+					fmt.Fprintf(&key, "i:%d;", fieldValue.Int)
+				}
+				generated.Values = append(generated.Values, fieldValue)
+			}
+			if previous, ok := seen[key.String()]; ok {
+				if previous.Identifier != encoded.Identifier || !bytes.Equal(previous.PropertiesNBT, encoded.PropertiesNBT) {
+					return blockSpec{}, fmt.Errorf("Dragonfly block.%s has duplicate public state %q with different encodings", typeOf.Name(), key.String())
+				}
+				continue
+			}
+			seen[key.String()] = encoded
+			definition.States = append(definition.States, generated)
 		}
-		encoded, err := encodeRegisteredBlock(typeOf.Name(), zero, states)
-		if err != nil {
-			return blockSpec{}, err
+		if len(definition.States) == 0 {
+			return blockSpec{}, fmt.Errorf("Dragonfly block.%s has no registered states", typeOf.Name())
 		}
-		result.Stateless = append(result.Stateless, encoded)
+		result.Types = append(result.Types, definition)
 	}
-	sort.Slice(result.Stateless, func(i, j int) bool { return result.Stateless[i].Name < result.Stateless[j].Name })
-	if len(result.Stateless) == 0 {
-		return blockSpec{}, fmt.Errorf("no stateless Dragonfly blocks found")
-	}
-
-	var sandType reflect.Type
-	var sandStates []world.Block
-	for typeOf, states := range registered {
-		if typeOf.Name() == "Sand" {
-			sandType, sandStates = typeOf, states
-			break
-		}
-	}
-	if sandType == nil || !sandHasRedBool(declarations["Sand"]) {
-		return blockSpec{}, fmt.Errorf("Dragonfly block.Sand.Red bool field not found")
-	}
-	for index, red := range []bool{false, true} {
-		value := reflect.New(sandType).Elem()
-		value.FieldByName("Red").SetBool(red)
-		block := value.Interface().(world.Block)
-		encoded, err := encodeRegisteredBlock("Sand", block, sandStates)
-		if err != nil {
-			return blockSpec{}, err
-		}
-		result.Sand[index] = encoded
+	if len(result.Types) == 0 {
+		return blockSpec{}, fmt.Errorf("no primitive Dragonfly block types found")
 	}
 	for _, name := range []string{"Water", "Lava"} {
 		var liquidType reflect.Type
@@ -3724,26 +3796,90 @@ func validateLiquidFields(spec *ast.TypeSpec, name string) error {
 	return nil
 }
 
-func sandHasRedBool(spec *ast.TypeSpec) bool {
-	if spec == nil {
+func blockFieldVaries(states []world.Block, path []int, fieldType string) bool {
+	if len(states) < 2 {
 		return false
 	}
-	structure, ok := spec.Type.(*ast.StructType)
-	if !ok {
-		return false
-	}
-	for _, field := range structure.Fields.List {
-		identifier, ok := field.Type.(*ast.Ident)
-		if !ok || identifier.Name != "bool" {
-			continue
+	value := func(state world.Block) blockFieldValue {
+		reflected := reflect.ValueOf(state)
+		if reflected.Kind() == reflect.Pointer {
+			reflected = reflected.Elem()
 		}
-		for _, name := range field.Names {
-			if name.Name == "Red" {
-				return true
-			}
+		field := reflected.FieldByIndex(path)
+		if fieldType == "bool" {
+			return blockFieldValue{Bool: field.Bool()}
+		}
+		return blockFieldValue{Int: int(field.Int())}
+	}
+	first := value(states[0])
+	for _, state := range states[1:] {
+		if value(state) != first {
+			return true
 		}
 	}
 	return false
+}
+
+func blockFieldAtASTPath(name string, path []int, declarations map[string]*ast.TypeSpec) (blockField, error) {
+	current := name
+	for depth, fieldIndex := range path {
+		var structure *ast.StructType
+		resolved := map[string]bool{}
+		for structure == nil {
+			if resolved[current] {
+				return blockField{}, fmt.Errorf("Dragonfly block.%s has a recursive underlying type", current)
+			}
+			resolved[current] = true
+			spec := declarations[current]
+			if spec == nil {
+				return blockField{}, fmt.Errorf("Dragonfly block.%s declaration not found", current)
+			}
+			switch value := spec.Type.(type) {
+			case *ast.StructType:
+				structure = value
+			case *ast.Ident:
+				current = value.Name
+			default:
+				return blockField{}, fmt.Errorf("Dragonfly block.%s does not have a local struct underlying type", current)
+			}
+		}
+		fields := flattenedASTFields(structure)
+		if fieldIndex < 0 || fieldIndex >= len(fields) {
+			return blockField{}, fmt.Errorf("Dragonfly block.%s field path %v is outside its AST declaration", name, path)
+		}
+		field := fields[fieldIndex]
+		if depth == len(path)-1 {
+			if field.Name == "" {
+				return blockField{}, fmt.Errorf("Dragonfly block.%s field path %v ends at an embedding", name, path)
+			}
+			return blockField{Name: field.Name, Type: formatGoExpression(field.Type)}, nil
+		}
+		embedded, ok := field.Type.(*ast.Ident)
+		if field.Name != "" || !ok {
+			return blockField{}, fmt.Errorf("Dragonfly block.%s field path %v does not follow a local embedding", name, path)
+		}
+		current = embedded.Name
+	}
+	return blockField{}, fmt.Errorf("Dragonfly block.%s has an empty field path", name)
+}
+
+type flattenedASTField struct {
+	Name string
+	Type ast.Expr
+}
+
+func flattenedASTFields(structure *ast.StructType) []flattenedASTField {
+	var fields []flattenedASTField
+	for _, field := range structure.Fields.List {
+		if len(field.Names) == 0 {
+			fields = append(fields, flattenedASTField{Type: field.Type})
+			continue
+		}
+		for _, name := range field.Names {
+			fields = append(fields, flattenedASTField{Name: name.Name, Type: field.Type})
+		}
+	}
+	return fields
 }
 
 func encodeRegisteredBlock(typeName string, value world.Block, registered []world.Block) (encodedBlock, error) {
@@ -3757,7 +3893,7 @@ func encodeRegisteredBlock(typeName string, value world.Block, registered []worl
 		}
 	}
 	if !found {
-		return encodedBlock{}, fmt.Errorf("block.%s zero state is not registered", typeName)
+		return encodedBlock{}, fmt.Errorf("block.%s state is not registered", typeName)
 	}
 	encoded, ok := host.EncodeBlockProperties(properties)
 	if !ok {
@@ -4593,18 +4729,32 @@ func generateBlocks(spec blockSpec) []byte {
 	output.WriteString("// Code generated from Dragonfly server/block Go AST and registry. DO NOT EDIT.\n")
 	output.WriteString("#nullable enable\nusing System;\nusing Dragonfly;\n\n")
 	output.WriteString("namespace Dragonfly\n{\n    public static partial class Block\n    {\n")
-	for _, block := range spec.Stateless {
-		fmt.Fprintf(&output, "        public readonly record struct %s : World.Block;\n", block.Name)
+	for _, definition := range spec.Types {
+		fmt.Fprintf(&output, "        public readonly record struct %s", definition.Name)
+		if len(definition.Fields) != 0 {
+			output.WriteByte('(')
+			for index, field := range definition.Fields {
+				if index != 0 {
+					output.WriteString(", ")
+				}
+				fmt.Fprintf(&output, "%s %s = %s", field.Type, field.Name, csharpBlockFieldValue(field, blockFieldValue{}))
+			}
+			output.WriteByte(')')
+		}
+		output.WriteString(" : World.Block;\n")
 	}
-	output.WriteString("        public readonly record struct Sand(bool Red = false) : World.Block;\n")
 	for _, liquid := range spec.Liquids {
 		fmt.Fprintf(&output, "        public readonly record struct %s(bool Still, int Depth, bool Falling) : World.Liquid\n        {\n", liquid.Name)
 		fmt.Fprintf(&output, "            public string LiquidType() => %s;\n        }\n", strconv.Quote(liquid.LiquidType))
 	}
 	output.WriteString("    }\n\n")
 	output.WriteString("    internal static class BlockCodec\n    {\n")
-	states := append([]encodedBlock(nil), spec.Stateless...)
-	states = append(states, spec.Sand[:]...)
+	var states []encodedBlock
+	for _, definition := range spec.Types {
+		for _, state := range definition.States {
+			states = append(states, state.encodedBlock)
+		}
+	}
 	for _, liquid := range spec.Liquids {
 		for _, state := range liquid.States {
 			states = append(states, state.encodedBlock)
@@ -4615,13 +4765,27 @@ func generateBlocks(spec blockSpec) []byte {
 	}
 	output.WriteString("\n        internal static bool TryEncode(World.Block block, out string identifier, out byte[] properties)\n        {\n")
 	output.WriteString("            switch (block)\n            {\n")
-	for index, block := range spec.Stateless {
-		fmt.Fprintf(&output, "                case Block.%s _:\n                    identifier = %s; properties = State%d; return true;\n", block.Name, strconv.Quote(block.Identifier), index)
+	stateIndex := 0
+	for _, definition := range spec.Types {
+		for _, state := range definition.States {
+			fmt.Fprintf(&output, "                case Block.%s", definition.Name)
+			if len(definition.Fields) == 0 {
+				output.WriteString(" _")
+			} else {
+				output.WriteString(" { ")
+				for index, field := range definition.Fields {
+					if index != 0 {
+						output.WriteString(", ")
+					}
+					fmt.Fprintf(&output, "%s: %s", field.Name, csharpBlockFieldValue(field, state.Values[index]))
+				}
+				output.WriteString(" }")
+			}
+			fmt.Fprintf(&output, ":\n                    identifier = %s; properties = State%d; return true;\n", strconv.Quote(state.Identifier), stateIndex)
+			stateIndex++
+		}
 	}
-	sandOffset := len(spec.Stateless)
-	fmt.Fprintf(&output, "                case Block.Sand { Red: true }:\n                    identifier = %s; properties = State%d; return true;\n", strconv.Quote(spec.Sand[1].Identifier), sandOffset+1)
-	fmt.Fprintf(&output, "                case Block.Sand:\n                    identifier = %s; properties = State%d; return true;\n", strconv.Quote(spec.Sand[0].Identifier), sandOffset)
-	liquidOffset := sandOffset + len(spec.Sand)
+	liquidOffset := stateIndex
 	for _, liquid := range spec.Liquids {
 		for _, state := range liquid.States {
 			fmt.Fprintf(&output, "                case Block.%s { Still: %t, Depth: %d, Falling: %t }:\n                    identifier = %s; properties = State%d; return true;\n",
@@ -4633,34 +4797,75 @@ func generateBlocks(spec blockSpec) []byte {
 	output.WriteString("                case EncodedBlock encoded:\n                    identifier = encoded.Identifier; properties = encoded.Properties; return true;\n")
 	output.WriteString("                default:\n                    identifier = string.Empty; properties = Array.Empty<byte>(); return false;\n            }\n        }\n\n")
 	output.WriteString("        internal static World.Block Decode(string identifier, ReadOnlySpan<byte> properties)\n        {\n")
-	for index, block := range spec.Stateless {
-		fmt.Fprintf(&output, "            if (identifier == %s && properties.SequenceEqual(State%d)) return new Block.%s();\n", strconv.Quote(block.Identifier), index, block.Name)
-	}
-	fmt.Fprintf(&output, "            if (identifier == %s && properties.SequenceEqual(State%d)) return new Block.Sand();\n", strconv.Quote(spec.Sand[0].Identifier), sandOffset)
-	fmt.Fprintf(&output, "            if (identifier == %s && properties.SequenceEqual(State%d)) return new Block.Sand(true);\n", strconv.Quote(spec.Sand[1].Identifier), sandOffset+1)
-	liquidOffset = sandOffset + len(spec.Sand)
-	for _, liquid := range spec.Liquids {
-		for _, state := range liquid.States {
-			fmt.Fprintf(&output, "            if (identifier == %s && properties.SequenceEqual(State%d)) return new Block.%s(%t, %d, %t);\n",
-				strconv.Quote(state.Identifier), liquidOffset, liquid.Name, state.Still, state.Depth, state.Falling)
-			liquidOffset++
-		}
-	}
+	blockCases, liquidCases := blockDecodeCases(spec)
+	writeBlockDecodeCases(&output, append(blockCases, liquidCases...))
 	output.WriteString("            return new EncodedBlock(identifier, properties.ToArray());\n        }\n\n")
 	output.WriteString("        internal static World.Liquid DecodeLiquid(string identifier, ReadOnlySpan<byte> properties)\n        {\n")
-	liquidOffset = sandOffset + len(spec.Sand)
-	for _, liquid := range spec.Liquids {
-		for _, state := range liquid.States {
-			fmt.Fprintf(&output, "            if (identifier == %s && properties.SequenceEqual(State%d)) return new Block.%s(%t, %d, %t);\n",
-				strconv.Quote(state.Identifier), liquidOffset, liquid.Name, state.Still, state.Depth, state.Falling)
-			liquidOffset++
-		}
-	}
+	writeBlockDecodeCases(&output, liquidCases)
 	output.WriteString("            return new EncodedLiquid(identifier, properties.ToArray());\n        }\n\n")
 	output.WriteString("        private sealed record EncodedBlock(string Identifier, byte[] Properties) : World.Block;\n")
 	output.WriteString("        private sealed record EncodedLiquid(string Identifier, byte[] Properties) : World.Liquid\n        {\n            public string LiquidType() => throw new InvalidOperationException(\"Opaque liquid type was not transported by the host.\");\n        }\n")
 	output.WriteString("    }\n}\n")
 	return output.Bytes()
+}
+
+func csharpBlockFieldValue(field blockField, value blockFieldValue) string {
+	if field.Type == "bool" {
+		return strconv.FormatBool(value.Bool)
+	}
+	return strconv.Itoa(value.Int)
+}
+
+func blockDecodeCases(spec blockSpec) (blocks, liquids []blockDecodeCase) {
+	stateIndex := 0
+	for _, definition := range spec.Types {
+		for _, state := range definition.States {
+			var constructor strings.Builder
+			fmt.Fprintf(&constructor, "new Block.%s(", definition.Name)
+			for index, field := range definition.Fields {
+				if index != 0 {
+					constructor.WriteString(", ")
+				}
+				constructor.WriteString(csharpBlockFieldValue(field, state.Values[index]))
+			}
+			constructor.WriteByte(')')
+			blocks = append(blocks, blockDecodeCase{Identifier: state.Identifier, State: stateIndex, Constructor: constructor.String()})
+			stateIndex++
+		}
+	}
+	for _, liquid := range spec.Liquids {
+		for _, state := range liquid.States {
+			liquids = append(liquids, blockDecodeCase{
+				Identifier: state.Identifier,
+				State:      stateIndex,
+				Constructor: fmt.Sprintf("new Block.%s(%t, %d, %t)",
+					liquid.Name, state.Still, state.Depth, state.Falling),
+			})
+			stateIndex++
+		}
+	}
+	return blocks, liquids
+}
+
+func writeBlockDecodeCases(output *bytes.Buffer, cases []blockDecodeCase) {
+	grouped := map[string][]blockDecodeCase{}
+	for _, state := range cases {
+		grouped[state.Identifier] = append(grouped[state.Identifier], state)
+	}
+	identifiers := make([]string, 0, len(grouped))
+	for identifier := range grouped {
+		identifiers = append(identifiers, identifier)
+	}
+	sort.Strings(identifiers)
+	output.WriteString("            switch (identifier)\n            {\n")
+	for _, identifier := range identifiers {
+		fmt.Fprintf(output, "                case %s:\n", strconv.Quote(identifier))
+		for _, state := range grouped[identifier] {
+			fmt.Fprintf(output, "                    if (properties.SequenceEqual(State%d)) return %s;\n", state.State, state.Constructor)
+		}
+		output.WriteString("                    break;\n")
+	}
+	output.WriteString("            }\n")
 }
 
 func generateBiomes(biomes []encodedBiome) []byte {

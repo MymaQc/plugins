@@ -120,9 +120,10 @@ World callbacks now carry Dragonfly-shaped transactions. `Player.Context` inheri
 `World.Block`, `World.Liquid`, `World.Biome`, `World.SetOpts`, and the current `World.Tx` block and
 biome surface are generated from Dragonfly source. This includes `Range`, `Block`, `BlockLoaded`,
 `Liquid`, `SetLiquid`, `ScheduleBlockUpdate`, `HighestLightBlocker`, `HighestBlock`, `Light`, and
-`SkyLight`, `CurrentTick`, `AddParticle`, plus 79 stateless concrete block types, `Block.Sand`,
-`Block.Water`, `Block.Lava`, all 88 registered vanilla biome types, and all 20 Dragonfly particle
-types with typed colours, blocks, faces, positions, and note instruments:
+`SkyLight`, `CurrentTick`, `AddParticle`, plus 112 concrete non-liquid block types covering 306
+canonical primitive-state registry entries, `Block.Water`, `Block.Lava`, all 88 registered vanilla
+biome types, and all 20 Dragonfly particle types with typed colours, blocks, faces, positions, and
+note instruments. Promoted Dragonfly fields remain visible, so crops use typed growth stages:
 
 ```csharp
 var pos = Cube.PosFromVec3(source.Position()).Side(Cube.Face.Down);
@@ -131,6 +132,7 @@ World.Block? previous = loaded ? block : tx.Block(pos);
 Cube.Range bounds = tx.Range();
 var nearby = tx.BlocksWithin(pos, 8, new Block.Sand());
 tx.SetBlock(pos, new Block.Sand());
+tx.SetBlock(pos, new Block.WheatSeeds(Growth: 7));
 var (liquid, found) = tx.Liquid(pos);
 tx.SetLiquid(pos, new Block.Water(Still: true, Depth: 8, Falling: false));
 tx.SetLiquid(pos, null); // Remove the liquid.

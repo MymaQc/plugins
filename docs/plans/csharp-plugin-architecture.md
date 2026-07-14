@@ -37,8 +37,11 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    `World.Tx.BlockLoaded`, `World.Tx.BlocksWithin`, `World.Tx.SetBlock`,
    `World.Tx.ScheduleBlockUpdate`,
    `World.Tx.HighestLightBlocker`, `World.Tx.HighestBlock`, `World.Tx.Light`,
-   `World.Tx.SkyLight`, `World.Liquid`, `World.Tx.Liquid`, `World.Tx.SetLiquid`, 79 stateless
-   block types, `Block.Sand`, `Block.Water`, and `Block.Lava`. The biome slice adds
+   `World.Tx.SkyLight`, `World.Liquid`, `World.Tx.Liquid`, `World.Tx.SetLiquid`, 112 non-liquid
+   block types covering all 306 registered states whose varying registry-state fields are primitive,
+   plus `Block.Water` and `Block.Lava`. Promoted fields are expanded through Dragonfly's AST, so
+   all eight growth stages of `BeetrootSeeds`, `Carrot`, `Potato`, and `WheatSeeds` remain typed.
+   The biome slice adds
    `World.Biome`, all 88 registered vanilla biome types, `SetBiome`, `Biome`, `Temperature`,
    `RainingAt`, `SnowingAt`, `ThunderingAt`, `Raining`, `Thundering`, and `CurrentTick`.
    The particle slice adds `World.Particle`, `World.Tx.AddParticle`, all 20 concrete Dragonfly
@@ -61,8 +64,9 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    maps Go `time.Duration` to C# `TimeSpan`
    and preserves the transaction-owned call. `BuildStructure` remains absent until its synchronous `At` and
    `blockAt` callbacks can be implemented without materialising or changing Dragonfly semantics.
-   Remaining stateful blocks, structures, world methods, custom blocks, and block models land
-   incrementally.
+   Descriptor-backed, nested, and NBT-backed block types, structures, remaining world methods,
+   custom blocks, and block models land incrementally. Unsupported block shapes remain absent;
+   they do not gain a public identifier/NBT escape hatch.
 5. Forms. `Form` interfaces, element fields and memberships, constructors, fluent methods,
    response value types, `Custom`/`Menu`/`Modal`, and `Player.SendForm`/`CloseForm` are generated
    from Dragonfly's `server/player/form` and `player.go` AST. Hand-written `FormCodec` code is
@@ -142,6 +146,8 @@ block below the source through `World.Tx`, writes typed `Block.Sand`, and exerci
 `World.SetOpts` flags, reads the world range, performs a non-loading block lookup, lazily searches
 nearby blocks, reads height/light data, inspects typed water, and writes/removes typed liquid.
 It also leaves typed water present and schedules its update with an exact 250 ms delay.
+Its separate `/kitchen crop` overload decodes and writes `Block.WheatSeeds(Growth: 7)`, proving
+that promoted private Go embeddings round-trip through the typed C# API.
 Its separate `/kitchen biome` overload changes and restores a typed biome while exercising every
 temperature and weather query in this slice.
 `/kitchen tick` reads Dragonfly's transaction-owned current tick; it does not alias world day-time.

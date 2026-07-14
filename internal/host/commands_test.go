@@ -3,6 +3,7 @@ package host
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -12,6 +13,7 @@ import (
 	"github.com/df-mc/dragonfly/server/player"
 	"github.com/df-mc/dragonfly/server/session"
 	"github.com/go-gl/mathgl/mgl64"
+	"github.com/sandertv/gophertunnel/minecraft/protocol"
 )
 
 var commandTestID atomic.Uint64
@@ -237,6 +239,25 @@ func TestCommandParametersReachAvailableCommandsPacket(t *testing.T) {
 	parameters := packet.Commands[0].Overloads[0].Parameters
 	if parameters[0].Name != "mode" || parameters[1].Name != "target" || !parameters[1].Optional {
 		t.Fatalf("parameters = %#v", parameters)
+	}
+	const enumMask = protocol.CommandArgValid | protocol.CommandArgEnum
+	if parameters[0].Type&enumMask != enumMask {
+		t.Fatalf("mode parameter type = %#x, want enum flags %#x", parameters[0].Type, enumMask)
+	}
+	enumIndex := parameters[0].Type &^ enumMask
+	if enumIndex >= uint32(len(packet.Enums)) {
+		t.Fatalf("mode enum index = %d, enums = %#v", enumIndex, packet.Enums)
+	}
+	mode := packet.Enums[enumIndex]
+	values := make([]string, len(mode.ValueIndices))
+	for index, valueIndex := range mode.ValueIndices {
+		if valueIndex >= uint32(len(packet.EnumValues)) {
+			t.Fatalf("mode value index = %d, values = %#v", valueIndex, packet.EnumValues)
+		}
+		values[index] = packet.EnumValues[valueIndex]
+	}
+	if mode.Type != "gamemode_mode" || !reflect.DeepEqual(values, []string{"survival", "creative", "adventure", "spectator"}) {
+		t.Fatalf("mode enum = %#v, values = %#v", mode, values)
 	}
 }
 

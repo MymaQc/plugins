@@ -537,7 +537,7 @@ func TestCSharpReflectedCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 	kitchen := commandNamed(t, commands, "kitchen")
-	if !slices.Contains(kitchen.Aliases, "ks") || len(kitchen.Overloads) != 17 {
+	if !slices.Contains(kitchen.Aliases, "ks") || len(kitchen.Overloads) != 18 {
 		t.Fatalf("kitchen descriptor = %#v", kitchen)
 	}
 	if kitchen.Overloads[1].Parameters[0].Name != "echo" ||
@@ -838,6 +838,22 @@ func TestCSharpReflectedCommands(t *testing.T) {
 	})
 	if err != nil || !slices.Equal(options, []string{"spawn", "source"}) {
 		t.Fatalf("dynamic enum options=%q error=%v", options, err)
+	}
+	input = base
+	input.Overload = 17
+	input.Arguments = []string{"crop"}
+	output, err = pluginRuntime.HandleCommand(kitchen.Index, input)
+	if err != nil || output.Failed || output.Message != "crop=-1, planted=7" {
+		t.Fatalf("crop output=%#v error=%v", output, err)
+	}
+	if host.worldBlockSet.Identifier != "minecraft:wheat" || len(host.worldBlockSet.PropertiesNBT) == 0 {
+		t.Fatalf("crop host block=%+v", host.worldBlockSet)
+	}
+	host.worldBlock = host.worldBlockSet
+	host.worldBlockOK = true
+	output, err = pluginRuntime.HandleCommand(kitchen.Index, input)
+	if err != nil || output.Failed || output.Message != "crop=7, planted=7" {
+		t.Fatalf("crop round trip output=%#v error=%v", output, err)
 	}
 }
 

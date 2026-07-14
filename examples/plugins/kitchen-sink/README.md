@@ -11,6 +11,7 @@ Runnable parity showcase. Its single plugin class demonstrates:
 - direct `Player.Message` output;
 - transaction-safe range, lazy block search, height/light queries, and block access through `World.Tx`;
 - generated `Cube.Pos`, `Block.Sand`, and all `World.SetOpts` flags in `/kitchen block`;
+- promoted Dragonfly crop state through typed `Block.WheatSeeds(Growth: 7)` in `/kitchen crop`;
 - typed `World.Liquid`, `Block.Water`, liquid inspection, placement, and nullable removal;
 - typed `ScheduleBlockUpdate` with a matching water ticker and C# `TimeSpan` delay;
 - all 88 generated vanilla biome types plus biome, temperature, and weather queries in

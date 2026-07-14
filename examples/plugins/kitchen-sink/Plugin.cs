@@ -36,7 +36,8 @@ public sealed class KitchenSink : Plugin
             new KitchenItem(),
             new KitchenForm(),
             new KitchenRawFormCommand(),
-            new KitchenEffect()));
+            new KitchenEffect(),
+            new KitchenCrop()));
         Console.WriteLine("kitchen-sink enabled");
     }
 
@@ -329,6 +330,25 @@ public sealed class KitchenSink : Plugin
                 liquidFound ? "true" : "false",
                 liquidState,
                 blockUpdateDelay.TotalMilliseconds);
+        }
+    }
+
+    internal sealed class KitchenCrop : Cmd.Runnable
+    {
+        public Cmd.SubCommand Crop;
+
+        public void Run(Cmd.Source source, Cmd.Output output, World.Tx? tx)
+        {
+            if (tx is null)
+            {
+                output.Error("A world transaction is required.");
+                return;
+            }
+            var position = Cube.PosFromVec3(source.Position()).Side(Cube.Face.Down);
+            var current = tx.Block(position);
+            var currentGrowth = current is Block.WheatSeeds wheat ? wheat.Growth : -1;
+            tx.SetBlock(position, new Block.WheatSeeds(7));
+            output.Printf("crop={0}, planted=7", currentGrowth);
         }
     }
 
