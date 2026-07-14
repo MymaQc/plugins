@@ -13,7 +13,7 @@ public sealed partial class Player
         PluginBridge.Host.SetPlayerState(
             _invocation,
             Id,
-            0,
+            Abi.PlayerStateGameMode,
             new PlayerStateValue { Integer = World.GameModeDescriptor(mode) });
     }
 

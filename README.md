@@ -46,8 +46,10 @@ Current C# slice: loading, lifecycle, reflected commands, player text actions, g
 effects, forms, items and player inventories, and 26 Dragonfly player handlers covering movement,
 chat, food loss, block and item interactions, experience, signs, sleep, held slots, jump, teleport,
 sprint/sneak toggles, punch-air, and quit. Player handler, command-interface,
-player-text, game-mode, effect, form, item, and player-inventory surfaces are generated from Dragonfly's
-Go AST.
+player-text, player-state, game-mode, effect, form, item, and player-inventory surfaces are generated
+from Dragonfly's Go AST. Generated player state parity currently includes `Food`/`SetFood`,
+`Health`, `MaxHealth`/`SetMaxHealth`, level and progress experience accessors, scale accessors,
+visibility toggles, and mobility toggles.
 `World.GameMode` includes Dragonfly's four registered values and exact `GameModeByID`/`GameModeID`
 lookups. `Player.SetGameMode` accepts custom implementations just like Dragonfly, and
 `Player.GameMode` returns their capabilities without exposing the transport descriptor.

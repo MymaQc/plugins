@@ -150,6 +150,8 @@ type recordingHost struct {
 	states             []PlayerStateKind
 	values             []PlayerStateValue
 	state              PlayerStateValue
+	stateValues        map[PlayerStateKind]PlayerStateValue
+	rejectStateWrites  bool
 	reads              []PlayerStateKind
 	experienceLevel    int32
 	experienceProgress float64
@@ -279,11 +281,14 @@ func (h *recordingHost) PlayerRotation(InvocationID, PlayerID) (Rotation, bool) 
 func (h *recordingHost) SetPlayerState(_ InvocationID, _ PlayerID, kind PlayerStateKind, value PlayerStateValue) bool {
 	h.states = append(h.states, kind)
 	h.values = append(h.values, value)
-	return true
+	return !h.rejectStateWrites
 }
 
 func (h *recordingHost) PlayerState(_ InvocationID, _ PlayerID, kind PlayerStateKind) (PlayerStateValue, bool) {
 	h.reads = append(h.reads, kind)
+	if value, ok := h.stateValues[kind]; ok {
+		return value, true
+	}
 	return h.state, true
 }
 

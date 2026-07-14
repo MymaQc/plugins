@@ -79,6 +79,15 @@ public static class Abi
     public const uint PlayerTextJukeboxPopup = 3;
     public const uint PlayerTextNameTag = 4;
     public const uint PlayerTextDisconnect = 5;
+    public const uint PlayerStateGameMode = 0;
+    public const uint PlayerStateFood = 3;
+    public const uint PlayerStateMaxHealth = 4;
+    public const uint PlayerStateHealth = 5;
+    public const uint PlayerStateExperienceLevel = 6;
+    public const uint PlayerStateExperienceProgress = 7;
+    public const uint PlayerStateScale = 8;
+    public const uint PlayerStateInvisible = 9;
+    public const uint PlayerStateImmobile = 10;
     public const uint InventoryMain = 0;
     public const uint InventoryArmour = 1;
     public const uint InventoryOffhand = 2;

@@ -32,6 +32,7 @@ public sealed class KitchenSink : Plugin
             new KitchenTick(),
             new KitchenParticle(),
             new KitchenGameMode(),
+            new KitchenState(),
             new KitchenItem(),
             new KitchenForm(),
             new KitchenRawFormCommand(),
@@ -477,6 +478,49 @@ public sealed class KitchenSink : Plugin
                 registered ? "true" : "false",
                 registered && found && roundTripRegistered && roundTripId == id ? "true" : "false",
                 customRegistered ? "true" : "false");
+        }
+    }
+
+    internal sealed class KitchenState : Cmd.Runnable
+    {
+        public Cmd.SubCommand State;
+
+        public void Run(Cmd.Source source, Cmd.Output output, World.Tx? tx)
+        {
+            if (source is not Player player)
+            {
+                output.Error("This command can only be used by a player.");
+                return;
+            }
+            var food = player.Food();
+            var health = player.Health();
+            var maxHealth = player.MaxHealth();
+            var experienceLevel = player.ExperienceLevel();
+            var experienceProgress = player.ExperienceProgress();
+            var scale = player.Scale();
+            var invisible = player.Invisible();
+            var immobile = player.Immobile();
+
+            player.SetFood(food);
+            player.SetMaxHealth(maxHealth);
+            player.SetExperienceLevel(experienceLevel);
+            player.SetExperienceProgress(experienceProgress);
+            player.SetScale(scale);
+            if (invisible) player.SetInvisible();
+            else player.SetVisible();
+            if (immobile) player.SetImmobile();
+            else player.SetMobile();
+
+            output.Printf(
+                "food={0}, health={1}/{2}, experience={3}:{4}, scale={5}, invisible={6}, immobile={7}",
+                food,
+                health,
+                maxHealth,
+                experienceLevel,
+                experienceProgress,
+                scale,
+                invisible ? "true" : "false",
+                immobile ? "true" : "false");
         }
     }
 

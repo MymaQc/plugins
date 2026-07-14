@@ -328,7 +328,7 @@ func TestPlayersReadsAndChangesState(t *testing.T) {
 		if gameMode.Integer != creativeDescriptor || food.Integer != 12 || maxHealth.Number != 40 || health.Number != 19 || level.Integer != 12 || math.Abs(progress.Number-0.5) > 0.02 || scale.Number != 1.5 || invisible.Integer != 1 || immobile.Integer != 1 {
 			t.Fatalf("game mode=%+v food=%+v max=%+v health=%+v level=%+v progress=%+v scale=%+v invisible=%+v immobile=%+v", gameMode, food, maxHealth, health, level, progress, scale, invisible, immobile)
 		}
-		if !players.SendPlayerText(invocation, id, native.PlayerTextNameTag, "Rust Player") || player.NameTag() != "Rust Player" {
+		if !players.SendPlayerText(invocation, id, native.PlayerTextNameTag, "C# Player") || player.NameTag() != "C# Player" {
 			t.Fatalf("name tag = %q", player.NameTag())
 		}
 		if !players.PlayPlayerSound(invocation, id, native.WorldSound{Kind: native.SoundLevelUp}) {
@@ -401,6 +401,16 @@ func TestPlayersReadsAndChangesState(t *testing.T) {
 			Type: native.EffectSpeed, Level: 0, Potency: 1,
 		}) {
 			t.Fatal("zero-level effect accepted")
+		}
+		if !players.SetPlayerState(invocation, id, native.PlayerStateMaxHealth, native.PlayerStateValue{Number: -5}) {
+			t.Fatal("negative max-health change failed")
+		}
+		clampedMaxHealth, _ := players.PlayerState(invocation, id, native.PlayerStateMaxHealth)
+		if clampedMaxHealth.Number != 1 {
+			t.Fatalf("clamped max health=%v, want 1", clampedMaxHealth.Number)
+		}
+		if !players.SetPlayerState(invocation, id, native.PlayerStateExperienceProgress, native.PlayerStateValue{Number: math.NaN()}) {
+			t.Fatal("NaN experience progress rejected unlike Dragonfly")
 		}
 	})
 }

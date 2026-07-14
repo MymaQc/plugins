@@ -1,0 +1,35 @@
+// Code generated from Dragonfly server/player/player.go Go AST. DO NOT EDIT.
+#nullable enable
+using Dragonfly.Native;
+
+namespace Dragonfly;
+
+public sealed partial class Player
+{
+    public int Food() => checked((int)PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateFood).Integer);
+    public void SetFood(int level) => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateFood, new PlayerStateValue { Integer = level });
+    public double Health() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateHealth).Number;
+    public double MaxHealth() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateMaxHealth).Number;
+    public void SetMaxHealth(double health) => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateMaxHealth, new PlayerStateValue { Number = health });
+    public int ExperienceLevel() => checked((int)PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateExperienceLevel).Integer);
+    public void SetExperienceLevel(int level)
+    {
+        if (level < 0) throw new ArgumentOutOfRangeException(nameof(level));
+        PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateExperienceLevel, new PlayerStateValue { Integer = level });
+    }
+    public double ExperienceProgress() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateExperienceProgress).Number;
+    public void SetExperienceProgress(double progress)
+    {
+        if (progress is < 0 or > 1)
+            throw new ArgumentOutOfRangeException(nameof(progress));
+        PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateExperienceProgress, new PlayerStateValue { Number = progress });
+    }
+    public double Scale() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateScale).Number;
+    public void SetScale(double s) => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateScale, new PlayerStateValue { Number = s });
+    public bool Invisible() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateInvisible).Integer != 0;
+    public void SetInvisible() => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateInvisible, new PlayerStateValue { Integer = 1 });
+    public void SetVisible() => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateInvisible, default);
+    public bool Immobile() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateImmobile).Integer != 0;
+    public void SetImmobile() => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateImmobile, new PlayerStateValue { Integer = 1 });
+    public void SetMobile() => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateImmobile, default);
+}

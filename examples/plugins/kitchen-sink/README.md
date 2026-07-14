@@ -18,6 +18,7 @@ Runnable parity showcase. Its single plugin class demonstrates:
 - transaction-owned `CurrentTick` in `/kitchen tick`;
 - all 20 generated particle types and all 16 typed note instruments in `/kitchen particle`;
 - registered lookup, player reads, and custom `World.GameMode` in `/kitchen game-mode`;
+- food, health, experience, scale, visibility, and mobility state round-trips in `/kitchen state`;
 - generated typed items (including finite stateful families, NBT-backed books, typed fireworks,
   seven armour tiers, four armour pieces, and 11 trim materials), firework explosions and shapes,
   armour defence/durability/repair/smelting behavior, all 28 armour round-trips, private dyed/trim

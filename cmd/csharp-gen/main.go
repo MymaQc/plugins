@@ -477,6 +477,10 @@ func main() {
 	if err != nil {
 		fatal(err)
 	}
+	playerStateMethods, err := inspectPlayerStateMethods(filepath.Join(directory, "server", "player", "player.go"))
+	if err != nil {
+		fatal(err)
+	}
 	effects, err := inspectEffects(filepath.Join(directory, "server", "entity", "effect"))
 	if err != nil {
 		fatal(err)
@@ -553,6 +557,10 @@ func main() {
 		{
 			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "Player.Item.g.cs"),
 			Content: generatePlayerItemMethods(playerItemMethods),
+		},
+		{
+			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "Player.State.g.cs"),
+			Content: generatePlayerStateMethods(playerStateMethods),
 		},
 		{
 			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "Effect.Types.g.cs"),
@@ -5522,7 +5530,7 @@ func generatePlayerGameModes(methods []commandMethod) []byte {
         PluginBridge.Host.SetPlayerState(
             _invocation,
             Id,
-            0,
+            Abi.PlayerStateGameMode,
             new PlayerStateValue { Integer = World.GameModeDescriptor(mode) });
     }
 `)

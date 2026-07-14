@@ -45,9 +45,6 @@ func setPlayerState(connected *player.Player, kind native.PlayerStateKind, value
 		}
 		connected.SetFood(int(value.Integer))
 	case native.PlayerStateMaxHealth:
-		if math.IsNaN(value.Number) || math.IsInf(value.Number, 0) || value.Number <= 0 {
-			return false
-		}
 		connected.SetMaxHealth(value.Number)
 	case native.PlayerStateExperienceLevel:
 		if value.Integer < math.MinInt32 || value.Integer > math.MaxInt32 || value.Integer < 0 {
@@ -55,14 +52,11 @@ func setPlayerState(connected *player.Player, kind native.PlayerStateKind, value
 		}
 		connected.SetExperienceLevel(int(value.Integer))
 	case native.PlayerStateExperienceProgress:
-		if math.IsNaN(value.Number) || math.IsInf(value.Number, 0) || value.Number < 0 || value.Number > 1 {
+		if value.Number < 0 || value.Number > 1 {
 			return false
 		}
 		connected.SetExperienceProgress(value.Number)
 	case native.PlayerStateScale:
-		if math.IsNaN(value.Number) || math.IsInf(value.Number, 0) {
-			return false
-		}
 		connected.SetScale(value.Number)
 	case native.PlayerStateInvisible:
 		if value.Integer != 0 && value.Integer != 1 {

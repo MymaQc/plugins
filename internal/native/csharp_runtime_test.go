@@ -98,6 +98,70 @@ func TestCSharpVanillaGameModeCommand(t *testing.T) {
 	}
 }
 
+func TestCSharpPlayerStateMethods(t *testing.T) {
+	host := &recordingHost{rejectStateWrites: true, stateValues: map[PlayerStateKind]PlayerStateValue{
+		PlayerStateFood:               {Integer: 10},
+		PlayerStateHealth:             {Number: 16},
+		PlayerStateMaxHealth:          {Number: 20},
+		PlayerStateExperienceLevel:    {Integer: 3},
+		PlayerStateExperienceProgress: {Number: 0.25},
+		PlayerStateScale:              {Number: 1},
+		PlayerStateInvisible:          {},
+		PlayerStateImmobile:           {},
+	}}
+	pluginRuntime := openCSharpRuntimeWithHost(t, host)
+	commands, err := pluginRuntime.Commands()
+	if err != nil {
+		t.Fatal(err)
+	}
+	kitchen := commandNamed(t, commands, "kitchen")
+	var overload uint64
+	found := false
+	for index, candidate := range kitchen.Overloads {
+		if len(candidate.Parameters) == 1 && candidate.Parameters[0].Name == "state" {
+			overload, found = uint64(index), true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("state overload missing: %#v", kitchen.Overloads)
+	}
+	player := PlayerID{UUID: [16]byte{5}, Generation: 4}
+	output, err := pluginRuntime.HandleCommand(kitchen.Index, CommandInput{
+		Invocation: 42, Source: "Danick", SourceKind: CommandSourcePlayer, SourcePlayer: &player,
+		Overload: overload, Arguments: []string{"state"},
+		OnlinePlayers: []CommandPlayer{{Player: player, Name: "Danick"}},
+	})
+	if err != nil || output.Failed || output.Message != "food=10, health=16/20, experience=3:0.25, scale=1, invisible=false, immobile=false" {
+		t.Fatalf("state output=%#v error=%v", output, err)
+	}
+	wantReads := []PlayerStateKind{
+		PlayerStateFood,
+		PlayerStateHealth,
+		PlayerStateMaxHealth,
+		PlayerStateExperienceLevel,
+		PlayerStateExperienceProgress,
+		PlayerStateScale,
+		PlayerStateInvisible,
+		PlayerStateImmobile,
+	}
+	if !slices.Equal(host.reads, wantReads) {
+		t.Fatalf("state reads=%v, want %v", host.reads, wantReads)
+	}
+	wantWrites := []PlayerStateKind{
+		PlayerStateFood,
+		PlayerStateMaxHealth,
+		PlayerStateExperienceLevel,
+		PlayerStateExperienceProgress,
+		PlayerStateScale,
+		PlayerStateInvisible,
+		PlayerStateImmobile,
+	}
+	if !slices.Equal(host.states, wantWrites) {
+		t.Fatalf("state writes=%v, want %v", host.states, wantWrites)
+	}
+}
+
 func TestCSharpTypedEffects(t *testing.T) {
 	host := &recordingHost{}
 	pluginRuntime := openCSharpRuntimeWithHost(t, host)
@@ -473,7 +537,7 @@ func TestCSharpReflectedCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 	kitchen := commandNamed(t, commands, "kitchen")
-	if !slices.Contains(kitchen.Aliases, "ks") || len(kitchen.Overloads) != 16 {
+	if !slices.Contains(kitchen.Aliases, "ks") || len(kitchen.Overloads) != 17 {
 		t.Fatalf("kitchen descriptor = %#v", kitchen)
 	}
 	if kitchen.Overloads[1].Parameters[0].Name != "echo" ||
