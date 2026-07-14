@@ -522,6 +522,10 @@ func main() {
 	if err != nil {
 		fatal(err)
 	}
+	playerKinematicsMethods, err := inspectPlayerKinematicsMethods(filepath.Join(directory, "server", "player", "player.go"))
+	if err != nil {
+		fatal(err)
+	}
 	effects, err := inspectEffects(filepath.Join(directory, "server", "entity", "effect"))
 	if err != nil {
 		fatal(err)
@@ -606,6 +610,10 @@ func main() {
 		{
 			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "Player.State.g.cs"),
 			Content: generatePlayerStateMethods(playerStateMethods),
+		},
+		{
+			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "Player.Kinematics.g.cs"),
+			Content: generatePlayerKinematicsMethods(playerKinematicsMethods),
 		},
 		{
 			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "Effect.Types.g.cs"),

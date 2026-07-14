@@ -214,18 +214,19 @@ func bg_go_player_transform(context C.uint64_t, invocation C.DfInvocationId, pla
 	return C.DF_STATUS_OK
 }
 
-//export bg_go_player_rotation
-func bg_go_player_rotation(context C.uint64_t, invocation C.DfInvocationId, player C.DfPlayerId, rotation *C.DfRotation) C.DfStatus {
+//export bg_go_player_kinematics
+func bg_go_player_kinematics(context C.uint64_t, invocation C.DfInvocationId, player C.DfPlayerId, output *C.DfPlayerKinematics) C.DfStatus {
 	host, ok := resolveHost(uint64(context))
-	if !ok || rotation == nil {
+	if !ok || output == nil {
 		return C.DF_STATUS_ERROR
 	}
-	value, ok := host.PlayerRotation(InvocationID(invocation), playerID(player))
+	value, ok := host.PlayerKinematics(InvocationID(invocation), playerID(player))
 	if !ok {
 		return C.DF_STATUS_ERROR
 	}
-	rotation.yaw = C.double(value.Yaw)
-	rotation.pitch = C.double(value.Pitch)
+	output.position = cEntityVec3(value.Position)
+	output.velocity = cEntityVec3(value.Velocity)
+	output.rotation = C.DfRotation{yaw: C.double(value.Rotation.Yaw), pitch: C.double(value.Rotation.Pitch)}
 	return C.DF_STATUS_OK
 }
 

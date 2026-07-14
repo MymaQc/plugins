@@ -523,7 +523,11 @@ func (h *csharpWorldHost) AddWorldParticle(invocation InvocationID, world WorldI
 
 func TestCSharpReflectedCommands(t *testing.T) {
 	host := &csharpWorldHost{
-		recordingHost:      &recordingHost{},
+		recordingHost: &recordingHost{entityState: EntityState{
+			Type: "minecraft:player", Position: Vec3{X: 1, Y: 64, Z: 2},
+			Velocity: Vec3{X: 0.25, Y: 0.5, Z: -0.25},
+			Rotation: Rotation{Yaw: 90, Pitch: -15},
+		}},
 		worldRange:         BlockRange{Min: -64, Max: 319},
 		worldBlockLoaded:   WorldBlock{Identifier: "minecraft:sand"},
 		worldBlockLoadedOK: true,
@@ -551,7 +555,7 @@ func TestCSharpReflectedCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 	kitchen := commandNamed(t, commands, "kitchen")
-	if !slices.Contains(kitchen.Aliases, "ks") || len(kitchen.Overloads) != 18 {
+	if !slices.Contains(kitchen.Aliases, "ks") || len(kitchen.Overloads) != 19 {
 		t.Fatalf("kitchen descriptor = %#v", kitchen)
 	}
 	if kitchen.Overloads[1].Parameters[0].Name != "echo" ||
@@ -607,6 +611,23 @@ func TestCSharpReflectedCommands(t *testing.T) {
 	output, err := pluginRuntime.HandleCommand(kitchen.Index, targeted)
 	if err != nil || output.Failed || output.Message != "RestartFU's ping: 52ms" {
 		t.Fatalf("targeted player: output=%#v error=%v", output, err)
+	}
+	kinematics := base
+	kinematics.Overload = 18
+	kinematics.Arguments = []string{"kinematics"}
+	output, err = pluginRuntime.HandleCommand(kitchen.Index, kinematics)
+	if err != nil || output.Failed || output.Message !=
+		"position=1,64,2, velocity=0.25,0.5,-0.25, rotation=90,-15" {
+		t.Fatalf("kinematics output=%#v error=%v", output, err)
+	}
+	if !slices.Equal(host.transforms, []PlayerTransformKind{
+		PlayerTransformTeleport,
+		PlayerTransformMove,
+		PlayerTransformDisplace,
+		PlayerTransformVelocity,
+	}) || host.vectors[0] != (Vec3{X: 1, Y: 64, Z: 2}) ||
+		host.vectors[3] != (Vec3{X: 0.25, Y: 0.5, Z: -0.25}) {
+		t.Fatalf("kinematics transforms=%v vectors=%+v", host.transforms, host.vectors)
 	}
 	for _, text := range []struct {
 		action string
@@ -1282,18 +1303,19 @@ func TestCSharpRuntimeReflectedPlayerHandlers(t *testing.T) {
 		}, false)
 	})
 
+	host.entityState = EntityState{Type: "minecraft:player", Position: player.Position}
 	allowed("item use", func() (bool, error) {
 		return pluginRuntime.HandlePlayerItemUse(next(), player, false)
 	})
-	nonFinite := player
-	nonFinite.Position.Y = math.NaN()
-	cancelled, err := pluginRuntime.HandlePlayerItemUse(next(), nonFinite, false)
+	host.entityState.Position.Y = math.NaN()
+	cancelled, err := pluginRuntime.HandlePlayerItemUse(next(), player, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !cancelled {
-		t.Fatal("item use did not decode and reject the non-finite player snapshot position")
+		t.Fatal("item use did not reject the non-finite live player position")
 	}
+	host.entityState.Position = player.Position
 	allowed("item use on block", func() (bool, error) {
 		return pluginRuntime.HandlePlayerItemUseOnBlock(next(), PlayerItemUseOnBlockInput{
 			Player: player, Position: position, Face: 3,

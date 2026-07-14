@@ -35,7 +35,7 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    exact signed Go nanoseconds; values mutated by C# are rounded to `TimeSpan` precision. Signed
    durations, including negative values, remain signed. Cancellation remains
    allowed by default and can only transition to cancelled.
-3. Player methods and commands. Command interfaces and the implemented `Player` method surface are generated from Dragonfly's Go AST. C# uses `Cmd.New`/`Cmd.Register`, one `Cmd.Runnable` per overload, and reflected public fields as Dragonfly uses reflected Go struct fields. Supported command fields include subcommands, native enums, dynamic `Cmd.Enum` values, players, vectors, optional values, and `Cmd.Varargs`. The generator roots runnable fields and field types for NativeAOT; runnable types use `internal` visibility and require no linker annotations. Bedrock-facing subcommands and enum/player suggestions are always lowercase. The generated game-mode slice includes the exact `World.GameMode` interface, four registered values, `GameModeByID`, `GameModeID`, `Player.SetGameMode`, and `Player.GameMode`. Custom C# game modes cross the private ABI as their eight Dragonfly capabilities and remain unregistered, matching raw Dragonfly behavior. The text slice includes `Message`, `SendPopup`, `SendTip`, `SendJukeboxPopup`, `SetNameTag`, and `Disconnect`. The state slice adds the exact 17 `Food`, health, experience-level/progress, scale, visibility, and mobility methods. Setters return `void`; private host status never enters the public API. `SetMaxHealth` preserves Dragonfly's clamp-to-one behavior for non-positive values. `Messagef` remains absent until Go `fmt.Sprintf` semantics can be preserved honestly.
+3. Player methods and commands. Command interfaces and the implemented `Player` method surface are generated from Dragonfly's Go AST. C# uses `Cmd.New`/`Cmd.Register`, one `Cmd.Runnable` per overload, and reflected public fields as Dragonfly uses reflected Go struct fields. Supported command fields include subcommands, native enums, dynamic `Cmd.Enum` values, players, vectors, optional values, and `Cmd.Varargs`. The generator roots runnable fields and field types for NativeAOT; runnable types use `internal` visibility and require no linker annotations. Bedrock-facing subcommands and enum/player suggestions are always lowercase. The generated game-mode slice includes the exact `World.GameMode` interface, four registered values, `GameModeByID`, `GameModeID`, `Player.SetGameMode`, and `Player.GameMode`. Custom C# game modes cross the private ABI as their eight Dragonfly capabilities and remain unregistered, matching raw Dragonfly behavior. The text slice includes `Message`, `SendPopup`, `SendTip`, `SendJukeboxPopup`, `SetNameTag`, and `Disconnect`. The state slice adds the exact 17 `Food`, health, experience-level/progress, scale, visibility, and mobility methods. The kinematics slice adds AST-generated `Teleport`, `Move`, `Displace`, `Position`, `Velocity`, `SetVelocity`, and `Rotation`; the host invokes those exact Dragonfly methods and does not reject non-finite values that raw Dragonfly accepts. Setters return `void`; private host status never enters the public API. `SetMaxHealth` preserves Dragonfly's clamp-to-one behavior for non-positive values. `Messagef` remains absent until Go `fmt.Sprintf` semantics can be preserved honestly.
 4. World and block parity. The first landed slice generates `Cube.Pos`, `Cube.Range`,
    `Cube.Face`, `World.Block`, `World.SetOpts`, `World.Tx.Range`, `World.Tx.Block`,
    `World.Tx.BlockLoaded`, `World.Tx.BlocksWithin`, `World.Tx.SetBlock`,
@@ -60,7 +60,7 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    plugins never handle identifiers, NBT, numeric biome IDs, world handles, iterator handles, or
    host errors. `Liquid` preserves Dragonfly's `(Liquid, bool)` result, and passing `null` to
    `SetLiquid` removes the liquid. Host
-   ABI 31 transports that distinction, signed `time.Duration` nanoseconds, private biome IDs,
+   ABI 32 transports that distinction, signed `time.Duration` nanoseconds, private biome IDs,
    particles, registered/custom game-mode capabilities, and the transaction owner's current tick
    without exposing them publicly. Form response callbacks additionally receive a borrowed full
    player snapshot, and ownership transfer guarantees exactly one response or drop callback.
@@ -117,7 +117,7 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    `SetHeldItems`, and `SetHeldSlot`; `Inventory.Value` exposes `Size`, `Item`, `SetItem`, and
    `AddItem`. C# setters return `void` as the chosen language adaptation, and invalid slots
    throw `ArgumentOutOfRangeException`; host statuses never enter the public API. The existing
-   ABI 31 includes one atomic held-item pair snapshot, so `HeldItems` observes the same player state
+   ABI 32 includes one atomic held-item pair snapshot, so `HeldItems` observes the same player state
    with one host read. Main and ender-chest inventory sizes are read from the live Dragonfly
    inventory, preserving custom `player.Config` sizes. Bounded open/read/close item snapshots preserve damage, unbreakable state, anvil cost, custom
    names, lore, item NBT, plugin values, and enchantments internally. Unknown registered stateful
@@ -128,7 +128,7 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    value methods, and player method signatures from Dragonfly's Go AST, then validates all 28
    built-ins against the live registry. C# exposes `Effect.Value`, registered `Type`/`LastingType`
    values, all five constructors, `ResultingColour`, `ByID`/`ID`, and the four player effect methods.
-   ABI 31 transports signed nanosecond duration, level, potency, ambient/particle/infinite flags, and
+   ABI 32 transports signed nanosecond duration, level, potency, ambient/particle/infinite flags, and
    tick. C# `TimeSpan` has 100 ns precision and rejects snapshots outside that precision instead of
    truncating them. Re-adding a snapshot is bounded to one million elapsed ticks because Dragonfly
    exposes `Tick` but no constructor or setter for it. Pending initial instant-effect potency is

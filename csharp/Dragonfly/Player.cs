@@ -31,14 +31,6 @@ public sealed partial class Player : Cmd.Source, Cmd.NamedTarget, World.Entity
 
     public string Name() => PlayerName;
     public TimeSpan Latency() => _latency;
-    public Vector3 Position() => PluginBridge.Host.TryReadEntityState(
-        _invocation,
-        EntityId(),
-        out var state) ? state.Position : _position;
-    public Rotation Rotation() => PluginBridge.Host.TryReadEntityState(
-        _invocation,
-        EntityId(),
-        out var state) ? state.Rotation : default;
     public World.EntityHandle H() => new(EntityId());
     public void Close() => PluginBridge.Host.CloseEntity(_invocation, EntityId());
     public void SendCommandOutput(Cmd.Output output) => _commandOutput?.Merge(output);

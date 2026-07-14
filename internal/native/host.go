@@ -27,7 +27,13 @@ const (
 	PlayerTransformTeleport PlayerTransformKind = iota
 	PlayerTransformMove
 	PlayerTransformVelocity
+	PlayerTransformDisplace
 )
+
+type PlayerKinematics struct {
+	Position, Velocity Vec3
+	Rotation           Rotation
+}
 
 type PlayerTitle struct {
 	Text       string
@@ -394,7 +400,7 @@ type Host interface {
 	ClosePlayerForm(InvocationID, PlayerID) bool
 	TransformPlayer(InvocationID, PlayerID, PlayerTransformKind, Vec3, float64, float64) bool
 	TransferPlayer(InvocationID, PlayerID, WorldID, Vec3) bool
-	PlayerRotation(InvocationID, PlayerID) (Rotation, bool)
+	PlayerKinematics(InvocationID, PlayerID) (PlayerKinematics, bool)
 	SetPlayerState(InvocationID, PlayerID, PlayerStateKind, PlayerStateValue) bool
 	PlayerState(InvocationID, PlayerID, PlayerStateKind) (PlayerStateValue, bool)
 	HealPlayer(InvocationID, PlayerID, float64, HealingSource) (float64, bool)
@@ -472,7 +478,9 @@ func (noopHost) TransformPlayer(InvocationID, PlayerID, PlayerTransformKind, Vec
 	return false
 }
 func (noopHost) TransferPlayer(InvocationID, PlayerID, WorldID, Vec3) bool { return false }
-func (noopHost) PlayerRotation(InvocationID, PlayerID) (Rotation, bool)    { return Rotation{}, false }
+func (noopHost) PlayerKinematics(InvocationID, PlayerID) (PlayerKinematics, bool) {
+	return PlayerKinematics{}, false
+}
 func (noopHost) SetPlayerState(InvocationID, PlayerID, PlayerStateKind, PlayerStateValue) bool {
 	return false
 }

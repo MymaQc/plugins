@@ -9,8 +9,8 @@ extern "C" {
 #endif
 
 #define DF_ABI_VERSION 7u
-// Version 31 transports Dragonfly effect fields using signed nanoseconds and ticks.
-#define DF_HOST_ABI_VERSION 31u
+// Version 32 adds exact player displacement and one player-kinematics snapshot.
+#define DF_HOST_ABI_VERSION 32u
 #define DF_STATUS_OK 0
 #define DF_STATUS_ERROR 1
 
@@ -23,6 +23,7 @@ typedef uint64_t DfInvocationId;
 typedef uint64_t DfBlockIteratorId;
 typedef struct { double x; double y; double z; } DfVec3;
 typedef struct { double yaw; double pitch; } DfRotation;
+typedef struct { DfVec3 position; DfVec3 velocity; DfRotation rotation; } DfPlayerKinematics;
 typedef struct { int32_t x; int32_t y; int32_t z; } DfBlockPos;
 typedef struct { int32_t min; int32_t max; } DfBlockRange;
 typedef struct { uint64_t value; } DfWorldId;
@@ -184,6 +185,7 @@ typedef struct { uint32_t kind; uint32_t data; int32_t integer; uint32_t flags; 
 #define DF_PLAYER_TRANSFORM_TELEPORT 0u
 #define DF_PLAYER_TRANSFORM_MOVE 1u
 #define DF_PLAYER_TRANSFORM_VELOCITY 2u
+#define DF_PLAYER_TRANSFORM_DISPLACE 3u
 #define DF_PLAYER_TEXT_MESSAGE 0u
 #define DF_PLAYER_TEXT_TIP 1u
 #define DF_PLAYER_TEXT_POPUP 2u
@@ -352,7 +354,7 @@ typedef DfStatus (*DfHostPlayerScoreboardRemoveFn)(uint64_t context, DfInvocatio
 typedef DfStatus (*DfHostPlayerFormSendFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, const DfFormView *form);
 typedef DfStatus (*DfHostPlayerFormCloseFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player);
 typedef DfStatus (*DfHostPlayerTransformFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfVec3 vector, double yaw, double pitch);
-typedef DfStatus (*DfHostPlayerRotationFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfRotation *rotation);
+typedef DfStatus (*DfHostPlayerKinematicsFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfPlayerKinematics *kinematics);
 typedef DfStatus (*DfHostPlayerStateSetFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfPlayerStateValue value);
 typedef DfStatus (*DfHostPlayerStateGetFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfPlayerStateValue *value);
 typedef DfStatus (*DfHostPlayerExperienceSetFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, int32_t level, double progress);
@@ -432,7 +434,7 @@ typedef struct {
     DfHostPlayerTextFn player_text;
     DfHostPlayerTitleFn player_title;
     DfHostPlayerTransformFn player_transform;
-    DfHostPlayerRotationFn player_rotation;
+    DfHostPlayerKinematicsFn player_kinematics;
     DfHostPlayerStateSetFn player_state_set;
     DfHostPlayerStateGetFn player_state_get;
     DfHostPlayerEffectFn player_effect;

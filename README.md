@@ -155,7 +155,7 @@ Dragonfly iterator and closes it on exhaustion, early exit, or callback completi
 
 Public block, liquid, biome, particle, colour, instrument, and item types come from Dragonfly's Go AST.
 Live registries feed internal generated codecs, so Minecraft identifiers, state NBT, numeric biome
-IDs, particle kinds, and instrument IDs never enter plugin code. Private host ABI 31 preserves the
+IDs, particle kinds, and instrument IDs never enter plugin code. Private host ABI 32 preserves the
 separate “no liquid” result, nullable liquid removal, signed nanosecond scheduling delays,
 biome/weather queries, particle payloads, registered/custom game-mode capabilities, and full
 callback-scoped player snapshots for form responses. Structurally valid form contexts receive
@@ -164,7 +164,7 @@ capability descriptors, and ABI errors also remain private transport details.
 
 The generated effect slice exposes all 28 registered Dragonfly effects, `Effect.Value`, the five
 constructors, value methods, colour mixing, registry lookup, and `Player.AddEffect`, `RemoveEffect`,
-`Effect`, and `Effects`. ABI 31 carries effect duration, potency, ambient/particle/infinite flags,
+`Effect`, and `Effects`. ABI 32 carries effect duration, potency, ambient/particle/infinite flags,
 and the current tick; C# exposes duration at `TimeSpan`'s 100 ns precision. Custom effect callbacks,
 registration, and concrete effect-specific multiplier methods wait for the entity and damage-source
 slices; no identifier-based fallback is exposed.

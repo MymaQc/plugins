@@ -51,13 +51,47 @@ internal static unsafe class PluginBridge
         internal static World.GameMode PlayerGameMode(ulong invocation, PlayerId player) =>
             World.GameModeFromDescriptor(GetPlayerState(invocation, player, 0).Integer);
 
-        internal readonly record struct EntitySnapshot(Vector3 Position, Rotation Rotation);
+        internal readonly record struct EntitySnapshot(
+            Vector3 Position,
+            Vector3 Velocity,
+            Rotation Rotation);
 
         internal static EntitySnapshot ReadEntityState(ulong invocation, EntityId entity)
         {
             if (!TryReadEntityState(invocation, entity, out var state))
                 throw new InvalidOperationException("entity is no longer available");
             return state;
+        }
+
+        internal static EntitySnapshot ReadPlayerKinematics(ulong invocation, PlayerId player)
+        {
+            var api = Api;
+            if (api is null || api->PlayerKinematics == null)
+                throw new InvalidOperationException("player is unavailable");
+            NativePlayerKinematics state;
+            if (api->PlayerKinematics(api->Context, invocation, player, &state) != Abi.Ok)
+                throw new InvalidOperationException("player is no longer available");
+            return new EntitySnapshot(
+                new Vector3(state.Position.X, state.Position.Y, state.Position.Z),
+                new Vector3(state.Velocity.X, state.Velocity.Y, state.Velocity.Z),
+                new Rotation(state.Rotation.Yaw, state.Rotation.Pitch));
+        }
+
+        internal static bool TryReadPlayerKinematics(
+            ulong invocation,
+            PlayerId player,
+            out EntitySnapshot snapshot)
+        {
+            snapshot = default;
+            var api = Api;
+            if (api is null || api->PlayerKinematics == null) return false;
+            NativePlayerKinematics state;
+            if (api->PlayerKinematics(api->Context, invocation, player, &state) != Abi.Ok) return false;
+            snapshot = new EntitySnapshot(
+                new Vector3(state.Position.X, state.Position.Y, state.Position.Z),
+                new Vector3(state.Velocity.X, state.Velocity.Y, state.Velocity.Z),
+                new Rotation(state.Rotation.Yaw, state.Rotation.Pitch));
+            return true;
         }
 
         internal static bool TryReadEntityState(
@@ -84,8 +118,29 @@ internal static unsafe class PluginBridge
                 return false;
             snapshot = new EntitySnapshot(
                 new Vector3(state.Position.X, state.Position.Y, state.Position.Z),
+                new Vector3(state.Velocity.X, state.Velocity.Y, state.Velocity.Z),
                 new Rotation(state.Rotation.Yaw, state.Rotation.Pitch));
             return true;
+        }
+
+        internal static void TransformPlayer(
+            ulong invocation,
+            PlayerId player,
+            uint kind,
+            Vector3 vector,
+            double yaw,
+            double pitch)
+        {
+            var api = Api;
+            if (api is null || api->PlayerTransform == null) return;
+            _ = api->PlayerTransform(
+                api->Context,
+                invocation,
+                player,
+                kind,
+                new Vec3 { X = vector.X, Y = vector.Y, Z = vector.Z },
+                yaw,
+                pitch);
         }
 
         internal static void CloseEntity(ulong invocation, EntityId entity)

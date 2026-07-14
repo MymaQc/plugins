@@ -453,7 +453,7 @@ func (p *Players) RemovePlayerScoreboard(invocation native.InvocationID, id nati
 }
 
 func (p *Players) TransformPlayer(invocation native.InvocationID, id native.PlayerID, kind native.PlayerTransformKind, vector native.Vec3, yaw, pitch float64) bool {
-	if !finite(vector.X, vector.Y, vector.Z, yaw, pitch) || kind > native.PlayerTransformVelocity {
+	if kind > native.PlayerTransformDisplace {
 		return false
 	}
 	v := mgl64.Vec3{vector.X, vector.Y, vector.Z}
@@ -465,14 +465,20 @@ func (p *Players) TransformPlayer(invocation native.InvocationID, id native.Play
 			connected.Move(v, yaw, pitch)
 		case native.PlayerTransformVelocity:
 			connected.SetVelocity(v)
+		case native.PlayerTransformDisplace:
+			connected.Displace(v)
 		}
 	})
 }
 
-func (p *Players) PlayerRotation(invocation native.InvocationID, id native.PlayerID) (native.Rotation, bool) {
-	return readPlayer(p, invocation, id, func(connected *player.Player) native.Rotation {
-		rotation := connected.Rotation()
-		return native.Rotation{Yaw: rotation.Yaw(), Pitch: rotation.Pitch()}
+func (p *Players) PlayerKinematics(invocation native.InvocationID, id native.PlayerID) (native.PlayerKinematics, bool) {
+	return readPlayer(p, invocation, id, func(connected *player.Player) native.PlayerKinematics {
+		position, velocity, rotation := connected.Position(), connected.Velocity(), connected.Rotation()
+		return native.PlayerKinematics{
+			Position: native.Vec3{X: position.X(), Y: position.Y(), Z: position.Z()},
+			Velocity: native.Vec3{X: velocity.X(), Y: velocity.Y(), Z: velocity.Z()},
+			Rotation: native.Rotation{Yaw: rotation.Yaw(), Pitch: rotation.Pitch()},
+		}
 	})
 }
 

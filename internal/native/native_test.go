@@ -260,7 +260,6 @@ type recordingHost struct {
 	title              PlayerTitle
 	scoreboard         PlayerScoreboard
 	scoreboardRemoved  bool
-	rotation           Rotation
 	transforms         []PlayerTransformKind
 	vectors            []Vec3
 	yaws               []float64
@@ -392,8 +391,15 @@ func (h *recordingHost) TransferPlayer(invocation InvocationID, player PlayerID,
 	return true
 }
 
-func (h *recordingHost) PlayerRotation(InvocationID, PlayerID) (Rotation, bool) {
-	return h.rotation, true
+func (h *recordingHost) PlayerKinematics(InvocationID, PlayerID) (PlayerKinematics, bool) {
+	if h.entityState.Type == "" {
+		return PlayerKinematics{}, false
+	}
+	return PlayerKinematics{
+		Position: h.entityState.Position,
+		Velocity: h.entityState.Velocity,
+		Rotation: h.entityState.Rotation,
+	}, true
 }
 
 func (h *recordingHost) SetPlayerState(_ InvocationID, _ PlayerID, kind PlayerStateKind, value PlayerStateValue) bool {
@@ -912,7 +918,7 @@ func TestMovementGuard(t *testing.T) {
 
 func TestPlayerTransformHostCalls(t *testing.T) {
 	library, plugins := nativeArtifacts(t)
-	host := &recordingHost{rotation: Rotation{Yaw: 10, Pitch: 5}}
+	host := &recordingHost{entityState: EntityState{Type: "minecraft:player", Rotation: Rotation{Yaw: 10, Pitch: 5}}}
 	runtime, err := OpenWithHost(library, plugins, host)
 	if err != nil {
 		t.Fatal(err)

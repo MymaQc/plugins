@@ -5,7 +5,7 @@ namespace Dragonfly.Native;
 public static class Abi
 {
     public const uint PluginVersion = 7;
-    public const uint HostVersion = 31;
+    public const uint HostVersion = 32;
     public const int Ok = 0;
     public const int Error = 1;
     public const uint PlayerMoveEvent = 1;
@@ -130,6 +130,10 @@ public static class Abi
     public const uint EntityHasVelocity = 1;
     public const uint EntityHasNameTag = 2;
     public const uint EntityCanTeleport = 4;
+    public const uint PlayerTransformTeleport = 0;
+    public const uint PlayerTransformMove = 1;
+    public const uint PlayerTransformVelocity = 2;
+    public const uint PlayerTransformDisplace = 3;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -224,8 +228,8 @@ public unsafe struct HostApi
     public ulong Context;
     public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, uint, StringView, int> PlayerText;
     public void* PlayerTitle;
-    public void* PlayerTransform;
-    public void* PlayerRotation;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, uint, Vec3, double, double, int> PlayerTransform;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, NativePlayerKinematics*, int> PlayerKinematics;
     public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, uint, PlayerStateValue, int> PlayerStateSet;
     public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, uint, PlayerStateValue*, int> PlayerStateGet;
     public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, uint, EffectView, int> PlayerEffect;
@@ -577,6 +581,14 @@ public struct NativeRotation
 {
     public double Yaw;
     public double Pitch;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct NativePlayerKinematics
+{
+    public Vec3 Position;
+    public Vec3 Velocity;
+    public NativeRotation Rotation;
 }
 
 [StructLayout(LayoutKind.Sequential)]

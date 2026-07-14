@@ -40,7 +40,8 @@ public sealed class KitchenSink : Plugin
             new KitchenForm(),
             new KitchenRawFormCommand(),
             new KitchenEffect(),
-            new KitchenCrop()));
+            new KitchenCrop(),
+            new KitchenKinematics()));
         Console.WriteLine("kitchen-sink enabled");
     }
 
@@ -282,6 +283,32 @@ public sealed class KitchenSink : Plugin
 
         public void Run(Cmd.Source source, Cmd.Output output, World.Tx? tx) =>
             output.Printf("position={0},{1},{2}", Value.X, Value.Y, Value.Z);
+    }
+
+    internal sealed class KitchenKinematics : Cmd.Runnable
+    {
+        public Cmd.SubCommand Kinematics;
+
+        public void Run(Cmd.Source source, Cmd.Output output, World.Tx? tx)
+        {
+            if (source is not Player player)
+            {
+                output.Error("This command can only be used by a player.");
+                return;
+            }
+            var position = player.Position();
+            var velocity = player.Velocity();
+            var rotation = player.Rotation();
+            player.Teleport(position);
+            player.Move(default, 0, 0);
+            player.Displace(default);
+            player.SetVelocity(velocity);
+            output.Printf(
+                "position={0},{1},{2}, velocity={3},{4},{5}, rotation={6},{7}",
+                position.X, position.Y, position.Z,
+                velocity.X, velocity.Y, velocity.Z,
+                rotation.Yaw, rotation.Pitch);
+        }
     }
 
     internal sealed class KitchenDestination : Cmd.Runnable

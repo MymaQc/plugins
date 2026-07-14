@@ -223,11 +223,33 @@ func TestPlayersTransformsPlayer(t *testing.T) {
 		if !players.TransformPlayer(invocation, id, native.PlayerTransformMove, native.Vec3{X: 1}, 20, 5) {
 			t.Fatal("move failed")
 		}
-		rotation, ok := players.PlayerRotation(invocation, id)
-		if !ok || rotation.Yaw != 20 || rotation.Pitch != 5 {
-			t.Fatalf("rotation = %+v ok=%v", rotation, ok)
+		kinematics, ok := players.PlayerKinematics(invocation, id)
+		if !ok || kinematics.Position != (native.Vec3{X: 5, Y: 5, Z: 6}) ||
+			kinematics.Rotation.Yaw != 20 || kinematics.Rotation.Pitch != 5 {
+			t.Fatalf("kinematics = %+v ok=%v", kinematics, ok)
+		}
+		if !players.TransformPlayer(invocation, id, native.PlayerTransformDisplace, native.Vec3{X: 0.25}, 0, 0) || player.Position().X() != 5.25 {
+			t.Fatalf("displaced position = %v", player.Position())
 		}
 		if !players.TransformPlayer(invocation, id, native.PlayerTransformVelocity, native.Vec3{Y: 1}, 0, 0) || player.Velocity().Y() != 1 {
+			t.Fatalf("velocity = %v", player.Velocity())
+		}
+		if players.TransformPlayer(invocation, id, native.PlayerTransformDisplace+1, native.Vec3{}, 0, 0) {
+			t.Fatal("unknown transform kind accepted")
+		}
+	})
+}
+
+func TestPlayersTransformKeepsDragonflyNumericSemantics(t *testing.T) {
+	withPlayer(t, func(player *player.Player) {
+		players := NewPlayers()
+		id := players.Register(player, 1)
+		invocation, leave := players.BeginInvocation(player.Tx())
+		defer leave()
+		if !players.TransformPlayer(invocation, id, native.PlayerTransformVelocity, native.Vec3{Y: math.NaN()}, 0, 0) {
+			t.Fatal("non-finite velocity rejected unlike Dragonfly")
+		}
+		if !math.IsNaN(player.Velocity().Y()) {
 			t.Fatalf("velocity = %v", player.Velocity())
 		}
 	})

@@ -159,6 +159,9 @@ _Static_assert(offsetof(DfPluginApiV7, handle_event) == 120, "DfPluginApiV7.hand
 _Static_assert(DF_ABI_VERSION == 7u, "plugin ABI version changed without bridge review");
 _Static_assert(sizeof(DfEntityState) == 128, "DfEntityState ABI layout changed");
 _Static_assert(offsetof(DfEntityState, world) == 72, "DfEntityState.world ABI offset changed");
+_Static_assert(sizeof(DfPlayerKinematics) == 64, "DfPlayerKinematics ABI layout changed");
+_Static_assert(offsetof(DfPlayerKinematics, rotation) == 48, "DfPlayerKinematics.rotation ABI offset changed");
+_Static_assert(DF_PLAYER_TRANSFORM_DISPLACE == 3u, "player transform ABI changed");
 _Static_assert(sizeof(DfParticleViewV1) == 40, "DfParticleViewV1 ABI layout changed");
 _Static_assert(offsetof(DfParticleViewV1, block) == 32, "DfParticleViewV1.block ABI offset changed");
 _Static_assert(sizeof(DfSoundViewV1) == 40, "DfSoundViewV1 ABI layout changed");
@@ -171,7 +174,7 @@ _Static_assert(offsetof(DfWorldOpenSpecV1, open_mode) == 48, "DfWorldOpenSpecV1.
 _Static_assert(offsetof(DfWorldOpenSpecV1, read_only) == 76, "DfWorldOpenSpecV1.read_only ABI offset changed");
 _Static_assert(sizeof(DfBlockRange) == 8, "DfBlockRange ABI layout changed");
 _Static_assert(sizeof(DfHostApiV27) == 664, "DfHostApiV27 ABI layout changed");
-_Static_assert(DF_HOST_ABI_VERSION == 31u, "host ABI version changed without bridge review");
+_Static_assert(DF_HOST_ABI_VERSION == 32u, "host ABI version changed without bridge review");
 _Static_assert(offsetof(DfHostApiV27, player_skin_open) == 80, "DfHostApiV27.player_skin_open ABI offset changed");
 _Static_assert(offsetof(DfHostApiV27, player_skin_set) == 112, "DfHostApiV27.player_skin_set ABI offset changed");
 _Static_assert(offsetof(DfHostApiV27, inventory_size) == 120, "DfHostApiV27.inventory_size ABI offset changed");
@@ -221,7 +224,7 @@ void bg_call_form_drop(DfFormDropFn callback, void *callback_context) { callback
 void bg_call_item_stack_views_drop(DfItemStackViewsDropFn callback, void *context) { callback(context); }
 extern DfStatus bg_go_player_transform(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfVec3 vector, double yaw, double pitch);
 extern DfStatus bg_go_player_transfer(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfWorldId world, DfVec3 position);
-extern DfStatus bg_go_player_rotation(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfRotation *rotation);
+extern DfStatus bg_go_player_kinematics(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfPlayerKinematics *kinematics);
 extern DfStatus bg_go_player_state_set(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfPlayerStateValue value);
 extern DfStatus bg_go_player_state_get(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfPlayerStateValue *value);
 extern DfStatus bg_go_player_heal(uint64_t context, DfInvocationId invocation, DfPlayerId player, double health, const DfHealingSourceView *source, DfPlayerHealResult *result);
@@ -316,8 +319,8 @@ static DfStatus host_player_transform(uint64_t context, DfInvocationId invocatio
     return bg_go_player_transform(context, invocation, player, kind, vector, yaw, pitch);
 }
 
-static DfStatus host_player_rotation(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfRotation *rotation) {
-    return bg_go_player_rotation(context, invocation, player, rotation);
+static DfStatus host_player_kinematics(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfPlayerKinematics *kinematics) {
+    return bg_go_player_kinematics(context, invocation, player, kinematics);
 }
 
 static DfStatus host_player_state_set(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfPlayerStateValue value) {
@@ -567,7 +570,7 @@ DfStatus bg_runtime_open(
         .player_text = host_player_text,
         .player_title = host_player_title,
         .player_transform = host_player_transform,
-        .player_rotation = host_player_rotation,
+        .player_kinematics = host_player_kinematics,
         .player_state_set = host_player_state_set,
         .player_state_get = host_player_state_get,
         .player_effect = host_player_effect,
