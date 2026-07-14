@@ -51,6 +51,124 @@ func openTestRuntime(t testing.TB) *Runtime {
 	return runtime
 }
 
+func TestStickyCancellation(t *testing.T) {
+	for _, test := range []struct {
+		name               string
+		incoming, returned bool
+		want               bool
+	}{
+		{name: "allowed", want: false},
+		{name: "cancelled by native", returned: true, want: true},
+		{name: "incoming cancellation", incoming: true, want: true},
+		{name: "both cancelled", incoming: true, returned: true, want: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := stickyCancellation(test.incoming, test.returned); got != test.want {
+				t.Fatalf("stickyCancellation(%t, %t) = %t, want %t", test.incoming, test.returned, got, test.want)
+			}
+		})
+	}
+}
+
+func TestCancellablePlayerCallbacksKeepIncomingCancellationOnRuntimeError(t *testing.T) {
+	runtime := &Runtime{}
+	tests := []struct {
+		name string
+		call func() (bool, error)
+	}{
+		{name: "move", call: func() (bool, error) { return runtime.HandlePlayerMove(0, PlayerMoveInput{}, true) }},
+		{name: "chat", call: func() (bool, error) {
+			output, err := runtime.HandlePlayerChat(0, PlayerChatInput{}, true)
+			return output.Cancelled, err
+		}},
+		{name: "join", call: func() (bool, error) { return runtime.HandlePlayerJoin(0, PlayerJoinInput{}, true) }},
+		{name: "hurt", call: func() (bool, error) {
+			output, err := runtime.HandlePlayerHurt(0, PlayerHurtInput{}, true)
+			return output.Cancelled, err
+		}},
+		{name: "heal", call: func() (bool, error) {
+			output, err := runtime.HandlePlayerHeal(0, PlayerHealInput{}, true)
+			return output.Cancelled, err
+		}},
+		{name: "block break", call: func() (bool, error) {
+			output, err := runtime.HandlePlayerBlockBreak(0, PlayerBlockBreakInput{}, true)
+			return output.Cancelled, err
+		}},
+		{name: "block place", call: func() (bool, error) { return runtime.HandlePlayerBlockPlace(0, PlayerBlockPlaceInput{}, true) }},
+		{name: "food loss", call: func() (bool, error) {
+			output, err := runtime.HandlePlayerFoodLoss(0, PlayerFoodLossInput{}, true)
+			return output.Cancelled, err
+		}},
+		{name: "start break", call: func() (bool, error) { return runtime.HandlePlayerStartBreak(0, PlayerPositionInput{}, true) }},
+		{name: "fire extinguish", call: func() (bool, error) { return runtime.HandlePlayerFireExtinguish(0, PlayerPositionInput{}, true) }},
+		{name: "toggle sprint", call: func() (bool, error) { return runtime.HandlePlayerToggleSprint(0, PlayerToggleInput{}, true) }},
+		{name: "toggle sneak", call: func() (bool, error) { return runtime.HandlePlayerToggleSneak(0, PlayerToggleInput{}, true) }},
+		{name: "teleport", call: func() (bool, error) { return runtime.HandlePlayerTeleport(0, PlayerTeleportInput{}, true) }},
+		{name: "experience gain", call: func() (bool, error) {
+			output, err := runtime.HandlePlayerExperienceGain(0, PlayerSnapshot{}, 0, true)
+			return output.Cancelled, err
+		}},
+		{name: "punch air", call: func() (bool, error) { return runtime.HandlePlayerPunchAir(0, PlayerSnapshot{}, true) }},
+		{name: "held slot change", call: func() (bool, error) { return runtime.HandlePlayerHeldSlotChange(0, PlayerHeldSlotChangeInput{}, true) }},
+		{name: "sleep", call: func() (bool, error) {
+			output, err := runtime.HandlePlayerSleep(0, PlayerSnapshot{}, false, true)
+			return output.Cancelled, err
+		}},
+		{name: "block pick", call: func() (bool, error) { return runtime.HandlePlayerBlockPick(0, PlayerBlockPickInput{}, true) }},
+		{name: "lectern page turn", call: func() (bool, error) {
+			output, err := runtime.HandlePlayerLecternPageTurn(0, PlayerLecternPageTurnInput{}, true)
+			return output.Cancelled, err
+		}},
+		{name: "sign edit", call: func() (bool, error) { return runtime.HandlePlayerSignEdit(0, PlayerSignEditInput{}, true) }},
+		{name: "item use", call: func() (bool, error) { return runtime.HandlePlayerItemUse(0, PlayerSnapshot{}, true) }},
+		{name: "item use on block", call: func() (bool, error) { return runtime.HandlePlayerItemUseOnBlock(0, PlayerItemUseOnBlockInput{}, true) }},
+		{name: "item consume", call: func() (bool, error) { return runtime.HandlePlayerItemConsume(0, PlayerSnapshot{}, ItemStack{}, true) }},
+		{name: "item release", call: func() (bool, error) {
+			return runtime.HandlePlayerItemRelease(0, PlayerSnapshot{}, ItemStack{}, 0, true)
+		}},
+		{name: "item damage", call: func() (bool, error) {
+			output, err := runtime.HandlePlayerItemDamage(0, PlayerSnapshot{}, ItemStack{}, 0, true)
+			return output.Cancelled, err
+		}},
+		{name: "item drop", call: func() (bool, error) { return runtime.HandlePlayerItemDrop(0, PlayerSnapshot{}, ItemStack{}, true) }},
+		{name: "item pickup", call: func() (bool, error) {
+			output, err := runtime.HandlePlayerItemPickup(0, PlayerItemPickupInput{}, true)
+			return output.Cancelled, err
+		}},
+		{name: "attack entity", call: func() (bool, error) {
+			output, err := runtime.HandlePlayerAttackEntity(0, PlayerAttackEntityInput{}, 0, 0, false, true)
+			return output.Cancelled, err
+		}},
+		{name: "item use on entity", call: func() (bool, error) {
+			return runtime.HandlePlayerItemUseOnEntity(0, PlayerItemUseOnEntityInput{}, true)
+		}},
+		{name: "skin change", call: func() (bool, error) {
+			output, err := runtime.HandlePlayerSkinChange(0, PlayerSkinChangeInput{}, PlayerSkin{}, true)
+			return output.Cancelled, err
+		}},
+		{name: "transfer", call: func() (bool, error) {
+			output, err := runtime.HandlePlayerTransfer(0, PlayerTransferInput{}, true)
+			return output.Cancelled, err
+		}},
+		{name: "command execution", call: func() (bool, error) {
+			output, err := runtime.HandlePlayerCommandExecution(0, PlayerCommandExecutionInput{}, true)
+			return output.Cancelled, err
+		}},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cancelled, err := test.call()
+			if err == nil {
+				t.Fatal("closed runtime call returned no error")
+			}
+			if !cancelled {
+				t.Fatal("incoming cancellation was cleared on error")
+			}
+		})
+	}
+}
+
 func TestRuntimeReadsStaticallyRegisteredEntityTypes(t *testing.T) {
 	library, plugins := nativeArtifacts(t)
 	runtime, err := Open(library, plugins)

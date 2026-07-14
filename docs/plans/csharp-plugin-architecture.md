@@ -22,15 +22,19 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
 ## Order
 
 1. NativeAOT loading and `OnEnable`/`OnDisable`.
-2. `player.Handler` events. Movement, chat, food loss, jump, teleport, sprint/sneak toggles,
-   punch-air, quit, fire extinguish, start/block break, block place/pick, item use/use-on-block,
-   item release/consume/damage/pickup/drop, experience gain, sign edit, sleep, lectern page turns,
-   and held-slot changes are implemented. Signatures and subscriptions come from Dragonfly's Go
-   AST. Private plugin ABI 6 gives every callback a borrowed full player snapshot, transports
-   stateful blocks and items directly, preserves signed nanosecond release durations, and returns
-   mutable block-break drops and item-pickup replacements through callback-owned typed stack views.
-   C# item-release durations truncate sub-100 ns remainders toward zero because `TimeSpan` has
-   100 ns precision. Cancellation remains allowed by default and can only transition to cancelled.
+2. `player.Handler` events. All 37 methods in the pinned Dragonfly interface are generated and
+   transported: movement, chat, world changes, damage/healing/death, respawn, skin changes, every
+   block/item interaction, entity use/attacks, transfer, command execution, diagnostics, and quit.
+   Signatures, order, and subscription bits come from Dragonfly's Go AST; generator tests fail on
+   any unknown upstream method instead of silently omitting it. Private plugin ABI 7 gives every
+   callback a borrowed full player snapshot, transports stateful blocks, items, skins, source
+   interfaces, worlds, entities, UDP addresses, command metadata/arguments, and all nine diagnostics
+   fields. Mutable block-break drops, item-pickup replacements, transfer addresses, and same-count
+   command arguments use callback-owned views with an exact-once drop callback. C# item-release
+   durations expose `TimeSpan`'s 100 ns precision. Unchanged hurt-immunity values preserve their
+   exact signed Go nanoseconds; values mutated by C# are rounded to `TimeSpan` precision. Signed
+   durations, including negative values, remain signed. Cancellation remains
+   allowed by default and can only transition to cancelled.
 3. Player methods and commands. Command interfaces and the implemented `Player` method surface are generated from Dragonfly's Go AST. C# uses `Cmd.New`/`Cmd.Register`, one `Cmd.Runnable` per overload, and reflected public fields as Dragonfly uses reflected Go struct fields. Supported command fields include subcommands, native enums, dynamic `Cmd.Enum` values, players, vectors, optional values, and `Cmd.Varargs`. The generator roots runnable fields and field types for NativeAOT; runnable types use `internal` visibility and require no linker annotations. Bedrock-facing subcommands and enum/player suggestions are always lowercase. The generated game-mode slice includes the exact `World.GameMode` interface, four registered values, `GameModeByID`, `GameModeID`, `Player.SetGameMode`, and `Player.GameMode`. Custom C# game modes cross the private ABI as their eight Dragonfly capabilities and remain unregistered, matching raw Dragonfly behavior. The text slice includes `Message`, `SendPopup`, `SendTip`, `SendJukeboxPopup`, `SetNameTag`, and `Disconnect`. The state slice adds the exact 17 `Food`, health, experience-level/progress, scale, visibility, and mobility methods. Setters return `void`; private host status never enters the public API. `SetMaxHealth` preserves Dragonfly's clamp-to-one behavior for non-positive values. `Messagef` remains absent until Go `fmt.Sprintf` semantics can be preserved honestly.
 4. World and block parity. The first landed slice generates `Cube.Pos`, `Cube.Range`,
    `Cube.Face`, `World.Block`, `World.SetOpts`, `World.Tx.Range`, `World.Tx.Block`,
@@ -168,8 +172,9 @@ capabilities, and round-trips the full nested firework stack. Empty, water, lava
 exercise typed content queries, consumption flags, duration, max counts, and lava fuel residue.
 `/kitchen effect` exercises every effect constructor and value method, registry and colour lookup,
 all potion/stew effect families, and a real player add/read/list/remove round trip.
-The same one-file plugin overrides every exposed `Player.Handler` method; mutable drop, pickup,
-experience, page, reminder, and damage arguments traverse the real private ABI.
+The same one-file plugin overrides all 37 `Player.Handler` methods; mutable damage, healing,
+immunity, keep-inventory, respawn, skin, knockback, transfer, command arguments, drops, pickup,
+experience, page, and reminder values traverse the real private ABI.
 `/kitchen form` exercises reflected menu, custom, and modal forms, every built-in element,
 submitted values, closers, and nested sends. `/kitchen raw-form` exercises the open `Form.Value`
 contract plus public element/menu-element JSON marshalling.

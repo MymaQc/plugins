@@ -383,32 +383,43 @@ var instrumentNames = []string{
 }
 
 var supportedPlayerHandlers = map[string]uint64{
-	"HandleMove":            1,
-	"HandleChat":            1 << 1,
-	"HandleQuit":            1 << 3,
-	"HandleBlockBreak":      1 << 6,
-	"HandleBlockPlace":      1 << 7,
-	"HandleFoodLoss":        1 << 8,
-	"HandleStartBreak":      1 << 10,
-	"HandleFireExtinguish":  1 << 11,
-	"HandleToggleSprint":    1 << 12,
-	"HandleToggleSneak":     1 << 13,
-	"HandleJump":            1 << 14,
-	"HandleTeleport":        1 << 15,
-	"HandleExperienceGain":  1 << 16,
-	"HandlePunchAir":        1 << 17,
-	"HandleHeldSlotChange":  1 << 18,
-	"HandleSleep":           1 << 19,
-	"HandleBlockPick":       1 << 20,
-	"HandleLecternPageTurn": 1 << 21,
-	"HandleSignEdit":        1 << 22,
-	"HandleItemUse":         1 << 23,
-	"HandleItemUseOnBlock":  1 << 24,
-	"HandleItemConsume":     1 << 25,
-	"HandleItemRelease":     1 << 26,
-	"HandleItemDamage":      1 << 27,
-	"HandleItemDrop":        1 << 28,
-	"HandleItemPickup":      1 << 37,
+	"HandleMove":             1,
+	"HandleChat":             1 << 1,
+	"HandleQuit":             1 << 3,
+	"HandleHurt":             1 << 4,
+	"HandleHeal":             1 << 5,
+	"HandleBlockBreak":       1 << 6,
+	"HandleBlockPlace":       1 << 7,
+	"HandleFoodLoss":         1 << 8,
+	"HandleDeath":            1 << 9,
+	"HandleStartBreak":       1 << 10,
+	"HandleFireExtinguish":   1 << 11,
+	"HandleToggleSprint":     1 << 12,
+	"HandleToggleSneak":      1 << 13,
+	"HandleJump":             1 << 14,
+	"HandleTeleport":         1 << 15,
+	"HandleExperienceGain":   1 << 16,
+	"HandlePunchAir":         1 << 17,
+	"HandleHeldSlotChange":   1 << 18,
+	"HandleSleep":            1 << 19,
+	"HandleBlockPick":        1 << 20,
+	"HandleLecternPageTurn":  1 << 21,
+	"HandleSignEdit":         1 << 22,
+	"HandleItemUse":          1 << 23,
+	"HandleItemUseOnBlock":   1 << 24,
+	"HandleItemConsume":      1 << 25,
+	"HandleItemRelease":      1 << 26,
+	"HandleItemDamage":       1 << 27,
+	"HandleItemDrop":         1 << 28,
+	"HandleAttackEntity":     1 << 29,
+	"HandleItemUseOnEntity":  1 << 30,
+	"HandleChangeWorld":      1 << 31,
+	"HandleRespawn":          1 << 32,
+	"HandleSkinChange":       1 << 33,
+	"HandleItemPickup":       1 << 37,
+	"HandleTransfer":         1 << 38,
+	"HandleCommandExecution": 1 << 39,
+	"HandleDiagnostics":      1 << 40,
 }
 
 var selectedCommandInterfaces = []string{
@@ -3943,17 +3954,17 @@ func playerHandlerMethods(path string) ([]method, error) {
 			var methods []method
 			for _, field := range interfaceType.Methods.List {
 				if len(field.Names) != 1 {
-					continue
+					return nil, fmt.Errorf("player.Handler has an unnamed or multiply named method")
 				}
 				subscription, supported := supportedPlayerHandlers[field.Names[0].Name]
 				if !supported {
-					continue
+					return nil, fmt.Errorf("unsupported player.Handler.%s method", field.Names[0].Name)
 				}
 				function, ok := field.Type.(*ast.FuncType)
 				if !ok {
 					return nil, fmt.Errorf("player.Handler.%s is not a method", field.Names[0].Name)
 				}
-				translated, err := translateParameters(function.Params)
+				translated, err := translatePlayerHandlerParameters(field.Names[0].Name, function.Params)
 				if err != nil {
 					return nil, fmt.Errorf("player.Handler.%s: %w", field.Names[0].Name, err)
 				}
@@ -3972,6 +3983,47 @@ func playerHandlerMethods(path string) ([]method, error) {
 		}
 	}
 	return nil, fmt.Errorf("Dragonfly player.Handler interface not found")
+}
+
+func translatePlayerHandlerParameters(methodName string, fields *ast.FieldList) ([]parameter, error) {
+	var parameters []parameter
+	for _, field := range fields.List {
+		if len(field.Names) == 0 {
+			return nil, fmt.Errorf("unnamed parameter")
+		}
+		for _, name := range field.Names {
+			if methodName == "HandleChangeWorld" && pointerToSelector(field.Type, "world", "World") {
+				switch name.Name {
+				case "before":
+					parameters = append(parameters, parameter{Name: name.Name, Type: "World?"})
+				case "after":
+					parameters = append(parameters, parameter{Name: name.Name, Type: "World"})
+				default:
+					return nil, fmt.Errorf("unsupported world parameter %s", name.Name)
+				}
+				continue
+			}
+			typeName, ok := csharpType(field.Type)
+			if !ok {
+				return nil, fmt.Errorf("unsupported parameter type %T", field.Type)
+			}
+			parameters = append(parameters, parameter{Name: name.Name, Type: typeName})
+		}
+	}
+	return parameters, nil
+}
+
+func pointerToSelector(expression ast.Expr, packageName, typeName string) bool {
+	pointer, ok := expression.(*ast.StarExpr)
+	if !ok {
+		return false
+	}
+	selector, ok := pointer.X.(*ast.SelectorExpr)
+	if !ok || selector.Sel.Name != typeName {
+		return false
+	}
+	identifier, ok := selector.X.(*ast.Ident)
+	return ok && identifier.Name == packageName
 }
 
 func translateParameters(fields *ast.FieldList) ([]parameter, error) {
@@ -4003,6 +4055,13 @@ func csharpType(expression ast.Expr) (string, bool) {
 		}
 		return "params " + typeName + "[]", true
 	case *ast.StarExpr:
+		if nested, ok := value.X.(*ast.StarExpr); ok {
+			if selector, ok := nested.X.(*ast.SelectorExpr); ok {
+				if packageName, ok := selector.X.(*ast.Ident); ok && packageName.Name == "world" && selector.Sel.Name == "World" {
+					return "ref World", true
+				}
+			}
+		}
 		typeName, ok := csharpType(value.X)
 		if !ok {
 			return "", false
@@ -4016,6 +4075,7 @@ func csharpType(expression ast.Expr) (string, bool) {
 			"any":     "object?",
 			"bool":    "bool",
 			"Context": "Player.Context",
+			"float64": "double",
 			"int":     "int",
 			"Player":  "Player",
 			"string":  "string",
@@ -4027,13 +4087,21 @@ func csharpType(expression ast.Expr) (string, bool) {
 			return "", false
 		}
 		typeName, ok := map[string]string{
-			"cube.Face":     "Cube.Face",
-			"cube.Pos":      "Cube.Pos",
-			"cube.Rotation": "Rotation",
-			"item.Stack":    "Item.Stack",
-			"mgl64.Vec3":    "Vector3",
-			"time.Duration": "TimeSpan",
-			"world.Block":   "World.Block",
+			"cmd.Command":         "Cmd.Command",
+			"cube.Face":           "Cube.Face",
+			"cube.Pos":            "Cube.Pos",
+			"cube.Rotation":       "Rotation",
+			"item.Stack":          "Item.Stack",
+			"mgl64.Vec3":          "Vector3",
+			"net.UDPAddr":         "Net.UDPAddr",
+			"session.Diagnostics": "Session.Diagnostics",
+			"skin.Skin":           "Skin",
+			"time.Duration":       "TimeSpan",
+			"world.Block":         "World.Block",
+			"world.DamageSource":  "World.DamageSource",
+			"world.Entity":        "World.Entity",
+			"world.HealingSource": "World.HealingSource",
+			"world.World":         "World",
 		}[packageName.Name+"."+value.Sel.Name]
 		return typeName, ok
 	default:
@@ -4231,6 +4299,7 @@ func formatGoExpression(expression ast.Expr) string {
 func generatePlayerHandler(methods []method) []byte {
 	var output bytes.Buffer
 	output.WriteString("// Code generated from Dragonfly server/player/handler.go. DO NOT EDIT.\n")
+	output.WriteString("#nullable enable\n")
 	output.WriteString("namespace Dragonfly;\n\n")
 	output.WriteString("public sealed partial class Player\n{\n    public interface Handler\n    {\n")
 	for _, method := range methods {

@@ -48,6 +48,7 @@ func openCSharpRuntimeWithHost(t testing.TB, host Host) *Runtime {
 		t.Fatalf("PluginCount() = %d, want 5", got)
 	}
 	wantSubscriptions := PlayerMoveSubscription | PlayerChatSubscription | PlayerQuitSubscription |
+		PlayerHurtSubscription | PlayerHealSubscription | PlayerDeathSubscription |
 		PlayerBlockBreakSubscription | PlayerBlockPlaceSubscription |
 		PlayerFoodLossSubscription | PlayerToggleSprintSubscription | PlayerToggleSneakSubscription |
 		PlayerStartBreakSubscription | PlayerFireExtinguishSubscription |
@@ -56,7 +57,9 @@ func openCSharpRuntimeWithHost(t testing.TB, host Host) *Runtime {
 		PlayerBlockPickSubscription | PlayerLecternPageTurnSubscription | PlayerSignEditSubscription |
 		PlayerItemUseSubscription | PlayerItemUseOnBlockSubscription | PlayerItemConsumeSubscription |
 		PlayerItemReleaseSubscription | PlayerItemDamageSubscription | PlayerItemPickupSubscription |
-		PlayerItemDropSubscription
+		PlayerItemDropSubscription | PlayerAttackEntitySubscription | PlayerItemUseOnEntitySubscription |
+		PlayerChangeWorldSubscription | PlayerRespawnSubscription | PlayerSkinChangeSubscription |
+		PlayerTransferSubscription | PlayerCommandExecutionSubscription | PlayerDiagnosticsSubscription
 	if got := pluginRuntime.Subscriptions(); got != wantSubscriptions {
 		t.Fatalf("Subscriptions() = %d, want %d", got, wantSubscriptions)
 	}
@@ -1327,6 +1330,82 @@ func TestCSharpRuntimeReflectedPlayerHandlers(t *testing.T) {
 	allowed("item drop", func() (bool, error) {
 		return pluginRuntime.HandlePlayerItemDrop(next(), player, stack, false)
 	})
+
+	heal, err := pluginRuntime.HandlePlayerHeal(next(), PlayerHealInput{
+		Player: player, Health: -2, Source: HealingSource{Kind: HealingSourceInstant},
+	}, false)
+	if err != nil || heal.Cancelled || heal.Health != 0 {
+		t.Fatalf("heal output=%+v error=%v", heal, err)
+	}
+	hurt, err := pluginRuntime.HandlePlayerHurt(next(), PlayerHurtInput{
+		Player: player, Damage: -3, AttackImmunity: -123_456_789 * time.Nanosecond,
+		Source: DamageSource{Kind: DamageSourceFall},
+	}, false)
+	if err != nil || hurt.Cancelled || hurt.Damage != 0 || hurt.AttackImmunity != -123_456_789*time.Nanosecond {
+		t.Fatalf("hurt output=%+v error=%v", hurt, err)
+	}
+	keepInventory, err := pluginRuntime.HandlePlayerDeath(next(), PlayerDeathInput{
+		Player: player, Source: DamageSource{Kind: DamageSourceVoid},
+	}, true)
+	if err != nil || !keepInventory {
+		t.Fatalf("death keep-inventory=%v error=%v", keepInventory, err)
+	}
+
+	before, after := WorldID(17), WorldID(18)
+	if err := pluginRuntime.HandlePlayerChangeWorld(next(), PlayerChangeWorldInput{
+		Player: player, Before: &before, After: after,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	respawn, err := pluginRuntime.HandlePlayerRespawn(
+		next(), PlayerRespawnInput{Player: player}, Vec3{X: 1, Y: 64, Z: 2}, after)
+	if err != nil || respawn.Position != (Vec3{X: 1, Y: 64, Z: 2}) || respawn.World != after {
+		t.Fatalf("respawn output=%+v error=%v", respawn, err)
+	}
+	skin := PlayerSkin{Width: 2, Height: 2, Pixels: make([]byte, 16), FullID: "handler-skin"}
+	skinChange, err := pluginRuntime.HandlePlayerSkinChange(
+		next(), PlayerSkinChangeInput{Player: player}, skin, false)
+	if err != nil || skinChange.Cancelled || !reflect.DeepEqual(skinChange.Skin, skin) {
+		t.Fatalf("skin-change output=%+v error=%v", skinChange, err)
+	}
+
+	target := EntityID{UUID: [16]byte{0x44}, Generation: 9}
+	allowed("item use on entity", func() (bool, error) {
+		return pluginRuntime.HandlePlayerItemUseOnEntity(
+			next(), PlayerItemUseOnEntityInput{Player: player, Target: target}, false)
+	})
+	attack, err := pluginRuntime.HandlePlayerAttackEntity(
+		next(), PlayerAttackEntityInput{Player: player, Target: target}, -1, -2, true, false)
+	if err != nil || attack.Cancelled || attack.KnockbackForce != 0 ||
+		attack.KnockbackHeight != 0 || !attack.Critical {
+		t.Fatalf("attack output=%+v error=%v", attack, err)
+	}
+
+	transfer, err := pluginRuntime.HandlePlayerTransfer(next(), PlayerTransferInput{
+		Player:  player,
+		Address: UDPAddress{IP: []byte{127, 0, 0, 1}, Port: 70_000, Zone: "example"},
+	}, false)
+	if err != nil || transfer.Cancelled || transfer.Address.Port != 65_535 ||
+		!slices.Equal(transfer.Address.IP, []byte{127, 0, 0, 1}) || transfer.Address.Zone != "example" {
+		t.Fatalf("transfer output=%+v error=%v", transfer, err)
+	}
+	commandExecution, err := pluginRuntime.HandlePlayerCommandExecution(next(), PlayerCommandExecutionInput{
+		Player:    player,
+		Command:   CommandInfo{Name: "kitchen", Description: "desc", Usage: "/kitchen", Aliases: []string{"ks"}},
+		Arguments: []string{" first ", "SECOND"},
+	}, false)
+	if err != nil || commandExecution.Cancelled ||
+		!slices.Equal(commandExecution.Arguments, []string{"first", "SECOND"}) {
+		t.Fatalf("command-execution output=%+v error=%v", commandExecution, err)
+	}
+	if err := pluginRuntime.HandlePlayerDiagnostics(next(), PlayerDiagnosticsInput{
+		Player: player, AverageFramesPerSecond: 60, AverageServerSimTickTime: 1,
+		AverageClientSimTickTime: 2, AverageBeginFrameTime: 3, AverageInputTime: 4,
+		AverageRenderTime: 5, AverageEndFrameTime: 6, AverageRemainderTimePercent: 7,
+		AverageUnaccountedTimePercent: 8,
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func assertCSharpHandlerStack(t *testing.T, got, want ItemStack, customName string) {

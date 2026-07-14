@@ -4,17 +4,20 @@ package host
 import (
 	"fmt"
 	"log/slog"
+	"net"
 	"time"
 
 	"github.com/bedrock-gophers/plugins/internal/native"
 	"github.com/df-mc/dragonfly/server/block"
 	"github.com/df-mc/dragonfly/server/block/cube"
+	"github.com/df-mc/dragonfly/server/cmd"
 	"github.com/df-mc/dragonfly/server/entity"
 	"github.com/df-mc/dragonfly/server/entity/effect"
 	"github.com/df-mc/dragonfly/server/item"
 	"github.com/df-mc/dragonfly/server/item/enchantment"
 	"github.com/df-mc/dragonfly/server/player"
 	playerskin "github.com/df-mc/dragonfly/server/player/skin"
+	"github.com/df-mc/dragonfly/server/session"
 	"github.com/df-mc/dragonfly/server/world"
 	"github.com/go-gl/mathgl/mgl64"
 )
@@ -56,6 +59,9 @@ type playerRuntime interface {
 	HandlePlayerChangeWorld(native.InvocationID, native.PlayerChangeWorldInput) error
 	HandlePlayerRespawn(native.InvocationID, native.PlayerRespawnInput, native.Vec3, native.WorldID) (native.PlayerRespawnOutput, error)
 	HandlePlayerSkinChange(native.InvocationID, native.PlayerSkinChangeInput, native.PlayerSkin, bool) (native.PlayerSkinChangeOutput, error)
+	HandlePlayerTransfer(native.InvocationID, native.PlayerTransferInput, bool) (native.PlayerTransferOutput, error)
+	HandlePlayerCommandExecution(native.InvocationID, native.PlayerCommandExecutionInput, bool) (native.PlayerCommandExecutionOutput, error)
+	HandlePlayerDiagnostics(native.InvocationID, native.PlayerDiagnosticsInput) error
 }
 
 type playerWorldResolver interface {
@@ -265,6 +271,102 @@ func (h *PlayerHandler) HandleSkinChange(ctx *player.Context, candidate *players
 		return
 	}
 	*candidate = converted
+}
+
+func (h *PlayerHandler) HandleTransfer(ctx *player.Context, address *net.UDPAddr) {
+	if h.runtime.Subscriptions()&native.PlayerTransferSubscription == 0 || address == nil {
+		return
+	}
+	p := ctx.Player()
+	invocation, leave := h.players.BeginInvocation(p.Tx())
+	defer leave()
+	output, err := h.runtime.HandlePlayerTransfer(invocation, native.PlayerTransferInput{
+		Player: h.playerSnapshot(p),
+		Address: native.UDPAddress{
+			IP:   append([]byte(nil), address.IP...),
+			Port: address.Port,
+			Zone: address.Zone,
+		},
+	}, ctx.Cancelled())
+	if output.Cancelled {
+		ctx.Cancel()
+	}
+	if err != nil {
+		h.log.Error("native plugin transfer handler failed", "player", p.Name(), "error", err)
+		return
+	}
+	if !applyTransferAddress(address, output.Address) {
+		h.log.Error("native plugin transfer handler returned an invalid address", "player", p.Name())
+	}
+}
+
+func (h *PlayerHandler) HandleCommandExecution(ctx *player.Context, command cmd.Command, arguments []string) {
+	if h.runtime.Subscriptions()&native.PlayerCommandExecutionSubscription == 0 {
+		return
+	}
+	p := ctx.Player()
+	invocation, leave := h.players.BeginInvocation(p.Tx())
+	defer leave()
+	output, err := h.runtime.HandlePlayerCommandExecution(invocation, native.PlayerCommandExecutionInput{
+		Player: h.playerSnapshot(p),
+		Command: native.CommandInfo{
+			Name:        command.Name(),
+			Description: command.Description(),
+			Usage:       command.Usage(),
+			Aliases:     append([]string(nil), command.Aliases()...),
+		},
+		Arguments: append([]string(nil), arguments...),
+	}, ctx.Cancelled())
+	if output.Cancelled {
+		ctx.Cancel()
+	}
+	if err != nil {
+		h.log.Error("native plugin command-execution handler failed", "player", p.Name(), "command", command.Name(), "error", err)
+		return
+	}
+	if !applyCommandArguments(arguments, output.Arguments) {
+		h.log.Error("native plugin command-execution handler returned an invalid argument count", "player", p.Name(), "command", command.Name())
+	}
+}
+
+func (h *PlayerHandler) HandleDiagnostics(p *player.Player, diagnostics session.Diagnostics) {
+	if h.runtime.Subscriptions()&native.PlayerDiagnosticsSubscription == 0 {
+		return
+	}
+	invocation, leave := h.players.BeginInvocation(p.Tx())
+	defer leave()
+	if err := h.runtime.HandlePlayerDiagnostics(invocation, native.PlayerDiagnosticsInput{
+		Player:                        h.playerSnapshot(p),
+		AverageFramesPerSecond:        diagnostics.AverageFramesPerSecond,
+		AverageServerSimTickTime:      diagnostics.AverageServerSimTickTime,
+		AverageClientSimTickTime:      diagnostics.AverageClientSimTickTime,
+		AverageBeginFrameTime:         diagnostics.AverageBeginFrameTime,
+		AverageInputTime:              diagnostics.AverageInputTime,
+		AverageRenderTime:             diagnostics.AverageRenderTime,
+		AverageEndFrameTime:           diagnostics.AverageEndFrameTime,
+		AverageRemainderTimePercent:   diagnostics.AverageRemainderTimePercent,
+		AverageUnaccountedTimePercent: diagnostics.AverageUnaccountedTimePercent,
+	}); err != nil {
+		h.log.Error("native plugin diagnostics handler failed", "player", p.Name(), "error", err)
+	}
+}
+
+func applyTransferAddress(destination *net.UDPAddr, source native.UDPAddress) bool {
+	if destination == nil || (len(source.IP) != 0 && len(source.IP) != net.IPv4len && len(source.IP) != net.IPv6len) {
+		return false
+	}
+	destination.IP = append(net.IP(nil), source.IP...)
+	destination.Port = source.Port
+	destination.Zone = source.Zone
+	return true
+}
+
+func applyCommandArguments(destination, source []string) bool {
+	if len(destination) != len(source) {
+		return false
+	}
+	copy(destination, source)
+	return true
 }
 
 func (h *PlayerHandler) HandleAttackEntity(ctx *player.Context, target world.Entity, force, height *float64, critical *bool) {

@@ -4,8 +4,9 @@ Runnable parity showcase. Its single plugin class demonstrates:
 
 - movement validation and cancellation;
 - chat and food-state mutation;
-- all 26 exposed player handlers, including typed block/item payloads, mutable break drops,
-  item-pickup replacement, signed release durations, and full player snapshots;
+- all 37 Dragonfly player handlers, including typed damage/healing sources, worlds, entities,
+  mutable skins and respawns, transfer addresses, command arguments, diagnostics, typed block/item
+  payloads, mutable break drops, item-pickup replacement, signed durations, and full snapshots;
 - player-action telemetry;
 - reflected command arguments and overloads;
 - direct `Player.Message` output;

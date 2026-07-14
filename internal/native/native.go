@@ -6,6 +6,10 @@ package native
 #cgo linux LDFLAGS: -ldl
 #include <stdlib.h>
 #include "bridge.h"
+
+static inline void bg_call_event_drop(DfEventDropFn callback, void *context) {
+    if (callback != NULL) callback(context);
+}
 */
 import "C"
 
@@ -21,49 +25,57 @@ import (
 )
 
 const (
-	maxEntityTypes      = 1024
-	maxEntityStateBytes = 16 << 20
+	maxEntityTypes                 = 1024
+	maxEntityStateBytes            = 16 << 20
+	maxEventStringBytes            = 64 << 10
+	maxCommandExecutionStringCount = 1024
+	maxCommandExecutionAliasCount  = 1024
+	maxTransferIPBytes             = 16
+	maxTransferZoneBytes           = 4096
 )
 
 const (
-	PlayerMoveSubscription            uint64 = 1
-	PlayerChatSubscription            uint64 = 2
-	PlayerJoinSubscription            uint64 = 4
-	PlayerQuitSubscription            uint64 = 8
-	PlayerHurtSubscription            uint64 = 16
-	PlayerHealSubscription            uint64 = 32
-	PlayerBlockBreakSubscription      uint64 = 64
-	PlayerBlockPlaceSubscription      uint64 = 128
-	PlayerFoodLossSubscription        uint64 = 256
-	PlayerDeathSubscription           uint64 = 512
-	PlayerStartBreakSubscription      uint64 = 1024
-	PlayerFireExtinguishSubscription  uint64 = 2048
-	PlayerToggleSprintSubscription    uint64 = 4096
-	PlayerToggleSneakSubscription     uint64 = 8192
-	PlayerJumpSubscription            uint64 = 16384
-	PlayerTeleportSubscription        uint64 = 32768
-	PlayerExperienceGainSubscription  uint64 = 65536
-	PlayerPunchAirSubscription        uint64 = 131072
-	PlayerHeldSlotChangeSubscription  uint64 = 262144
-	PlayerSleepSubscription           uint64 = 524288
-	PlayerBlockPickSubscription       uint64 = 1048576
-	PlayerLecternPageTurnSubscription uint64 = 2097152
-	PlayerSignEditSubscription        uint64 = 4194304
-	PlayerItemUseSubscription         uint64 = 8388608
-	PlayerItemUseOnBlockSubscription  uint64 = 16777216
-	PlayerItemConsumeSubscription     uint64 = 33554432
-	PlayerItemReleaseSubscription     uint64 = 67108864
-	PlayerItemDamageSubscription      uint64 = 134217728
-	PlayerItemDropSubscription        uint64 = 268435456
-	PlayerAttackEntitySubscription    uint64 = 536870912
-	PlayerItemUseOnEntitySubscription uint64 = 1073741824
-	PlayerChangeWorldSubscription     uint64 = 2147483648
-	PlayerRespawnSubscription         uint64 = 4294967296
-	PlayerSkinChangeSubscription      uint64 = 8589934592
-	PlayerItemPickupSubscription      uint64 = 137438953472
-	MaxChatReplacementBytes                  = 4096
-	MaxCommandOutputBytes                    = 4096
-	MaxCommandEnumBytes                      = 4096
+	PlayerMoveSubscription             uint64 = 1
+	PlayerChatSubscription             uint64 = 2
+	PlayerJoinSubscription             uint64 = 4
+	PlayerQuitSubscription             uint64 = 8
+	PlayerHurtSubscription             uint64 = 16
+	PlayerHealSubscription             uint64 = 32
+	PlayerBlockBreakSubscription       uint64 = 64
+	PlayerBlockPlaceSubscription       uint64 = 128
+	PlayerFoodLossSubscription         uint64 = 256
+	PlayerDeathSubscription            uint64 = 512
+	PlayerStartBreakSubscription       uint64 = 1024
+	PlayerFireExtinguishSubscription   uint64 = 2048
+	PlayerToggleSprintSubscription     uint64 = 4096
+	PlayerToggleSneakSubscription      uint64 = 8192
+	PlayerJumpSubscription             uint64 = 16384
+	PlayerTeleportSubscription         uint64 = 32768
+	PlayerExperienceGainSubscription   uint64 = 65536
+	PlayerPunchAirSubscription         uint64 = 131072
+	PlayerHeldSlotChangeSubscription   uint64 = 262144
+	PlayerSleepSubscription            uint64 = 524288
+	PlayerBlockPickSubscription        uint64 = 1048576
+	PlayerLecternPageTurnSubscription  uint64 = 2097152
+	PlayerSignEditSubscription         uint64 = 4194304
+	PlayerItemUseSubscription          uint64 = 8388608
+	PlayerItemUseOnBlockSubscription   uint64 = 16777216
+	PlayerItemConsumeSubscription      uint64 = 33554432
+	PlayerItemReleaseSubscription      uint64 = 67108864
+	PlayerItemDamageSubscription       uint64 = 134217728
+	PlayerItemDropSubscription         uint64 = 268435456
+	PlayerAttackEntitySubscription     uint64 = 536870912
+	PlayerItemUseOnEntitySubscription  uint64 = 1073741824
+	PlayerChangeWorldSubscription      uint64 = 2147483648
+	PlayerRespawnSubscription          uint64 = 4294967296
+	PlayerSkinChangeSubscription       uint64 = 8589934592
+	PlayerItemPickupSubscription       uint64 = 137438953472
+	PlayerTransferSubscription         uint64 = 274877906944
+	PlayerCommandExecutionSubscription uint64 = 549755813888
+	PlayerDiagnosticsSubscription      uint64 = 1099511627776
+	MaxChatReplacementBytes                   = 4096
+	MaxCommandOutputBytes                     = 4096
+	MaxCommandEnumBytes                       = 4096
 )
 
 // InvocationID identifies one synchronous command, event, or form callback.
@@ -325,6 +337,53 @@ type PlayerSkinChangeInput struct {
 type PlayerSkinChangeOutput struct {
 	Cancelled bool
 	Skin      PlayerSkin
+}
+
+type UDPAddress struct {
+	IP   []byte
+	Port int
+	Zone string
+}
+
+type PlayerTransferInput struct {
+	Player  PlayerSnapshot
+	Address UDPAddress
+}
+
+type PlayerTransferOutput struct {
+	Cancelled bool
+	Address   UDPAddress
+}
+
+type CommandInfo struct {
+	Name        string
+	Description string
+	Usage       string
+	Aliases     []string
+}
+
+type PlayerCommandExecutionInput struct {
+	Player    PlayerSnapshot
+	Command   CommandInfo
+	Arguments []string
+}
+
+type PlayerCommandExecutionOutput struct {
+	Cancelled bool
+	Arguments []string
+}
+
+type PlayerDiagnosticsInput struct {
+	Player                        PlayerSnapshot
+	AverageFramesPerSecond        float64
+	AverageServerSimTickTime      float64
+	AverageClientSimTickTime      float64
+	AverageBeginFrameTime         float64
+	AverageInputTime              float64
+	AverageRenderTime             float64
+	AverageEndFrameTime           float64
+	AverageRemainderTimePercent   float64
+	AverageUnaccountedTimePercent float64
 }
 
 type PlayerItemPickupInput struct {
@@ -972,7 +1031,7 @@ func (r *Runtime) HandlePlayerMove(invocation InvocationID, input PlayerMoveInpu
 	packed := uint64(C.bg_runtime_handle_player_move_value(r.ptr, nativeInput, state.cancelled))
 	runtime.KeepAlive(input.Player.Name)
 	status := int32(uint32(packed >> 32))
-	finalCancelled := uint8(packed) != 0
+	finalCancelled := stickyCancellation(cancelled, uint8(packed) != 0)
 	if status != C.DF_STATUS_OK {
 		return finalCancelled, fmt.Errorf("native movement handler failed with status %d", status)
 	}
@@ -1010,10 +1069,10 @@ func (r *Runtime) HandlePlayerChat(invocation InvocationID, input PlayerChatInpu
 		state.cancelled = 1
 	}
 	if status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_CHAT, unsafe.Pointer(&nativeInput), unsafe.Pointer(&state)); status != C.DF_STATUS_OK {
-		output.Cancelled = state.cancelled != 0
+		output.Cancelled = stickyCancellation(cancelled, state.cancelled != 0)
 		return output, fmt.Errorf("native chat handler failed with status %d", int32(status))
 	}
-	output.Cancelled = state.cancelled != 0
+	output.Cancelled = stickyCancellation(cancelled, state.cancelled != 0)
 	if state.has_replacement != 0 {
 		value := string(C.GoBytes(replacement, C.int(state.replacement.len)))
 		output.Replacement = &value
@@ -1037,9 +1096,9 @@ func (r *Runtime) HandlePlayerJoin(invocation InvocationID, input PlayerJoinInpu
 		state.cancelled = 1
 	}
 	if status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_JOIN, unsafe.Pointer(&nativeInput), unsafe.Pointer(&state)); status != C.DF_STATUS_OK {
-		return state.cancelled != 0, fmt.Errorf("native join handler failed with status %d", int32(status))
+		return stickyCancellation(cancelled, state.cancelled != 0), fmt.Errorf("native join handler failed with status %d", int32(status))
 	}
-	return state.cancelled != 0, nil
+	return stickyCancellation(cancelled, state.cancelled != 0), nil
 }
 
 func (r *Runtime) HandlePlayerQuit(invocation InvocationID, input PlayerQuitInput) error {
@@ -1077,18 +1136,19 @@ func (r *Runtime) HandlePlayerHurt(invocation InvocationID, input PlayerHurtInpu
 	nativeInput.immune = C.uint8_t(boolByte(input.Immune))
 	nativeInput.source = source
 	state := C.DfPlayerHurtState{
-		damage:                       C.double(input.Damage),
-		attack_immunity_milliseconds: C.uint64_t(max(input.AttackImmunity.Milliseconds(), 0)),
+		damage:                      C.double(input.Damage),
+		attack_immunity_nanoseconds: C.int64_t(input.AttackImmunity),
 	}
 	if cancelled {
 		state.cancelled = 1
 	}
-	if status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_HURT, unsafe.Pointer(&nativeInput), unsafe.Pointer(&state)); status != C.DF_STATUS_OK {
+	status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_HURT, unsafe.Pointer(&nativeInput), unsafe.Pointer(&state))
+	output.Cancelled = stickyCancellation(cancelled, state.cancelled != 0)
+	if status != C.DF_STATUS_OK {
 		return output, fmt.Errorf("native hurt handler failed with status %d", int32(status))
 	}
-	output.Cancelled = state.cancelled != 0
 	output.Damage = float64(state.damage)
-	output.AttackImmunity = time.Duration(state.attack_immunity_milliseconds) * time.Millisecond
+	output.AttackImmunity = time.Duration(state.attack_immunity_nanoseconds)
 	return output, nil
 }
 
@@ -1111,10 +1171,11 @@ func (r *Runtime) HandlePlayerHeal(invocation InvocationID, input PlayerHealInpu
 	if cancelled {
 		state.cancelled = 1
 	}
-	if status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_HEAL, unsafe.Pointer(&nativeInput), unsafe.Pointer(&state)); status != C.DF_STATUS_OK {
+	status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_HEAL, unsafe.Pointer(&nativeInput), unsafe.Pointer(&state))
+	output.Cancelled = stickyCancellation(cancelled, state.cancelled != 0)
+	if status != C.DF_STATUS_OK {
 		return output, fmt.Errorf("native heal handler failed with status %d", int32(status))
 	}
-	output.Cancelled = state.cancelled != 0
 	output.Health = float64(state.health)
 	return output, nil
 }
@@ -1148,6 +1209,7 @@ func (r *Runtime) HandlePlayerBlockBreak(invocation InvocationID, input PlayerBl
 		state.cancelled = 1
 	}
 	status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_BLOCK_BREAK, unsafe.Pointer(&nativeInput), unsafe.Pointer(&state))
+	output.Cancelled = stickyCancellation(cancelled, state.cancelled != 0)
 	hasReplacement := state.replacement_drop != nil
 	replacementFields := state.replacement_drops != nil || state.replacement_drop_count != 0 || state.replacement_context != nil
 	var replacements []ItemStack
@@ -1165,7 +1227,6 @@ func (r *Runtime) HandlePlayerBlockBreak(invocation InvocationID, input PlayerBl
 	if !validReplacement {
 		return output, errors.New("native block-break handler returned invalid replacement drops")
 	}
-	output.Cancelled = state.cancelled != 0
 	output.Experience = int32(state.experience)
 	if hasReplacement {
 		output.Drops = replacements
@@ -1194,9 +1255,9 @@ func (r *Runtime) HandlePlayerBlockPlace(invocation InvocationID, input PlayerBl
 		state.cancelled = 1
 	}
 	if status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_BLOCK_PLACE, unsafe.Pointer(&nativeInput), unsafe.Pointer(&state)); status != C.DF_STATUS_OK {
-		return state.cancelled != 0, fmt.Errorf("native block-place handler failed with status %d", int32(status))
+		return stickyCancellation(cancelled, state.cancelled != 0), fmt.Errorf("native block-place handler failed with status %d", int32(status))
 	}
-	return state.cancelled != 0, nil
+	return stickyCancellation(cancelled, state.cancelled != 0), nil
 }
 
 func (r *Runtime) HandlePlayerFoodLoss(invocation InvocationID, input PlayerFoodLossInput, cancelled bool) (PlayerFoodLossOutput, error) {
@@ -1213,10 +1274,11 @@ func (r *Runtime) HandlePlayerFoodLoss(invocation InvocationID, input PlayerFood
 	if cancelled {
 		state.cancelled = 1
 	}
-	if status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_FOOD_LOSS, unsafe.Pointer(&nativeInput), unsafe.Pointer(&state)); status != C.DF_STATUS_OK {
+	status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_FOOD_LOSS, unsafe.Pointer(&nativeInput), unsafe.Pointer(&state))
+	output.Cancelled = stickyCancellation(cancelled, state.cancelled != 0)
+	if status != C.DF_STATUS_OK {
 		return output, fmt.Errorf("native food-loss handler failed with status %d", int32(status))
 	}
-	output.Cancelled = state.cancelled != 0
 	output.To = int32(state.to)
 	return output, nil
 }
@@ -1259,9 +1321,9 @@ func (r *Runtime) HandlePlayerStartBreak(invocation InvocationID, input PlayerPo
 		state.cancelled = 1
 	}
 	if status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_START_BREAK, unsafe.Pointer(&nativeInput), unsafe.Pointer(&state)); status != C.DF_STATUS_OK {
-		return state.cancelled != 0, fmt.Errorf("native start-break handler failed with status %d", int32(status))
+		return stickyCancellation(cancelled, state.cancelled != 0), fmt.Errorf("native start-break handler failed with status %d", int32(status))
 	}
-	return state.cancelled != 0, nil
+	return stickyCancellation(cancelled, state.cancelled != 0), nil
 }
 
 func (r *Runtime) HandlePlayerFireExtinguish(invocation InvocationID, input PlayerPositionInput, cancelled bool) (bool, error) {
@@ -1278,9 +1340,9 @@ func (r *Runtime) HandlePlayerFireExtinguish(invocation InvocationID, input Play
 		state.cancelled = 1
 	}
 	if status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_FIRE_EXTINGUISH, unsafe.Pointer(&nativeInput), unsafe.Pointer(&state)); status != C.DF_STATUS_OK {
-		return state.cancelled != 0, fmt.Errorf("native fire-extinguish handler failed with status %d", int32(status))
+		return stickyCancellation(cancelled, state.cancelled != 0), fmt.Errorf("native fire-extinguish handler failed with status %d", int32(status))
 	}
-	return state.cancelled != 0, nil
+	return stickyCancellation(cancelled, state.cancelled != 0), nil
 }
 
 func (r *Runtime) HandlePlayerToggleSprint(invocation InvocationID, input PlayerToggleInput, cancelled bool) (bool, error) {
@@ -1297,9 +1359,9 @@ func (r *Runtime) HandlePlayerToggleSprint(invocation InvocationID, input Player
 		state.cancelled = 1
 	}
 	if status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_TOGGLE_SPRINT, unsafe.Pointer(&nativeInput), unsafe.Pointer(&state)); status != C.DF_STATUS_OK {
-		return state.cancelled != 0, fmt.Errorf("native toggle-sprint handler failed with status %d", int32(status))
+		return stickyCancellation(cancelled, state.cancelled != 0), fmt.Errorf("native toggle-sprint handler failed with status %d", int32(status))
 	}
-	return state.cancelled != 0, nil
+	return stickyCancellation(cancelled, state.cancelled != 0), nil
 }
 func (r *Runtime) HandlePlayerToggleSneak(invocation InvocationID, input PlayerToggleInput, cancelled bool) (bool, error) {
 	if r == nil || r.ptr == nil {
@@ -1315,9 +1377,9 @@ func (r *Runtime) HandlePlayerToggleSneak(invocation InvocationID, input PlayerT
 		state.cancelled = 1
 	}
 	if status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_TOGGLE_SNEAK, unsafe.Pointer(&nativeInput), unsafe.Pointer(&state)); status != C.DF_STATUS_OK {
-		return state.cancelled != 0, fmt.Errorf("native toggle-sneak handler failed with status %d", int32(status))
+		return stickyCancellation(cancelled, state.cancelled != 0), fmt.Errorf("native toggle-sneak handler failed with status %d", int32(status))
 	}
-	return state.cancelled != 0, nil
+	return stickyCancellation(cancelled, state.cancelled != 0), nil
 }
 
 func (r *Runtime) HandlePlayerJump(invocation InvocationID, player PlayerSnapshot) error {
@@ -1349,9 +1411,9 @@ func (r *Runtime) HandlePlayerTeleport(invocation InvocationID, input PlayerTele
 		state.cancelled = 1
 	}
 	if status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_TELEPORT, unsafe.Pointer(&nativeInput), unsafe.Pointer(&state)); status != C.DF_STATUS_OK {
-		return state.cancelled != 0, fmt.Errorf("native teleport handler failed with status %d", int32(status))
+		return stickyCancellation(cancelled, state.cancelled != 0), fmt.Errorf("native teleport handler failed with status %d", int32(status))
 	}
-	return state.cancelled != 0, nil
+	return stickyCancellation(cancelled, state.cancelled != 0), nil
 }
 
 func (r *Runtime) HandlePlayerExperienceGain(invocation InvocationID, player PlayerSnapshot, amount int, cancelled bool) (PlayerExperienceGainOutput, error) {
@@ -1367,10 +1429,12 @@ func (r *Runtime) HandlePlayerExperienceGain(invocation InvocationID, player Pla
 	if cancelled {
 		state.cancelled = 1
 	}
-	if status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_EXPERIENCE_GAIN, unsafe.Pointer(&input), unsafe.Pointer(&state)); status != C.DF_STATUS_OK {
+	status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_EXPERIENCE_GAIN, unsafe.Pointer(&input), unsafe.Pointer(&state))
+	output.Cancelled = stickyCancellation(cancelled, state.cancelled != 0)
+	if status != C.DF_STATUS_OK {
 		return output, fmt.Errorf("native experience-gain handler failed with status %d", int32(status))
 	}
-	return PlayerExperienceGainOutput{Cancelled: state.cancelled != 0, Amount: int(state.amount)}, nil
+	return PlayerExperienceGainOutput{Cancelled: output.Cancelled, Amount: int(state.amount)}, nil
 }
 
 func (r *Runtime) HandlePlayerPunchAir(invocation InvocationID, player PlayerSnapshot, cancelled bool) (bool, error) {
@@ -1386,9 +1450,9 @@ func (r *Runtime) HandlePlayerPunchAir(invocation InvocationID, player PlayerSna
 		state.cancelled = 1
 	}
 	if status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_PUNCH_AIR, unsafe.Pointer(&input), unsafe.Pointer(&state)); status != C.DF_STATUS_OK {
-		return state.cancelled != 0, fmt.Errorf("native punch-air handler failed with status %d", int32(status))
+		return stickyCancellation(cancelled, state.cancelled != 0), fmt.Errorf("native punch-air handler failed with status %d", int32(status))
 	}
-	return state.cancelled != 0, nil
+	return stickyCancellation(cancelled, state.cancelled != 0), nil
 }
 
 func (r *Runtime) HandlePlayerHeldSlotChange(invocation InvocationID, input PlayerHeldSlotChangeInput, cancelled bool) (bool, error) {
@@ -1406,9 +1470,9 @@ func (r *Runtime) HandlePlayerHeldSlotChange(invocation InvocationID, input Play
 		state.cancelled = 1
 	}
 	if status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_HELD_SLOT_CHANGE, unsafe.Pointer(&nativeInput), unsafe.Pointer(&state)); status != C.DF_STATUS_OK {
-		return state.cancelled != 0, fmt.Errorf("native held-slot-change handler failed with status %d", int32(status))
+		return stickyCancellation(cancelled, state.cancelled != 0), fmt.Errorf("native held-slot-change handler failed with status %d", int32(status))
 	}
-	return state.cancelled != 0, nil
+	return stickyCancellation(cancelled, state.cancelled != 0), nil
 }
 
 func (r *Runtime) HandlePlayerSleep(invocation InvocationID, player PlayerSnapshot, sendReminder, cancelled bool) (PlayerSleepOutput, error) {
@@ -1424,10 +1488,12 @@ func (r *Runtime) HandlePlayerSleep(invocation InvocationID, player PlayerSnapsh
 	if cancelled {
 		state.cancelled = 1
 	}
-	if status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_SLEEP, unsafe.Pointer(&input), unsafe.Pointer(&state)); status != C.DF_STATUS_OK {
+	status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_SLEEP, unsafe.Pointer(&input), unsafe.Pointer(&state))
+	output.Cancelled = stickyCancellation(cancelled, state.cancelled != 0)
+	if status != C.DF_STATUS_OK {
 		return output, fmt.Errorf("native sleep handler failed with status %d", int32(status))
 	}
-	return PlayerSleepOutput{Cancelled: state.cancelled != 0, SendReminder: state.send_reminder != 0}, nil
+	return PlayerSleepOutput{Cancelled: output.Cancelled, SendReminder: state.send_reminder != 0}, nil
 }
 
 func (r *Runtime) HandlePlayerBlockPick(invocation InvocationID, input PlayerBlockPickInput, cancelled bool) (bool, error) {
@@ -1448,9 +1514,9 @@ func (r *Runtime) HandlePlayerBlockPick(invocation InvocationID, input PlayerBlo
 		state.cancelled = 1
 	}
 	if status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_BLOCK_PICK, unsafe.Pointer(&nativeInput), unsafe.Pointer(&state)); status != C.DF_STATUS_OK {
-		return state.cancelled != 0, fmt.Errorf("native block-pick handler failed with status %d", int32(status))
+		return stickyCancellation(cancelled, state.cancelled != 0), fmt.Errorf("native block-pick handler failed with status %d", int32(status))
 	}
-	return state.cancelled != 0, nil
+	return stickyCancellation(cancelled, state.cancelled != 0), nil
 }
 
 func (r *Runtime) HandlePlayerLecternPageTurn(invocation InvocationID, input PlayerLecternPageTurnInput, cancelled bool) (PlayerLecternPageTurnOutput, error) {
@@ -1468,10 +1534,12 @@ func (r *Runtime) HandlePlayerLecternPageTurn(invocation InvocationID, input Pla
 	if cancelled {
 		state.cancelled = 1
 	}
-	if status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_LECTERN_PAGE_TURN, unsafe.Pointer(&nativeInput), unsafe.Pointer(&state)); status != C.DF_STATUS_OK {
+	status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_LECTERN_PAGE_TURN, unsafe.Pointer(&nativeInput), unsafe.Pointer(&state))
+	output.Cancelled = stickyCancellation(cancelled, state.cancelled != 0)
+	if status != C.DF_STATUS_OK {
 		return output, fmt.Errorf("native lectern-page-turn handler failed with status %d", int32(status))
 	}
-	return PlayerLecternPageTurnOutput{Cancelled: state.cancelled != 0, NewPage: int(state.new_page)}, nil
+	return PlayerLecternPageTurnOutput{Cancelled: output.Cancelled, NewPage: int(state.new_page)}, nil
 }
 
 func (r *Runtime) HandlePlayerSignEdit(invocation InvocationID, input PlayerSignEditInput, cancelled bool) (bool, error) {
@@ -1493,9 +1561,9 @@ func (r *Runtime) HandlePlayerSignEdit(invocation InvocationID, input PlayerSign
 		state.cancelled = 1
 	}
 	if status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_SIGN_EDIT, unsafe.Pointer(&nativeInput), unsafe.Pointer(&state)); status != C.DF_STATUS_OK {
-		return state.cancelled != 0, fmt.Errorf("native sign-edit handler failed with status %d", int32(status))
+		return stickyCancellation(cancelled, state.cancelled != 0), fmt.Errorf("native sign-edit handler failed with status %d", int32(status))
 	}
-	return state.cancelled != 0, nil
+	return stickyCancellation(cancelled, state.cancelled != 0), nil
 }
 
 func (r *Runtime) HandlePlayerItemUse(invocation InvocationID, player PlayerSnapshot, cancelled bool) (bool, error) {
@@ -1511,9 +1579,9 @@ func (r *Runtime) HandlePlayerItemUse(invocation InvocationID, player PlayerSnap
 		state.cancelled = 1
 	}
 	if status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_ITEM_USE, unsafe.Pointer(&input), unsafe.Pointer(&state)); status != C.DF_STATUS_OK {
-		return state.cancelled != 0, fmt.Errorf("native item-use handler failed with status %d", int32(status))
+		return stickyCancellation(cancelled, state.cancelled != 0), fmt.Errorf("native item-use handler failed with status %d", int32(status))
 	}
-	return state.cancelled != 0, nil
+	return stickyCancellation(cancelled, state.cancelled != 0), nil
 }
 
 func (r *Runtime) HandlePlayerItemUseOnBlock(invocation InvocationID, input PlayerItemUseOnBlockInput, cancelled bool) (bool, error) {
@@ -1532,9 +1600,9 @@ func (r *Runtime) HandlePlayerItemUseOnBlock(invocation InvocationID, input Play
 		state.cancelled = 1
 	}
 	if status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_ITEM_USE_ON_BLOCK, unsafe.Pointer(&nativeInput), unsafe.Pointer(&state)); status != C.DF_STATUS_OK {
-		return state.cancelled != 0, fmt.Errorf("native item-use-on-block handler failed with status %d", int32(status))
+		return stickyCancellation(cancelled, state.cancelled != 0), fmt.Errorf("native item-use-on-block handler failed with status %d", int32(status))
 	}
-	return state.cancelled != 0, nil
+	return stickyCancellation(cancelled, state.cancelled != 0), nil
 }
 
 func (r *Runtime) HandlePlayerItemConsume(invocation InvocationID, player PlayerSnapshot, item ItemStack, cancelled bool) (bool, error) {
@@ -1566,9 +1634,9 @@ func (r *Runtime) handlePlayerItemStackEvent(invocation InvocationID, event C.Df
 		defer C.free(playerName)
 		input.item = itemView
 		if status := C.bg_runtime_handle_event(r.ptr, event, unsafe.Pointer(&input), unsafe.Pointer(&state)); status != C.DF_STATUS_OK {
-			return state.cancelled != 0, fmt.Errorf("native item-consume handler failed with status %d", int32(status))
+			return stickyCancellation(cancelled, state.cancelled != 0), fmt.Errorf("native item-consume handler failed with status %d", int32(status))
 		}
-		return state.cancelled != 0, nil
+		return stickyCancellation(cancelled, state.cancelled != 0), nil
 	}
 	var input C.DfPlayerItemReleaseInput
 	input.invocation = C.DfInvocationId(invocation)
@@ -1577,9 +1645,9 @@ func (r *Runtime) handlePlayerItemStackEvent(invocation InvocationID, event C.Df
 	input.item = itemView
 	input.duration_nanoseconds = C.int64_t(duration)
 	if status := C.bg_runtime_handle_event(r.ptr, event, unsafe.Pointer(&input), unsafe.Pointer(&state)); status != C.DF_STATUS_OK {
-		return state.cancelled != 0, fmt.Errorf("native item-release handler failed with status %d", int32(status))
+		return stickyCancellation(cancelled, state.cancelled != 0), fmt.Errorf("native item-release handler failed with status %d", int32(status))
 	}
-	return state.cancelled != 0, nil
+	return stickyCancellation(cancelled, state.cancelled != 0), nil
 }
 
 func (r *Runtime) HandlePlayerItemDamage(invocation InvocationID, player PlayerSnapshot, item ItemStack, damage int, cancelled bool) (PlayerItemDamageOutput, error) {
@@ -1602,10 +1670,12 @@ func (r *Runtime) HandlePlayerItemDamage(invocation InvocationID, player PlayerS
 	if cancelled {
 		state.cancelled = 1
 	}
-	if status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_ITEM_DAMAGE, unsafe.Pointer(&input), unsafe.Pointer(&state)); status != C.DF_STATUS_OK {
+	status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_ITEM_DAMAGE, unsafe.Pointer(&input), unsafe.Pointer(&state))
+	output.Cancelled = stickyCancellation(cancelled, state.cancelled != 0)
+	if status != C.DF_STATUS_OK {
 		return output, fmt.Errorf("native item-damage handler failed with status %d", int32(status))
 	}
-	return PlayerItemDamageOutput{Cancelled: state.cancelled != 0, Damage: int(state.damage)}, nil
+	return PlayerItemDamageOutput{Cancelled: output.Cancelled, Damage: int(state.damage)}, nil
 }
 
 func (r *Runtime) HandlePlayerItemDrop(invocation InvocationID, player PlayerSnapshot, item ItemStack, cancelled bool) (bool, error) {
@@ -1628,9 +1698,9 @@ func (r *Runtime) HandlePlayerItemDrop(invocation InvocationID, player PlayerSna
 		state.cancelled = 1
 	}
 	if status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_ITEM_DROP, unsafe.Pointer(&input), unsafe.Pointer(&state)); status != C.DF_STATUS_OK {
-		return state.cancelled != 0, fmt.Errorf("native item-drop handler failed with status %d", int32(status))
+		return stickyCancellation(cancelled, state.cancelled != 0), fmt.Errorf("native item-drop handler failed with status %d", int32(status))
 	}
-	return state.cancelled != 0, nil
+	return stickyCancellation(cancelled, state.cancelled != 0), nil
 }
 
 func (r *Runtime) HandlePlayerItemPickup(invocation InvocationID, input PlayerItemPickupInput, cancelled bool) (PlayerItemPickupOutput, error) {
@@ -1649,6 +1719,7 @@ func (r *Runtime) HandlePlayerItemPickup(invocation InvocationID, input PlayerIt
 	defer C.free(playerName)
 	state := C.DfPlayerItemPickupState{cancelled: C.uint8_t(boolByte(cancelled))}
 	status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_ITEM_PICKUP, unsafe.Pointer(&nativeInput), unsafe.Pointer(&state))
+	output.Cancelled = stickyCancellation(cancelled, state.cancelled != 0)
 	hasReplacement := state.replacement_drop != nil
 	replacementFields := state.replacement != nil || state.replacement_context != nil
 	var replacement []ItemStack
@@ -1664,7 +1735,6 @@ func (r *Runtime) HandlePlayerItemPickup(invocation InvocationID, input PlayerIt
 	if !validReplacement {
 		return output, errors.New("native item-pickup handler returned invalid replacement")
 	}
-	output.Cancelled = state.cancelled != 0
 	if hasReplacement {
 		output.Item = replacement[0]
 	}
@@ -1685,11 +1755,13 @@ func (r *Runtime) HandlePlayerAttackEntity(invocation InvocationID, input Player
 		knockback_force: C.double(force), knockback_height: C.double(height),
 		critical: C.uint8_t(boolByte(critical)), cancelled: C.uint8_t(boolByte(cancelled)),
 	}
-	if status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_ATTACK_ENTITY, unsafe.Pointer(&nativeInput), unsafe.Pointer(&state)); status != C.DF_STATUS_OK {
+	status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_ATTACK_ENTITY, unsafe.Pointer(&nativeInput), unsafe.Pointer(&state))
+	output.Cancelled = stickyCancellation(cancelled, state.cancelled != 0)
+	if status != C.DF_STATUS_OK {
 		return output, fmt.Errorf("native attack-entity handler failed with status %d", int32(status))
 	}
 	return PlayerAttackEntityOutput{
-		Cancelled: state.cancelled != 0, KnockbackForce: float64(state.knockback_force),
+		Cancelled: output.Cancelled, KnockbackForce: float64(state.knockback_force),
 		KnockbackHeight: float64(state.knockback_height), Critical: state.critical != 0,
 	}, nil
 }
@@ -1706,9 +1778,9 @@ func (r *Runtime) HandlePlayerItemUseOnEntity(invocation InvocationID, input Pla
 	var state C.DfPlayerItemUseOnEntityState
 	state.cancelled = C.uint8_t(boolByte(cancelled))
 	if status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_ITEM_USE_ON_ENTITY, unsafe.Pointer(&nativeInput), unsafe.Pointer(&state)); status != C.DF_STATUS_OK {
-		return cancelled, fmt.Errorf("native item-use-on-entity handler failed with status %d", int32(status))
+		return stickyCancellation(cancelled, state.cancelled != 0), fmt.Errorf("native item-use-on-entity handler failed with status %d", int32(status))
 	}
-	return state.cancelled != 0, nil
+	return stickyCancellation(cancelled, state.cancelled != 0), nil
 }
 
 func (r *Runtime) HandlePlayerChangeWorld(invocation InvocationID, input PlayerChangeWorldInput) error {
@@ -1773,15 +1845,149 @@ func (r *Runtime) HandlePlayerSkinChange(invocation InvocationID, input PlayerSk
 	nativeInput.snapshot = C.uint64_t(snapshot)
 	state := C.DfPlayerSkinChangeState{cancelled: C.uint8_t(boolByte(cancelled))}
 	if status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_SKIN_CHANGE, unsafe.Pointer(&nativeInput), unsafe.Pointer(&state)); status != C.DF_STATUS_OK {
-		output.Cancelled = state.cancelled != 0
+		output.Cancelled = stickyCancellation(cancelled, state.cancelled != 0)
 		return output, fmt.Errorf("native skin-change handler failed with status %d", int32(status))
 	}
-	output.Cancelled = state.cancelled != 0
+	output.Cancelled = stickyCancellation(cancelled, state.cancelled != 0)
 	finalSkin, ok := resolveSkinSnapshot(r.hostContext, invocation, snapshot)
 	if !ok || !validPlayerSkinPayload(finalSkin) {
 		return output, errors.New("native skin-change handler returned an invalid skin")
 	}
-	return PlayerSkinChangeOutput{Cancelled: state.cancelled != 0, Skin: finalSkin}, nil
+	return PlayerSkinChangeOutput{Cancelled: output.Cancelled, Skin: finalSkin}, nil
+}
+
+func (r *Runtime) HandlePlayerTransfer(invocation InvocationID, input PlayerTransferInput, cancelled bool) (PlayerTransferOutput, error) {
+	output := PlayerTransferOutput{Cancelled: cancelled, Address: cloneUDPAddress(input.Address)}
+	if r == nil || r.ptr == nil {
+		return output, errors.New("native runtime is closed")
+	}
+	if input.Address.Port < math.MinInt32 || input.Address.Port > math.MaxInt32 ||
+		!validTransferIP(input.Address.IP) || len(input.Address.Zone) > maxTransferZoneBytes || !utf8.ValidString(input.Address.Zone) {
+		return output, errors.New("invalid transfer address")
+	}
+	arena := &nativeViewArena{}
+	defer arena.release()
+	ip, ok := arena.stringView(input.Address.IP)
+	if !ok {
+		return output, errors.New("allocate transfer IP")
+	}
+	zone, ok := arena.stringView([]byte(input.Address.Zone))
+	if !ok {
+		return output, errors.New("allocate transfer zone")
+	}
+	var nativeInput C.DfPlayerTransferInput
+	nativeInput.invocation = C.DfInvocationId(invocation)
+	playerName := fillPlayerSnapshot(&nativeInput.player, input.Player)
+	defer C.free(playerName)
+	state := C.DfPlayerTransferState{
+		cancelled: C.uint8_t(boolByte(cancelled)),
+		address: C.DfUDPAddrView{
+			ip: ip, port: C.int32_t(input.Address.Port), zone: zone,
+		},
+	}
+	status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_TRANSFER, unsafe.Pointer(&nativeInput), unsafe.Pointer(&state))
+	if state.replacement_drop != nil {
+		defer C.bg_call_event_drop(state.replacement_drop, state.replacement_context)
+	}
+	output.Cancelled = stickyCancellation(cancelled, state.cancelled != 0)
+	if status != C.DF_STATUS_OK {
+		return output, fmt.Errorf("native transfer handler failed with status %d", int32(status))
+	}
+	address, ok := copyNativeUDPAddress(state.address)
+	if !ok {
+		return output, errors.New("native transfer handler returned an invalid address")
+	}
+	output.Address = address
+	return output, nil
+}
+
+func (r *Runtime) HandlePlayerCommandExecution(invocation InvocationID, input PlayerCommandExecutionInput, cancelled bool) (PlayerCommandExecutionOutput, error) {
+	output := PlayerCommandExecutionOutput{Cancelled: cancelled, Arguments: append([]string(nil), input.Arguments...)}
+	if r == nil || r.ptr == nil {
+		return output, errors.New("native runtime is closed")
+	}
+	if len(input.Command.Aliases) > maxCommandExecutionAliasCount || len(input.Arguments) > maxCommandExecutionStringCount ||
+		!validEventString(input.Command.Name) || !validEventString(input.Command.Description) || !validEventString(input.Command.Usage) {
+		return output, errors.New("command execution input exceeds limits")
+	}
+	arena := &nativeViewArena{}
+	defer arena.release()
+	name, ok := arena.stringView([]byte(input.Command.Name))
+	if !ok {
+		return output, errors.New("allocate command name")
+	}
+	description, ok := arena.stringView([]byte(input.Command.Description))
+	if !ok {
+		return output, errors.New("allocate command description")
+	}
+	usage, ok := arena.stringView([]byte(input.Command.Usage))
+	if !ok {
+		return output, errors.New("allocate command usage")
+	}
+	aliases, ok := arena.stringViews(input.Command.Aliases)
+	if !ok {
+		return output, errors.New("allocate command aliases")
+	}
+	arguments, ok := arena.stringViews(input.Arguments)
+	if !ok {
+		return output, errors.New("allocate command arguments")
+	}
+	var nativeInput C.DfPlayerCommandExecutionInput
+	nativeInput.invocation = C.DfInvocationId(invocation)
+	playerName := fillPlayerSnapshot(&nativeInput.player, input.Player)
+	defer C.free(playerName)
+	nativeInput.command_name = name
+	nativeInput.command_description = description
+	nativeInput.command_usage = usage
+	nativeInput.command_aliases = aliases
+	nativeInput.command_alias_count = C.uint64_t(len(input.Command.Aliases))
+	nativeInput.arguments = arguments
+	nativeInput.argument_count = C.uint64_t(len(input.Arguments))
+	state := C.DfPlayerCommandExecutionState{cancelled: C.uint8_t(boolByte(cancelled))}
+	status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_COMMAND_EXECUTION, unsafe.Pointer(&nativeInput), unsafe.Pointer(&state))
+	if state.replacement_drop != nil {
+		defer C.bg_call_event_drop(state.replacement_drop, state.replacement_context)
+	}
+	output.Cancelled = stickyCancellation(cancelled, state.cancelled != 0)
+	if status != C.DF_STATUS_OK {
+		return output, fmt.Errorf("native command-execution handler failed with status %d", int32(status))
+	}
+	if state.replacement_drop == nil {
+		return output, nil
+	}
+	if uint64(len(input.Arguments)) != uint64(state.replacement_argument_count) {
+		return output, errors.New("native command-execution handler changed argument count")
+	}
+	replacement, ok := copyNativeStrings(state.replacement_arguments, uint64(state.replacement_argument_count), maxCommandExecutionStringCount)
+	if !ok {
+		return output, errors.New("native command-execution handler returned invalid arguments")
+	}
+	output.Arguments = replacement
+	return output, nil
+}
+
+func (r *Runtime) HandlePlayerDiagnostics(invocation InvocationID, input PlayerDiagnosticsInput) error {
+	if r == nil || r.ptr == nil {
+		return errors.New("native runtime is closed")
+	}
+	var nativeInput C.DfPlayerDiagnosticsInput
+	nativeInput.invocation = C.DfInvocationId(invocation)
+	playerName := fillPlayerSnapshot(&nativeInput.player, input.Player)
+	defer C.free(playerName)
+	nativeInput.average_frames_per_second = C.double(input.AverageFramesPerSecond)
+	nativeInput.average_server_sim_tick_time = C.double(input.AverageServerSimTickTime)
+	nativeInput.average_client_sim_tick_time = C.double(input.AverageClientSimTickTime)
+	nativeInput.average_begin_frame_time = C.double(input.AverageBeginFrameTime)
+	nativeInput.average_input_time = C.double(input.AverageInputTime)
+	nativeInput.average_render_time = C.double(input.AverageRenderTime)
+	nativeInput.average_end_frame_time = C.double(input.AverageEndFrameTime)
+	nativeInput.average_remainder_time_percent = C.double(input.AverageRemainderTimePercent)
+	nativeInput.average_unaccounted_time_percent = C.double(input.AverageUnaccountedTimePercent)
+	var state C.DfPlayerDiagnosticsState
+	if status := C.bg_runtime_handle_event(r.ptr, C.DF_EVENT_PLAYER_DIAGNOSTICS, unsafe.Pointer(&nativeInput), unsafe.Pointer(&state)); status != C.DF_STATUS_OK {
+		return fmt.Errorf("native diagnostics handler failed with status %d", int32(status))
+	}
+	return nil
 }
 
 type nativeViewArena struct {
@@ -1811,10 +2017,94 @@ func (a *nativeViewArena) stringView(value []byte) (C.DfStringView, bool) {
 	return C.DfStringView{data: (*C.uint8_t)(pointer), len: C.uint64_t(len(value))}, true
 }
 
+func (a *nativeViewArena) stringViews(values []string) (*C.DfStringView, bool) {
+	if len(values) == 0 {
+		return nil, true
+	}
+	pointer, ok := a.allocate(uintptr(len(values)) * C.sizeof_DfStringView)
+	if !ok {
+		return nil, false
+	}
+	views := unsafe.Slice((*C.DfStringView)(pointer), len(values))
+	for index, value := range values {
+		if !validEventString(value) {
+			return nil, false
+		}
+		view, ok := a.stringView([]byte(value))
+		if !ok {
+			return nil, false
+		}
+		views[index] = view
+	}
+	return (*C.DfStringView)(pointer), true
+}
+
 func (a *nativeViewArena) release() {
 	for index := len(a.allocations) - 1; index >= 0; index-- {
 		C.free(a.allocations[index])
 	}
+}
+
+func validEventString(value string) bool {
+	return len(value) <= maxEventStringBytes && utf8.ValidString(value)
+}
+
+func validTransferIP(value []byte) bool {
+	return len(value) == 0 || len(value) == netIPv4Bytes || len(value) == maxTransferIPBytes
+}
+
+const netIPv4Bytes = 4
+
+func cloneUDPAddress(value UDPAddress) UDPAddress {
+	value.IP = append([]byte(nil), value.IP...)
+	return value
+}
+
+func copyNativeUDPAddress(value C.DfUDPAddrView) (UDPAddress, bool) {
+	ip, ok := copyNativeBytes(value.ip, maxTransferIPBytes)
+	if !ok || !validTransferIP(ip) {
+		return UDPAddress{}, false
+	}
+	zoneBytes, ok := copyNativeBytes(value.zone, maxTransferZoneBytes)
+	if !ok || !utf8.Valid(zoneBytes) {
+		return UDPAddress{}, false
+	}
+	return UDPAddress{IP: ip, Port: int(value.port), Zone: string(zoneBytes)}, true
+}
+
+func copyNativeStrings(values *C.DfStringView, count uint64, maxCount int) ([]string, bool) {
+	if count > uint64(maxCount) {
+		return nil, false
+	}
+	if count == 0 {
+		return []string{}, true
+	}
+	if values == nil {
+		return nil, false
+	}
+	views := unsafe.Slice(values, int(count))
+	result := make([]string, len(views))
+	for index, view := range views {
+		value, ok := copyNativeBytes(view, maxEventStringBytes)
+		if !ok || !utf8.Valid(value) {
+			return nil, false
+		}
+		result[index] = string(value)
+	}
+	return result, true
+}
+
+func copyNativeBytes(value C.DfStringView, maxBytes int) ([]byte, bool) {
+	if uint64(value.len) > uint64(maxBytes) {
+		return nil, false
+	}
+	if value.len == 0 {
+		return []byte{}, true
+	}
+	if value.data == nil {
+		return nil, false
+	}
+	return C.GoBytes(unsafe.Pointer(value.data), C.int(value.len)), true
 }
 
 func nativeItemStackView(value ItemStack, arena *nativeViewArena) (C.DfItemStackViewV3, bool) {
@@ -1934,6 +2224,10 @@ func boolByte(value bool) uint8 {
 		return 1
 	}
 	return 0
+}
+
+func stickyCancellation(incoming, returned bool) bool {
+	return incoming || returned
 }
 
 func nativeDamageSource(source DamageSource) (C.DfDamageSourceView, func(), bool) {

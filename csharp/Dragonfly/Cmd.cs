@@ -14,14 +14,25 @@ public static partial class Cmd
             Bindings = bindings;
         }
 
+        internal Command(string name, string description, string usage, string[] aliases)
+        {
+            CommandName = name;
+            CommandDescription = description;
+            CommandUsage = usage;
+            CommandAliases = aliases;
+            Bindings = [];
+        }
+
         internal string CommandName { get; }
         internal string CommandDescription { get; }
+        internal string? CommandUsage { get; }
         internal string[] CommandAliases { get; }
         internal CommandBinding[] Bindings { get; }
 
         public string Name() => CommandName;
         public string Description() => CommandDescription;
-        public string Usage() => string.Join('\n', Bindings.Select(binding => binding.Usage(CommandName)));
+        public string Usage() => CommandUsage ??
+            string.Join('\n', Bindings.Select(binding => binding.Usage(CommandName)));
         public IReadOnlyList<string> Aliases() => CommandAliases;
     }
 

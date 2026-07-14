@@ -4,7 +4,7 @@ namespace Dragonfly.Native;
 
 public static class Abi
 {
-    public const uint PluginVersion = 6;
+    public const uint PluginVersion = 7;
     public const uint HostVersion = 31;
     public const int Ok = 0;
     public const int Error = 1;
@@ -14,12 +14,18 @@ public static class Abi
     public const ulong PlayerChatSubscription = 1UL << 1;
     public const uint PlayerQuitEvent = 4;
     public const ulong PlayerQuitSubscription = 1UL << 3;
+    public const uint PlayerHurtEvent = 5;
+    public const ulong PlayerHurtSubscription = 1UL << 4;
+    public const uint PlayerHealEvent = 6;
+    public const ulong PlayerHealSubscription = 1UL << 5;
     public const uint PlayerBlockBreakEvent = 7;
     public const ulong PlayerBlockBreakSubscription = 1UL << 6;
     public const uint PlayerBlockPlaceEvent = 8;
     public const ulong PlayerBlockPlaceSubscription = 1UL << 7;
     public const uint PlayerFoodLossEvent = 9;
     public const ulong PlayerFoodLossSubscription = 1UL << 8;
+    public const uint PlayerDeathEvent = 10;
+    public const ulong PlayerDeathSubscription = 1UL << 9;
     public const uint PlayerStartBreakEvent = 11;
     public const ulong PlayerStartBreakSubscription = 1UL << 10;
     public const uint PlayerFireExtinguishEvent = 12;
@@ -58,8 +64,24 @@ public static class Abi
     public const ulong PlayerItemDamageSubscription = 1UL << 27;
     public const uint PlayerItemDropEvent = 29;
     public const ulong PlayerItemDropSubscription = 1UL << 28;
+    public const uint PlayerAttackEntityEvent = 30;
+    public const ulong PlayerAttackEntitySubscription = 1UL << 29;
+    public const uint PlayerItemUseOnEntityEvent = 31;
+    public const ulong PlayerItemUseOnEntitySubscription = 1UL << 30;
+    public const uint PlayerChangeWorldEvent = 32;
+    public const ulong PlayerChangeWorldSubscription = 1UL << 31;
+    public const uint PlayerRespawnEvent = 33;
+    public const ulong PlayerRespawnSubscription = 1UL << 32;
+    public const uint PlayerSkinChangeEvent = 34;
+    public const ulong PlayerSkinChangeSubscription = 1UL << 33;
     public const uint PlayerItemPickupEvent = 38;
     public const ulong PlayerItemPickupSubscription = 1UL << 37;
+    public const uint PlayerTransferEvent = 39;
+    public const ulong PlayerTransferSubscription = 1UL << 38;
+    public const uint PlayerCommandExecutionEvent = 40;
+    public const ulong PlayerCommandExecutionSubscription = 1UL << 39;
+    public const uint PlayerDiagnosticsEvent = 41;
+    public const ulong PlayerDiagnosticsSubscription = 1UL << 40;
     public const uint CommandParameterSubcommand = 1;
     public const uint CommandParameterEnum = 2;
     public const uint CommandParameterString = 3;
@@ -95,6 +117,16 @@ public static class Abi
     public const uint SetBlockDisableBlockUpdates = 1;
     public const uint SetBlockDisableLiquidDisplacement = 1 << 1;
     public const uint SetBlockDisableRedstoneUpdates = 1 << 2;
+    public const uint DamageSourceReducedByArmour = 1;
+    public const uint DamageSourceReducedByResistance = 1 << 1;
+    public const uint DamageSourceFire = 1 << 2;
+    public const uint DamageSourceIgnoresTotem = 1 << 3;
+    public const uint DamageSourceFireProtection = 1 << 4;
+    public const uint DamageSourceFeatherFalling = 1 << 5;
+    public const uint DamageSourceBlastProtection = 1 << 6;
+    public const uint DamageSourceProjectileProtection = 1 << 7;
+    public const uint DamageSourceWither = 18;
+    public const uint HealingSourceRegeneration = 3;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -196,8 +228,8 @@ public unsafe struct HostApi
     public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, uint, EffectView, int> PlayerEffect;
     public void* PlayerEntityVisibility;
     public void* PlayerSkinOpen;
-    public void* PlayerSkinAnimationInfo;
-    public void* PlayerSkinRead;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, ulong, ulong, SkinAnimationInfo*, int> PlayerSkinAnimationInfo;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, ulong, SkinData*, int> PlayerSkinRead;
     public void* PlayerSkinClose;
     public void* PlayerSkinSet;
     public delegate* unmanaged[Cdecl]<ulong, ulong, InventoryId, uint*, int> InventorySize;
@@ -239,8 +271,8 @@ public unsafe struct HostApi
     public void* PlayerSoundPlay;
     public void* PlayerHeal;
     public void* PlayerHurt;
-    public void* SkinSnapshotInfo;
-    public void* SkinSnapshotSet;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, ulong, SkinInfo*, int> SkinSnapshotInfo;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, ulong, SkinView*, int> SkinSnapshotSet;
     public void* WorldOpenSpec;
     public void* PlayerTransfer;
     public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, EffectBuffer*, int> PlayerEffects;
@@ -291,6 +323,13 @@ public unsafe struct PluginApi
 
 [StructLayout(LayoutKind.Sequential)]
 public unsafe struct PlayerId
+{
+    public fixed byte Bytes[16];
+    public ulong Generation;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct EntityId
 {
     public fixed byte Bytes[16];
     public ulong Generation;
@@ -418,6 +457,99 @@ public unsafe struct BlockView
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public unsafe struct DamageSourceView
+{
+    public StringView Name;
+    public uint Kind;
+    public uint Flags;
+    public EntityId Entity;
+    public EntityId SecondaryEntity;
+    public BlockView* Block;
+    public byte Data;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct HealingSourceView
+{
+    public StringView Name;
+    public uint Kind;
+    public byte Data;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct SkinAnimationInfo
+{
+    public uint Width;
+    public uint Height;
+    public uint AnimationType;
+    public long FrameCount;
+    public long Expression;
+    public ulong PixelsLength;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct SkinInfo
+{
+    public uint Width;
+    public uint Height;
+    public byte Persona;
+    public ulong PlayFabIdLength;
+    public ulong FullIdLength;
+    public ulong PixelsLength;
+    public ulong ModelDefaultLength;
+    public ulong ModelAnimatedFaceLength;
+    public ulong ModelLength;
+    public uint CapeWidth;
+    public uint CapeHeight;
+    public ulong CapePixelsLength;
+    public ulong AnimationCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SkinData
+{
+    public StringBuffer PlayFabId;
+    public StringBuffer FullId;
+    public StringBuffer Pixels;
+    public StringBuffer ModelDefault;
+    public StringBuffer ModelAnimatedFace;
+    public StringBuffer Model;
+    public StringBuffer CapePixels;
+    public StringBuffer* AnimationPixels;
+    public ulong AnimationCapacity;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct SkinAnimationView
+{
+    public uint Width;
+    public uint Height;
+    public uint AnimationType;
+    public long FrameCount;
+    public long Expression;
+    public StringView Pixels;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct SkinView
+{
+    public uint Width;
+    public uint Height;
+    public byte Persona;
+    public StringView PlayFabId;
+    public StringView FullId;
+    public StringView Pixels;
+    public StringView ModelDefault;
+    public StringView ModelAnimatedFace;
+    public StringView Model;
+    public uint CapeWidth;
+    public uint CapeHeight;
+    public StringView CapePixels;
+    public SkinAnimationView* Animations;
+    public ulong AnimationCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 public struct Rgba
 {
     public byte R;
@@ -491,6 +623,38 @@ public struct PlayerQuitState
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public struct PlayerHurtInput
+{
+    public ulong Invocation;
+    public PlayerSnapshot Player;
+    public byte Immune;
+    public DamageSourceView Source;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct PlayerHurtState
+{
+    public byte Cancelled;
+    public double Damage;
+    public long AttackImmunityNanoseconds;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct PlayerHealInput
+{
+    public ulong Invocation;
+    public PlayerSnapshot Player;
+    public HealingSourceView Source;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct PlayerHealState
+{
+    public byte Cancelled;
+    public double Health;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 public struct PlayerFoodLossInput
 {
     public ulong Invocation;
@@ -503,6 +667,20 @@ public struct PlayerFoodLossState
 {
     public byte Cancelled;
     public int To;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct PlayerDeathInput
+{
+    public ulong Invocation;
+    public PlayerSnapshot Player;
+    public DamageSourceView Source;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct PlayerDeathState
+{
+    public byte KeepInventory;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -665,6 +843,125 @@ public unsafe struct PlayerItemPickupState
     public ItemStackViewV3* Replacement;
     public void* ReplacementContext;
     public delegate* unmanaged[Cdecl]<void*, void> ReplacementDrop;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct PlayerAttackEntityInput
+{
+    public ulong Invocation;
+    public PlayerSnapshot Player;
+    public EntityId Target;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct PlayerAttackEntityState
+{
+    public byte Cancelled;
+    public double KnockbackForce;
+    public double KnockbackHeight;
+    public byte Critical;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct PlayerItemUseOnEntityInput
+{
+    public ulong Invocation;
+    public PlayerSnapshot Player;
+    public EntityId Target;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct PlayerChangeWorldInput
+{
+    public ulong Invocation;
+    public PlayerSnapshot Player;
+    public WorldId Before;
+    public WorldId After;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct PlayerRespawnState
+{
+    public Vec3 Position;
+    public WorldId World;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct PlayerSkinChangeInput
+{
+    public ulong Invocation;
+    public PlayerSnapshot Player;
+    public ulong Snapshot;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct UDPAddrView
+{
+    public StringView IP;
+    public int Port;
+    public StringView Zone;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct PlayerTransferInput
+{
+    public ulong Invocation;
+    public PlayerSnapshot Player;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PlayerTransferState
+{
+    public byte Cancelled;
+    public UDPAddrView Address;
+    public void* ReplacementContext;
+    public delegate* unmanaged[Cdecl]<void*, void> ReplacementDrop;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PlayerCommandExecutionInput
+{
+    public ulong Invocation;
+    public PlayerSnapshot Player;
+    public StringView CommandName;
+    public StringView CommandDescription;
+    public StringView CommandUsage;
+    public StringView* CommandAliases;
+    public ulong CommandAliasCount;
+    public StringView* Arguments;
+    public ulong ArgumentCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PlayerCommandExecutionState
+{
+    public byte Cancelled;
+    public StringView* ReplacementArguments;
+    public ulong ReplacementArgumentCount;
+    public void* ReplacementContext;
+    public delegate* unmanaged[Cdecl]<void*, void> ReplacementDrop;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct PlayerDiagnosticsInput
+{
+    public ulong Invocation;
+    public PlayerSnapshot Player;
+    public double AverageFramesPerSecond;
+    public double AverageServerSimTickTime;
+    public double AverageClientSimTickTime;
+    public double AverageBeginFrameTime;
+    public double AverageInputTime;
+    public double AverageRenderTime;
+    public double AverageEndFrameTime;
+    public double AverageRemainderTimePercent;
+    public double AverageUnaccountedTimePercent;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct PlayerDiagnosticsState
+{
+    public byte Reserved;
 }
 
 [StructLayout(LayoutKind.Sequential)]

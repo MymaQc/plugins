@@ -513,6 +513,303 @@ internal static unsafe class PluginBridge
             }
         }
 
+        internal static Skin EventSkin(ulong invocation, ulong snapshot)
+        {
+            const ulong maxSkinData = 64UL << 20;
+            const ulong maxSkinAnimations = 64;
+            var api = Api;
+            if (api is null || api->SkinSnapshotInfo == null ||
+                api->PlayerSkinAnimationInfo == null || api->PlayerSkinRead == null)
+                throw new InvalidOperationException("skin is unavailable");
+
+            SkinInfo info;
+            if (api->SkinSnapshotInfo(api->Context, invocation, snapshot, &info) != Abi.Ok ||
+                info.Persona > 1 || info.AnimationCount > maxSkinAnimations)
+                throw new InvalidOperationException("skin is no longer available");
+
+            var lengths = new[]
+            {
+                info.PlayFabIdLength,
+                info.FullIdLength,
+                info.PixelsLength,
+                info.ModelDefaultLength,
+                info.ModelAnimatedFaceLength,
+                info.ModelLength,
+                info.CapePixelsLength,
+            };
+            ulong total = 0;
+            foreach (var length in lengths)
+            {
+                if (length > int.MaxValue || length > maxSkinData - total)
+                    throw new InvalidOperationException("invalid skin returned by server");
+                total += length;
+            }
+            if (!ValidSkinPixels(info.Width, info.Height, info.PixelsLength, true) ||
+                !ValidSkinPixels(info.CapeWidth, info.CapeHeight, info.CapePixelsLength, true))
+                throw new InvalidOperationException("invalid skin returned by server");
+
+            var animationInfos = new SkinAnimationInfo[checked((int)info.AnimationCount)];
+            for (var index = 0; index < animationInfos.Length; index++)
+            {
+                fixed (SkinAnimationInfo* animation = &animationInfos[index])
+                {
+                    if (api->PlayerSkinAnimationInfo(
+                            api->Context,
+                            invocation,
+                            snapshot,
+                            (ulong)index,
+                            animation) != Abi.Ok)
+                        throw new InvalidOperationException("skin is no longer available");
+                }
+                var value = animationInfos[index];
+                if (value.AnimationType > 2 || value.FrameCount <= 0 ||
+                    !ValidSkinPixels(value.Width, value.Height, value.PixelsLength, false) ||
+                    value.PixelsLength > int.MaxValue || value.PixelsLength > maxSkinData - total)
+                    throw new InvalidOperationException("invalid skin returned by server");
+                total += value.PixelsLength;
+            }
+
+            var allocations = new List<nint>();
+            try
+            {
+                StringBuffer Allocate(ulong length)
+                {
+                    if (length == 0) return default;
+                    var data = (byte*)NativeMemory.Alloc((nuint)length);
+                    allocations.Add((nint)data);
+                    return new StringBuffer { Data = data, Capacity = length };
+                }
+
+                var animationBuffers = animationInfos.Length == 0
+                    ? null
+                    : (StringBuffer*)NativeMemory.Alloc(
+                        (nuint)animationInfos.Length,
+                        (nuint)sizeof(StringBuffer));
+                if (animationBuffers is not null) allocations.Add((nint)animationBuffers);
+                for (var index = 0; index < animationInfos.Length; index++)
+                    animationBuffers[index] = Allocate(animationInfos[index].PixelsLength);
+
+                var data = new SkinData
+                {
+                    PlayFabId = Allocate(info.PlayFabIdLength),
+                    FullId = Allocate(info.FullIdLength),
+                    Pixels = Allocate(info.PixelsLength),
+                    ModelDefault = Allocate(info.ModelDefaultLength),
+                    ModelAnimatedFace = Allocate(info.ModelAnimatedFaceLength),
+                    Model = Allocate(info.ModelLength),
+                    CapePixels = Allocate(info.CapePixelsLength),
+                    AnimationPixels = animationBuffers,
+                    AnimationCapacity = info.AnimationCount,
+                };
+                if (api->PlayerSkinRead(api->Context, invocation, snapshot, &data) != Abi.Ok ||
+                    data.PlayFabId.Length != info.PlayFabIdLength ||
+                    data.FullId.Length != info.FullIdLength ||
+                    data.Pixels.Length != info.PixelsLength ||
+                    data.ModelDefault.Length != info.ModelDefaultLength ||
+                    data.ModelAnimatedFace.Length != info.ModelAnimatedFaceLength ||
+                    data.Model.Length != info.ModelLength ||
+                    data.CapePixels.Length != info.CapePixelsLength)
+                    throw new InvalidOperationException("skin is no longer available");
+
+                var animations = new SkinAnimation[animationInfos.Length];
+                for (var index = 0; index < animations.Length; index++)
+                {
+                    if (animationBuffers[index].Length != animationInfos[index].PixelsLength)
+                        throw new InvalidOperationException("skin is no longer available");
+                    var animation = animationInfos[index];
+                    if (animation.FrameCount > int.MaxValue || animation.Expression is < int.MinValue or > int.MaxValue)
+                        throw new InvalidOperationException("invalid skin returned by server");
+                    animations[index] = new SkinAnimation(
+                        checked((int)animation.Width),
+                        checked((int)animation.Height),
+                        (SkinAnimationType)animation.AnimationType,
+                        CopySkinBuffer(animationBuffers[index]),
+                        checked((int)animation.FrameCount),
+                        checked((int)animation.Expression));
+                }
+                return new Skin(
+                    checked((int)info.Width),
+                    checked((int)info.Height),
+                    CopySkinBuffer(data.Pixels))
+                {
+                    Persona = info.Persona != 0,
+                    PlayFabID = SkinText(data.PlayFabId),
+                    FullID = SkinText(data.FullId),
+                    ModelConfig = new SkinModelConfig
+                    {
+                        Default = SkinText(data.ModelDefault),
+                        AnimatedFace = SkinText(data.ModelAnimatedFace),
+                    },
+                    Model = CopySkinBuffer(data.Model),
+                    Cape = new SkinCape(
+                        checked((int)info.CapeWidth),
+                        checked((int)info.CapeHeight),
+                        CopySkinBuffer(data.CapePixels)),
+                    Animations = animations,
+                };
+            }
+            finally
+            {
+                foreach (var allocation in allocations) NativeMemory.Free((void*)allocation);
+            }
+        }
+
+        internal static void SetEventSkin(ulong invocation, ulong snapshot, Skin skin)
+        {
+            ArgumentNullException.ThrowIfNull(skin);
+            var api = Api;
+            if (api is null || api->SkinSnapshotSet == null)
+                throw new InvalidOperationException("skin is unavailable");
+            using var lease = new SkinViewLease(skin);
+            var view = lease.View;
+            if (api->SkinSnapshotSet(api->Context, invocation, snapshot, &view) != Abi.Ok)
+                throw new InvalidOperationException("skin is no longer available");
+        }
+
+        private static bool ValidSkinPixels(uint width, uint height, ulong length, bool empty)
+        {
+            if (width > 4096 || height > 4096) return false;
+            if (width == 0 || height == 0)
+                return empty && width == 0 && height == 0 && length == 0;
+            return (ulong)width * height * 4 == length;
+        }
+
+        private static byte[] CopySkinBuffer(StringBuffer value) => value.Length == 0
+            ? []
+            : new ReadOnlySpan<byte>(value.Data, checked((int)value.Length)).ToArray();
+
+        private static string SkinText(StringBuffer value) => value.Length == 0
+            ? ""
+            : Encoding.UTF8.GetString(value.Data, checked((int)value.Length));
+
+        private sealed class SkinViewLease : IDisposable
+        {
+            private readonly List<nint> _allocations = [];
+            internal SkinView View;
+
+            internal SkinViewLease(Skin skin)
+            {
+                try
+                {
+                    ValidateSkin(skin);
+                    var animations = AllocateArray<SkinAnimationView>(skin.Animations.Length);
+                    for (var index = 0; index < skin.Animations.Length; index++)
+                    {
+                        var animation = skin.Animations[index];
+                        var animationBounds = animation.Bounds();
+                        animations[index] = new SkinAnimationView
+                        {
+                            Width = checked((uint)animationBounds.Width),
+                            Height = checked((uint)animationBounds.Height),
+                            AnimationType = (uint)animation.Type(),
+                            FrameCount = animation.FrameCount,
+                            Expression = animation.AnimationExpression,
+                            Pixels = Allocate(animation.Pix),
+                        };
+                    }
+                    var bounds = skin.Bounds();
+                    var capeBounds = skin.Cape.Bounds();
+                    View = new SkinView
+                    {
+                        Width = checked((uint)bounds.Width),
+                        Height = checked((uint)bounds.Height),
+                        Persona = skin.Persona ? (byte)1 : (byte)0,
+                        PlayFabId = Allocate(Encoding.UTF8.GetBytes(skin.PlayFabID)),
+                        FullId = Allocate(Encoding.UTF8.GetBytes(skin.FullID)),
+                        Pixels = Allocate(skin.Pix),
+                        ModelDefault = Allocate(Encoding.UTF8.GetBytes(skin.ModelConfig.Default)),
+                        ModelAnimatedFace = Allocate(Encoding.UTF8.GetBytes(skin.ModelConfig.AnimatedFace)),
+                        Model = Allocate(skin.Model),
+                        CapeWidth = checked((uint)capeBounds.Width),
+                        CapeHeight = checked((uint)capeBounds.Height),
+                        CapePixels = Allocate(skin.Cape.Pix),
+                        Animations = animations,
+                        AnimationCount = (ulong)skin.Animations.Length,
+                    };
+                }
+                catch
+                {
+                    Dispose();
+                    throw;
+                }
+            }
+
+            private static void ValidateSkin(Skin skin)
+            {
+                ArgumentNullException.ThrowIfNull(skin.PlayFabID);
+                ArgumentNullException.ThrowIfNull(skin.FullID);
+                ArgumentNullException.ThrowIfNull(skin.Pix);
+                ArgumentNullException.ThrowIfNull(skin.ModelConfig);
+                ArgumentNullException.ThrowIfNull(skin.ModelConfig.Default);
+                ArgumentNullException.ThrowIfNull(skin.ModelConfig.AnimatedFace);
+                ArgumentNullException.ThrowIfNull(skin.Model);
+                ArgumentNullException.ThrowIfNull(skin.Cape);
+                ArgumentNullException.ThrowIfNull(skin.Cape.Pix);
+                ArgumentNullException.ThrowIfNull(skin.Animations);
+                var bounds = skin.Bounds();
+                var capeBounds = skin.Cape.Bounds();
+                if (skin.Animations.Length > 64 ||
+                    !ValidSkinPixels(
+                        checked((uint)bounds.Width),
+                        checked((uint)bounds.Height),
+                        (ulong)skin.Pix.Length,
+                        true) ||
+                    !ValidSkinPixels(
+                        checked((uint)capeBounds.Width),
+                        checked((uint)capeBounds.Height),
+                        (ulong)skin.Cape.Pix.Length,
+                        true))
+                    throw new ArgumentException("invalid skin", nameof(skin));
+                long total = Encoding.UTF8.GetByteCount(skin.PlayFabID) +
+                    Encoding.UTF8.GetByteCount(skin.FullID) + skin.Pix.LongLength +
+                    Encoding.UTF8.GetByteCount(skin.ModelConfig.Default) +
+                    Encoding.UTF8.GetByteCount(skin.ModelConfig.AnimatedFace) + skin.Model.LongLength +
+                    skin.Cape.Pix.LongLength;
+                foreach (var animation in skin.Animations)
+                {
+                    ArgumentNullException.ThrowIfNull(animation);
+                    ArgumentNullException.ThrowIfNull(animation.Pix);
+                    var animationBounds = animation.Bounds();
+                    if ((uint)animation.Type() > 2 || animation.FrameCount <= 0 ||
+                        !ValidSkinPixels(
+                            checked((uint)animationBounds.Width),
+                            checked((uint)animationBounds.Height),
+                            (ulong)animation.Pix.Length,
+                            false))
+                        throw new ArgumentException("invalid skin animation", nameof(skin));
+                    total += animation.Pix.LongLength;
+                }
+                if (total > 64L << 20 || Encoding.UTF8.GetByteCount(skin.PlayFabID) > 4096 ||
+                    Encoding.UTF8.GetByteCount(skin.FullID) > 4096 ||
+                    Encoding.UTF8.GetByteCount(skin.ModelConfig.Default) > 4096 ||
+                    Encoding.UTF8.GetByteCount(skin.ModelConfig.AnimatedFace) > 4096)
+                    throw new ArgumentException("skin data exceeds server limits", nameof(skin));
+            }
+
+            private StringView Allocate(byte[] value)
+            {
+                if (value.Length == 0) return default;
+                var data = (byte*)NativeMemory.Alloc((nuint)value.Length);
+                _allocations.Add((nint)data);
+                value.CopyTo(new Span<byte>(data, value.Length));
+                return new StringView { Data = data, Length = (ulong)value.Length };
+            }
+
+            private T* AllocateArray<T>(int count) where T : unmanaged
+            {
+                if (count == 0) return null;
+                var data = (T*)NativeMemory.Alloc((nuint)count, (nuint)sizeof(T));
+                _allocations.Add((nint)data);
+                return data;
+            }
+
+            public void Dispose()
+            {
+                foreach (var allocation in _allocations) NativeMemory.Free((void*)allocation);
+                _allocations.Clear();
+            }
+        }
+
         internal static void SendPlayerForm(ulong invocation, PlayerId player, Form.Value form)
         {
             ArgumentNullException.ThrowIfNull(form);
@@ -1377,6 +1674,44 @@ internal static unsafe class PluginBridge
                     }
                     return Abi.Ok;
                 }
+                case Abi.PlayerHurtEvent:
+                {
+                    var value = (PlayerHurtInput*)input;
+                    var result = (PlayerHurtState*)state;
+                    if (value->Immune > 1) return Abi.Error;
+                    var context = Event(value->Player, result->Cancelled, value->Invocation);
+                    var damage = result->Damage;
+                    var originalAttackImmunityNanoseconds = result->AttackImmunityNanoseconds;
+                    var originalAttackImmunity = TimeSpan.FromTicks(
+                        originalAttackImmunityNanoseconds / 100);
+                    var attackImmunity = originalAttackImmunity;
+                    plugin.HandleHurt(
+                        context,
+                        ref damage,
+                        value->Immune != 0,
+                        ref attackImmunity,
+                        EventDamageSource(value->Source, value->Invocation));
+                    result->Damage = damage;
+                    result->AttackImmunityNanoseconds = attackImmunity == originalAttackImmunity
+                        ? originalAttackImmunityNanoseconds
+                        : checked(attackImmunity.Ticks * 100);
+                    ApplyCancellation(context, &result->Cancelled);
+                    return Abi.Ok;
+                }
+                case Abi.PlayerHealEvent:
+                {
+                    var value = (PlayerHealInput*)input;
+                    var result = (PlayerHealState*)state;
+                    var context = Event(value->Player, result->Cancelled, value->Invocation);
+                    var health = result->Health;
+                    plugin.HandleHeal(
+                        context,
+                        ref health,
+                        EventHealingSource(value->Source));
+                    result->Health = health;
+                    ApplyCancellation(context, &result->Cancelled);
+                    return Abi.Ok;
+                }
                 case Abi.PlayerBlockBreakEvent:
                 {
                     var value = (PlayerBlockBreakInput*)input;
@@ -1449,6 +1784,18 @@ internal static unsafe class PluginBridge
                     plugin.HandleFoodLoss(context, value->From, ref to);
                     result->To = to;
                     ApplyCancellation(context, &result->Cancelled);
+                    return Abi.Ok;
+                }
+                case Abi.PlayerDeathEvent:
+                {
+                    var value = (PlayerDeathInput*)input;
+                    var result = (PlayerDeathState*)state;
+                    var keepInventory = result->KeepInventory != 0;
+                    plugin.HandleDeath(
+                        SnapshotPlayer(value->Player, value->Invocation),
+                        EventDamageSource(value->Source, value->Invocation),
+                        ref keepInventory);
+                    result->KeepInventory = keepInventory ? (byte)1 : (byte)0;
                     return Abi.Ok;
                 }
                 case Abi.PlayerExperienceGainEvent:
@@ -1574,6 +1921,147 @@ internal static unsafe class PluginBridge
                     ApplyCancellation(context, &result->Cancelled);
                     return Abi.Ok;
                 }
+                case Abi.PlayerAttackEntityEvent:
+                {
+                    var value = (PlayerAttackEntityInput*)input;
+                    var result = (PlayerAttackEntityState*)state;
+                    if (result->Critical > 1) return Abi.Error;
+                    var context = Event(value->Player, result->Cancelled, value->Invocation);
+                    var target = EventEntity(value->Target, value->Invocation);
+                    if (target is null) return Abi.Error;
+                    var force = result->KnockbackForce;
+                    var height = result->KnockbackHeight;
+                    var critical = result->Critical != 0;
+                    plugin.HandleAttackEntity(
+                        context,
+                        target,
+                        ref force,
+                        ref height,
+                        ref critical);
+                    result->KnockbackForce = force;
+                    result->KnockbackHeight = height;
+                    result->Critical = critical ? (byte)1 : (byte)0;
+                    ApplyCancellation(context, &result->Cancelled);
+                    return Abi.Ok;
+                }
+                case Abi.PlayerItemUseOnEntityEvent:
+                {
+                    var value = (PlayerItemUseOnEntityInput*)input;
+                    var result = (CancellableState*)state;
+                    var context = Event(value->Player, result->Cancelled, value->Invocation);
+                    var target = EventEntity(value->Target, value->Invocation);
+                    if (target is null) return Abi.Error;
+                    plugin.HandleItemUseOnEntity(context, target);
+                    ApplyCancellation(context, &result->Cancelled);
+                    return Abi.Ok;
+                }
+                case Abi.PlayerChangeWorldEvent:
+                {
+                    var value = (PlayerChangeWorldInput*)input;
+                    if (value->After.Value == 0) return Abi.Error;
+                    var before = value->Before.Value == 0
+                        ? null
+                        : new World(value->Invocation, value->Before);
+                    plugin.HandleChangeWorld(
+                        SnapshotPlayer(value->Player, value->Invocation),
+                        before,
+                        new World(value->Invocation, value->After));
+                    return Abi.Ok;
+                }
+                case Abi.PlayerRespawnEvent:
+                {
+                    var value = (PlayerEventInput*)input;
+                    var result = (PlayerRespawnState*)state;
+                    if (result->World.Value == 0) return Abi.Error;
+                    var position = new Vector3(
+                        result->Position.X,
+                        result->Position.Y,
+                        result->Position.Z);
+                    var world = new World(value->Invocation, result->World);
+                    plugin.HandleRespawn(
+                        SnapshotPlayer(value->Player, value->Invocation),
+                        ref position,
+                        ref world);
+                    ArgumentNullException.ThrowIfNull(world);
+                    result->Position = new Vec3 { X = position.X, Y = position.Y, Z = position.Z };
+                    result->World = world.Id;
+                    return Abi.Ok;
+                }
+                case Abi.PlayerSkinChangeEvent:
+                {
+                    var value = (PlayerSkinChangeInput*)input;
+                    var result = (CancellableState*)state;
+                    var context = Event(value->Player, result->Cancelled, value->Invocation);
+                    var skin = Host.EventSkin(value->Invocation, value->Snapshot);
+                    plugin.HandleSkinChange(context, ref skin);
+                    ArgumentNullException.ThrowIfNull(skin);
+                    Host.SetEventSkin(value->Invocation, value->Snapshot, skin);
+                    ApplyCancellation(context, &result->Cancelled);
+                    return Abi.Ok;
+                }
+                case Abi.PlayerTransferEvent:
+                {
+                    var value = (PlayerTransferInput*)input;
+                    var result = (PlayerTransferState*)state;
+                    var previousContext = result->ReplacementContext;
+                    var previousDrop = result->ReplacementDrop;
+                    var address = EventUDPAddr(result->Address);
+                    var context = Event(value->Player, result->Cancelled, value->Invocation);
+                    plugin.HandleTransfer(context, ref address);
+                    ArgumentNullException.ThrowIfNull(address);
+                    var replacement = new PendingTransferAddress(address);
+                    result->Address = replacement.View;
+                    result->ReplacementContext = replacement.Context;
+                    result->ReplacementDrop = replacement.Drop;
+                    ApplyCancellation(context, &result->Cancelled);
+                    if (previousDrop != null) previousDrop(previousContext);
+                    return Abi.Ok;
+                }
+                case Abi.PlayerCommandExecutionEvent:
+                {
+                    var value = (PlayerCommandExecutionInput*)input;
+                    var result = (PlayerCommandExecutionState*)state;
+                    var previousContext = result->ReplacementContext;
+                    var previousDrop = result->ReplacementDrop;
+                    var aliases = EventStrings(value->CommandAliases, value->CommandAliasCount);
+                    var arguments = result->ReplacementDrop == null
+                        ? EventStrings(value->Arguments, value->ArgumentCount)
+                        : EventStrings(result->ReplacementArguments, result->ReplacementArgumentCount);
+                    var context = Event(value->Player, result->Cancelled, value->Invocation);
+                    plugin.HandleCommandExecution(
+                        context,
+                        new Cmd.Command(
+                            Utf8(value->CommandName),
+                            Utf8(value->CommandDescription),
+                            Utf8(value->CommandUsage),
+                            aliases),
+                        arguments);
+                    var replacement = new PendingEventStrings(arguments);
+                    result->ReplacementArguments = replacement.Views;
+                    result->ReplacementArgumentCount = replacement.Count;
+                    result->ReplacementContext = replacement.Context;
+                    result->ReplacementDrop = replacement.Drop;
+                    ApplyCancellation(context, &result->Cancelled);
+                    if (previousDrop != null) previousDrop(previousContext);
+                    return Abi.Ok;
+                }
+                case Abi.PlayerDiagnosticsEvent:
+                {
+                    var value = (PlayerDiagnosticsInput*)input;
+                    plugin.HandleDiagnostics(
+                        SnapshotPlayer(value->Player, value->Invocation),
+                        new Session.Diagnostics(
+                            value->AverageFramesPerSecond,
+                            value->AverageServerSimTickTime,
+                            value->AverageClientSimTickTime,
+                            value->AverageBeginFrameTime,
+                            value->AverageInputTime,
+                            value->AverageRenderTime,
+                            value->AverageEndFrameTime,
+                            value->AverageRemainderTimePercent,
+                            value->AverageUnaccountedTimePercent));
+                    return Abi.Ok;
+                }
                 case Abi.PlayerItemPickupEvent:
                 {
                     var value = (PlayerItemPickupInput*)input;
@@ -1686,7 +2174,205 @@ internal static unsafe class PluginBridge
         return BlockCodec.Decode(Utf8(block.Identifier), properties);
     }
 
+    private static World.Entity? EventEntity(EntityId entity, ulong invocation) =>
+        entity.Generation == 0 ? null : new World.Entity(invocation, entity);
+
+    private static World.DamageSource EventDamageSource(DamageSourceView source, ulong invocation)
+    {
+        const uint knownFlags = Abi.DamageSourceReducedByArmour |
+            Abi.DamageSourceReducedByResistance | Abi.DamageSourceFire |
+            Abi.DamageSourceIgnoresTotem | Abi.DamageSourceFireProtection |
+            Abi.DamageSourceFeatherFalling | Abi.DamageSourceBlastProtection |
+            Abi.DamageSourceProjectileProtection;
+        if (source.Kind > Abi.DamageSourceWither || (source.Flags & ~knownFlags) != 0 ||
+            source.Data > 1 || source.Data != 0 && source.Kind != 12 ||
+            (source.Block is not null) != (source.Kind == 2))
+            throw new InvalidOperationException("invalid damage source returned by server");
+        _ = Utf8(source.Name);
+        var properties = new World.DamageProperties(
+            (source.Flags & Abi.DamageSourceReducedByArmour) != 0,
+            (source.Flags & Abi.DamageSourceReducedByResistance) != 0,
+            (source.Flags & Abi.DamageSourceFire) != 0,
+            (source.Flags & Abi.DamageSourceIgnoresTotem) != 0);
+        return source.Kind switch
+        {
+            0 => new World.CustomDamageSource(properties),
+            1 => new World.AttackDamageSource(properties, EventEntity(source.Entity, invocation)),
+            2 => new World.BlockDamageSource(properties, EventBlock(*source.Block)),
+            3 => new World.DrowningDamageSource(properties),
+            4 => new World.ExplosionDamageSource(properties),
+            5 => new World.FallDamageSource(properties),
+            6 => new World.FireDamageSource(properties),
+            7 => new World.GlideDamageSource(properties),
+            8 => new World.InstantDamageSource(properties),
+            9 => new World.LavaDamageSource(properties),
+            10 => new World.LightningDamageSource(properties),
+            11 => new World.MagmaDamageSource(properties),
+            12 => new World.PoisonDamageSource(properties, source.Data != 0),
+            13 => new World.ProjectileDamageSource(
+                properties,
+                EventEntity(source.Entity, invocation),
+                EventEntity(source.SecondaryEntity, invocation)),
+            14 => new World.StarvationDamageSource(properties),
+            15 => new World.SuffocationDamageSource(properties),
+            16 => new World.ThornsDamageSource(properties, EventEntity(source.Entity, invocation)),
+            17 => new World.VoidDamageSource(properties),
+            18 => new World.WitherDamageSource(properties),
+            _ => throw new InvalidOperationException("invalid damage source returned by server"),
+        };
+    }
+
+    private static World.HealingSource EventHealingSource(HealingSourceView source)
+    {
+        if (source.Kind > Abi.HealingSourceRegeneration || source.Data > 1 ||
+            source.Data != 0 && source.Kind != 1)
+            throw new InvalidOperationException("invalid healing source returned by server");
+        _ = Utf8(source.Name);
+        return source.Kind switch
+        {
+            0 => new World.CustomHealingSource(),
+            1 => new World.FoodHealingSource(source.Data != 0),
+            2 => new World.InstantHealingSource(),
+            3 => new World.RegenerationHealingSource(),
+            _ => throw new InvalidOperationException("invalid healing source returned by server"),
+        };
+    }
+
+    private static Net.UDPAddr EventUDPAddr(UDPAddrView address)
+    {
+        if (address.IP.Length > 16 || address.IP.Length != 0 && address.IP.Data is null)
+            throw new InvalidOperationException("invalid transfer IP returned by server");
+        var ip = address.IP.Length == 0
+            ? Array.Empty<byte>()
+            : new ReadOnlySpan<byte>(address.IP.Data, checked((int)address.IP.Length)).ToArray();
+        return new Net.UDPAddr(ip, address.Port, Utf8(address.Zone));
+    }
+
+    private static string[] EventStrings(StringView* values, ulong count)
+    {
+        const ulong maxStrings = 1024;
+        if (count > maxStrings || count != 0 && values is null)
+            throw new InvalidOperationException("invalid string array returned by server");
+        var result = new string[checked((int)count)];
+        for (var index = 0; index < result.Length; index++) result[index] = Utf8(values[index]);
+        return result;
+    }
+
     private static PendingEventItems TransferEventItems(IReadOnlyList<Item.Stack> items) => new(items);
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void DropTransferAddress(void* context)
+    {
+        if (context is null) return;
+        var handle = GCHandle.FromIntPtr((nint)context);
+        try { (handle.Target as PendingTransferAddress)?.Dispose(); }
+        finally { handle.Free(); }
+    }
+
+    private sealed class PendingTransferAddress : IDisposable
+    {
+        private GCHandle _handle;
+
+        internal PendingTransferAddress(Net.UDPAddr address)
+        {
+            ArgumentNullException.ThrowIfNull(address.IP);
+            ArgumentNullException.ThrowIfNull(address.Zone);
+            if (address.IP.Length is not (0 or 4 or 16))
+                throw new ArgumentException("a UDP address IP must be empty, IPv4, or IPv6", nameof(address));
+            var zone = Encoding.UTF8.GetBytes(address.Zone);
+            if (zone.Length > 4096)
+                throw new ArgumentException("a UDP address zone must not exceed 4096 UTF-8 bytes", nameof(address));
+            try
+            {
+                View = new UDPAddrView { IP = Allocate(address.IP), Port = address.Port };
+                var view = View;
+                view.Zone = Allocate(zone);
+                View = view;
+                _handle = GCHandle.Alloc(this);
+            }
+            catch
+            {
+                Dispose();
+                throw;
+            }
+        }
+
+        internal UDPAddrView View { get; private set; }
+        internal void* Context => (void*)GCHandle.ToIntPtr(_handle);
+        internal delegate* unmanaged[Cdecl]<void*, void> Drop => &DropTransferAddress;
+
+        public void Dispose()
+        {
+            if (View.IP.Data is not null) NativeMemory.Free(View.IP.Data);
+            if (View.Zone.Data is not null) NativeMemory.Free(View.Zone.Data);
+            View = default;
+        }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void DropEventStrings(void* context)
+    {
+        if (context is null) return;
+        var handle = GCHandle.FromIntPtr((nint)context);
+        try { (handle.Target as PendingEventStrings)?.Dispose(); }
+        finally { handle.Free(); }
+    }
+
+    private sealed class PendingEventStrings : IDisposable
+    {
+        private GCHandle _handle;
+
+        internal PendingEventStrings(IReadOnlyList<string> values)
+        {
+            try
+            {
+                Views = values.Count == 0
+                    ? null
+                    : (StringView*)NativeMemory.AllocZeroed(
+                        (nuint)values.Count,
+                        (nuint)sizeof(StringView));
+                Count = (ulong)values.Count;
+                for (var index = 0; index < values.Count; index++)
+                {
+                    ArgumentNullException.ThrowIfNull(values[index]);
+                    var bytes = Encoding.UTF8.GetBytes(values[index]);
+                    if (bytes.Length > 64 * 1024)
+                        throw new ArgumentException(
+                            "an event string must not exceed 64 KiB of UTF-8 data",
+                            nameof(values));
+                    Views[index] = Allocate(bytes);
+                }
+                _handle = GCHandle.Alloc(this);
+            }
+            catch
+            {
+                Dispose();
+                throw;
+            }
+        }
+
+        internal StringView* Views { get; private set; }
+        internal ulong Count { get; }
+        internal void* Context => (void*)GCHandle.ToIntPtr(_handle);
+        internal delegate* unmanaged[Cdecl]<void*, void> Drop => &DropEventStrings;
+
+        public void Dispose()
+        {
+            if (Views is null) return;
+            for (var index = 0; index < checked((int)Count); index++)
+                if (Views[index].Data is not null) NativeMemory.Free(Views[index].Data);
+            NativeMemory.Free(Views);
+            Views = null;
+        }
+    }
+
+    private static StringView Allocate(ReadOnlySpan<byte> bytes)
+    {
+        if (bytes.Length == 0) return default;
+        var data = (byte*)NativeMemory.Alloc((nuint)bytes.Length);
+        bytes.CopyTo(new Span<byte>(data, bytes.Length));
+        return new StringView { Data = data, Length = (ulong)bytes.Length };
+    }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void DropEventItems(void* context)

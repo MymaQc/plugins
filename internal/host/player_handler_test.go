@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"math"
+	"net"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -11,9 +13,11 @@ import (
 	"github.com/bedrock-gophers/plugins/internal/native"
 	"github.com/df-mc/dragonfly/server/block"
 	"github.com/df-mc/dragonfly/server/block/cube"
+	"github.com/df-mc/dragonfly/server/cmd"
 	"github.com/df-mc/dragonfly/server/entity"
 	"github.com/df-mc/dragonfly/server/player"
 	playerskin "github.com/df-mc/dragonfly/server/player/skin"
+	"github.com/df-mc/dragonfly/server/session"
 	"github.com/df-mc/dragonfly/server/world"
 	"github.com/go-gl/mathgl/mgl64"
 	"github.com/google/uuid"
@@ -54,6 +58,18 @@ type runtimeStub struct {
 	skinChangeOutput    native.PlayerSkinChangeOutput
 	skinChangeCalled    bool
 	skinChangeErr       error
+	transferInput       native.PlayerTransferInput
+	transferOutput      native.PlayerTransferOutput
+	transferErr         error
+	transferTx          *world.World
+	commandInput        native.PlayerCommandExecutionInput
+	commandOutput       native.PlayerCommandExecutionOutput
+	commandErr          error
+	commandTx           *world.World
+	diagnosticsInput    native.PlayerDiagnosticsInput
+	diagnosticsCalled   bool
+	diagnosticsErr      error
+	diagnosticsTx       *world.World
 	players             *Players
 }
 
@@ -67,6 +83,10 @@ func (testDamageSource) IgnoreTotem() bool         { return true }
 type testHealingSource struct{}
 
 func (testHealingSource) HealingSource() {}
+
+type commandExecutionTestRunnable struct{}
+
+func (commandExecutionTestRunnable) Run(cmd.Source, *cmd.Output, *world.Tx) {}
 
 func (r *runtimeStub) HandlePlayerJoin(_ native.InvocationID, input native.PlayerJoinInput, _ bool) (bool, error) {
 	r.joinInput = input
@@ -206,6 +226,47 @@ func (r *runtimeStub) HandlePlayerSkinChange(_ native.InvocationID, input native
 		return native.PlayerSkinChangeOutput{Cancelled: cancelled, Skin: skin}, nil
 	}
 	return r.skinChangeOutput, nil
+}
+
+func (r *runtimeStub) HandlePlayerTransfer(invocation native.InvocationID, input native.PlayerTransferInput, cancelled bool) (native.PlayerTransferOutput, error) {
+	r.transferInput = input
+	if r.players != nil {
+		if tx, ok := r.players.InvocationTx(invocation); ok {
+			r.transferTx = tx.World()
+		}
+	}
+	output := r.transferOutput
+	output.Cancelled = output.Cancelled || cancelled
+	if output.Address.IP == nil {
+		output.Address = input.Address
+	}
+	return output, r.transferErr
+}
+
+func (r *runtimeStub) HandlePlayerCommandExecution(invocation native.InvocationID, input native.PlayerCommandExecutionInput, cancelled bool) (native.PlayerCommandExecutionOutput, error) {
+	r.commandInput = input
+	if r.players != nil {
+		if tx, ok := r.players.InvocationTx(invocation); ok {
+			r.commandTx = tx.World()
+		}
+	}
+	output := r.commandOutput
+	output.Cancelled = output.Cancelled || cancelled
+	if output.Arguments == nil {
+		output.Arguments = append([]string(nil), input.Arguments...)
+	}
+	return output, r.commandErr
+}
+
+func (r *runtimeStub) HandlePlayerDiagnostics(invocation native.InvocationID, input native.PlayerDiagnosticsInput) error {
+	r.diagnosticsCalled = true
+	r.diagnosticsInput = input
+	if r.players != nil {
+		if tx, ok := r.players.InvocationTx(invocation); ok {
+			r.diagnosticsTx = tx.World()
+		}
+	}
+	return r.diagnosticsErr
 }
 
 func TestPlayerHandlerChangeWorldFiresOnFirstDestinationTick(t *testing.T) {
@@ -403,6 +464,125 @@ func withPlayerTx(t *testing.T, function func(*world.Tx, *player.Player)) {
 	}).Wait(context.Background()); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestPlayerHandlerTransferForwardsAddress(t *testing.T) {
+	withPlayerTx(t, func(tx *world.Tx, p *player.Player) {
+		players := NewPlayers()
+		runtime := &runtimeStub{
+			subscriptions: native.PlayerTransferSubscription,
+			players:       players,
+			transferOutput: native.PlayerTransferOutput{
+				Cancelled: true,
+				Address:   native.UDPAddress{IP: net.ParseIP("2001:db8::1").To16(), Port: 19133, Zone: "eth0"},
+			},
+		}
+		players.Register(p, 7)
+		p.Handle(NewPlayerHandler(runtime, nil, players, nil))
+		if err := p.Transfer("127.0.0.1:19132"); err != nil {
+			t.Fatal(err)
+		}
+		if runtime.transferInput.Player.Player.Generation != 7 || runtime.transferInput.Player.Name != "TestPlayer" {
+			t.Fatalf("unexpected player snapshot: %+v", runtime.transferInput.Player)
+		}
+		if !net.IP(runtime.transferInput.Address.IP).Equal(net.ParseIP("127.0.0.1")) || runtime.transferInput.Address.Port != 19132 {
+			t.Fatalf("unexpected transfer address: %+v", runtime.transferInput.Address)
+		}
+		if runtime.transferTx != tx.World() {
+			t.Fatal("transfer invocation did not use the player's transaction")
+		}
+	})
+}
+
+func TestApplyTransferAddress(t *testing.T) {
+	destination := &net.UDPAddr{IP: net.IPv4zero, Port: 1}
+	source := native.UDPAddress{IP: net.ParseIP("2001:db8::2").To16(), Port: 19133, Zone: "eth0"}
+	if !applyTransferAddress(destination, source) {
+		t.Fatal("valid transfer address was rejected")
+	}
+	if !destination.IP.Equal(net.ParseIP("2001:db8::2")) || destination.Port != 19133 || destination.Zone != "eth0" {
+		t.Fatalf("unexpected destination: %+v", destination)
+	}
+	source.IP[0] = 0
+	if destination.IP[0] == 0 {
+		t.Fatal("destination aliases the native address")
+	}
+	if applyTransferAddress(destination, native.UDPAddress{IP: []byte{1, 2, 3}, Port: 19132}) {
+		t.Fatal("invalid transfer IP was accepted")
+	}
+}
+
+func TestPlayerHandlerCommandExecutionForwardsIdentityAndArguments(t *testing.T) {
+	const name = "native-event-command-test"
+	command := cmd.New(name, "command event test", []string{"nect"}, commandExecutionTestRunnable{})
+	cmd.Register(command)
+	withPlayerTx(t, func(tx *world.Tx, p *player.Player) {
+		players := NewPlayers()
+		runtime := &runtimeStub{
+			subscriptions: native.PlayerCommandExecutionSubscription,
+			players:       players,
+			commandOutput: native.PlayerCommandExecutionOutput{
+				Cancelled: true,
+				Arguments: []string{"changed", "arguments"},
+			},
+		}
+		players.Register(p, 9)
+		p.Handle(NewPlayerHandler(runtime, nil, players, nil))
+		p.ExecuteCommand("/" + name + " first second")
+		if runtime.commandInput.Player.Player.Generation != 9 || runtime.commandInput.Command.Name != name ||
+			runtime.commandInput.Command.Description != "command event test" || runtime.commandInput.Command.Usage != command.Usage() ||
+			!reflect.DeepEqual(runtime.commandInput.Command.Aliases, command.Aliases()) ||
+			!reflect.DeepEqual(runtime.commandInput.Arguments, []string{"first", "second"}) {
+			t.Fatalf("unexpected command input: %+v", runtime.commandInput)
+		}
+		if runtime.commandTx != tx.World() {
+			t.Fatal("command-execution invocation did not use the player's transaction")
+		}
+	})
+}
+
+func TestApplyCommandArguments(t *testing.T) {
+	destination := []string{"first", "second"}
+	if !applyCommandArguments(destination, []string{"changed", "arguments"}) || !reflect.DeepEqual(destination, []string{"changed", "arguments"}) {
+		t.Fatalf("arguments were not replaced: %v", destination)
+	}
+	if applyCommandArguments(destination, []string{"wrong-count"}) {
+		t.Fatal("argument count change was accepted")
+	}
+}
+
+func TestPlayerHandlerDiagnosticsForwardsAllFields(t *testing.T) {
+	diagnostics := session.Diagnostics{
+		AverageFramesPerSecond:        1,
+		AverageServerSimTickTime:      2,
+		AverageClientSimTickTime:      3,
+		AverageBeginFrameTime:         4,
+		AverageInputTime:              5,
+		AverageRenderTime:             6,
+		AverageEndFrameTime:           7,
+		AverageRemainderTimePercent:   8,
+		AverageUnaccountedTimePercent: 9,
+	}
+	withPlayerTx(t, func(tx *world.Tx, p *player.Player) {
+		players := NewPlayers()
+		runtime := &runtimeStub{
+			subscriptions: native.PlayerDiagnosticsSubscription,
+			players:       players,
+		}
+		players.Register(p, 11)
+		p.Handle(NewPlayerHandler(runtime, nil, players, nil))
+		p.UpdateDiagnostics(diagnostics)
+		input := runtime.diagnosticsInput
+		if !runtime.diagnosticsCalled || input.Player.Player.Generation != 11 || input.AverageFramesPerSecond != 1 ||
+			input.AverageServerSimTickTime != 2 || input.AverageClientSimTickTime != 3 || input.AverageBeginFrameTime != 4 ||
+			input.AverageInputTime != 5 || input.AverageRenderTime != 6 || input.AverageEndFrameTime != 7 ||
+			input.AverageRemainderTimePercent != 8 || input.AverageUnaccountedTimePercent != 9 {
+			t.Fatalf("unexpected diagnostics input: %+v", input)
+		}
+		if runtime.diagnosticsTx != tx.World() {
+			t.Fatal("diagnostics invocation did not use the player's transaction")
+		}
+	})
 }
 
 func TestPlayerHandlerMove(t *testing.T) {

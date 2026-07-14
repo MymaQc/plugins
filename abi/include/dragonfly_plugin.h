@@ -8,7 +8,7 @@
 extern "C" {
 #endif
 
-#define DF_ABI_VERSION 6u
+#define DF_ABI_VERSION 7u
 // Version 31 transports Dragonfly effect fields using signed nanoseconds and ticks.
 #define DF_HOST_ABI_VERSION 31u
 #define DF_STATUS_OK 0
@@ -28,6 +28,8 @@ typedef struct { int32_t min; int32_t max; } DfBlockRange;
 typedef struct { uint64_t value; } DfWorldId;
 typedef struct { const uint8_t *data; uint64_t len; } DfStringView;
 typedef struct { uint8_t *data; uint64_t len; uint64_t capacity; } DfStringBuffer;
+typedef void (*DfEventDropFn)(void *context);
+typedef struct { DfStringView ip; int32_t port; DfStringView zone; } DfUDPAddrView;
 #define DF_DAMAGE_SOURCE_REDUCED_BY_ARMOUR 1u
 #define DF_DAMAGE_SOURCE_REDUCED_BY_RESISTANCE 2u
 #define DF_DAMAGE_SOURCE_FIRE 4u
@@ -601,7 +603,7 @@ typedef struct {
 typedef struct {
     uint8_t cancelled;
     double damage;
-    uint64_t attack_immunity_milliseconds;
+    int64_t attack_immunity_nanoseconds;
 } DfPlayerHurtState;
 
 #define DF_EVENT_PLAYER_HEAL 6u
@@ -990,6 +992,75 @@ typedef struct {
     DfItemStackViewsDropFn replacement_drop;
 } DfPlayerItemPickupState;
 
+#define DF_EVENT_PLAYER_TRANSFER 39u
+
+typedef struct {
+    DfInvocationId invocation;
+    DfPlayerSnapshot player;
+} DfPlayerTransferInput;
+
+/*
+ * address initially borrows the host address for the duration of handle_event.
+ * A plugin replacing address.ip or address.zone with owned storage sets
+ * replacement_drop and transfers that storage to the host. The host copies the
+ * final address and invokes replacement_drop exactly once, including error and
+ * validation paths.
+ */
+typedef struct {
+    uint8_t cancelled;
+    DfUDPAddrView address;
+    void *replacement_context;
+    DfEventDropFn replacement_drop;
+} DfPlayerTransferState;
+
+#define DF_EVENT_PLAYER_COMMAND_EXECUTION 40u
+
+typedef struct {
+    DfInvocationId invocation;
+    DfPlayerSnapshot player;
+    DfStringView command_name;
+    DfStringView command_description;
+    DfStringView command_usage;
+    const DfStringView *command_aliases;
+    uint64_t command_alias_count;
+    const DfStringView *arguments;
+    uint64_t argument_count;
+} DfPlayerCommandExecutionInput;
+
+/*
+ * replacement_arguments must contain exactly input.argument_count entries.
+ * A non-null replacement_drop transfers the replacement array and its strings
+ * to the host. The host copies them and invokes replacement_drop exactly once,
+ * including error and validation paths.
+ */
+typedef struct {
+    uint8_t cancelled;
+    const DfStringView *replacement_arguments;
+    uint64_t replacement_argument_count;
+    void *replacement_context;
+    DfEventDropFn replacement_drop;
+} DfPlayerCommandExecutionState;
+
+#define DF_EVENT_PLAYER_DIAGNOSTICS 41u
+
+typedef struct {
+    DfInvocationId invocation;
+    DfPlayerSnapshot player;
+    double average_frames_per_second;
+    double average_server_sim_tick_time;
+    double average_client_sim_tick_time;
+    double average_begin_frame_time;
+    double average_input_time;
+    double average_render_time;
+    double average_end_frame_time;
+    double average_remainder_time_percent;
+    double average_unaccounted_time_percent;
+} DfPlayerDiagnosticsInput;
+
+typedef struct {
+    uint8_t _reserved;
+} DfPlayerDiagnosticsState;
+
 #define DF_EVENT_ENTITY_HURT 35u
 
 typedef struct {
@@ -1062,9 +1133,9 @@ typedef struct {
     DfPluginSetHostFn set_host;
     DfPluginDestroyFn destroy;
     DfHandleEventFn handle_event;
-} DfPluginApiV6;
+} DfPluginApiV7;
 
-typedef const DfPluginApiV6 *(*DfPluginEntryV6Fn)(void);
+typedef const DfPluginApiV7 *(*DfPluginEntryV7Fn)(void);
 
 typedef struct DfRuntime DfRuntime;
 typedef struct { DfStringView plugin_directory; const DfHostApiV27 *host; } DfRuntimeConfig;

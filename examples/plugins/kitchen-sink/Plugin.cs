@@ -13,6 +13,9 @@ public sealed class KitchenSink : Plugin
     private long _quits;
     private long _sneaks;
     private long _sprints;
+    private long _transfers;
+    private long _commandExecutions;
+    private long _diagnostics;
 
     public override void OnEnable()
     {
@@ -58,6 +61,9 @@ public sealed class KitchenSink : Plugin
         if (!Finite(pos)) ctx.Cancel();
     }
 
+    public override void HandleChangeWorld(Player player, World? before, World after) =>
+        _ = (player, before, after);
+
     public override void HandleToggleSprint(Player.Context ctx, bool sprinting)
     {
         if (sprinting) Increment(ref _sprints);
@@ -73,6 +79,33 @@ public sealed class KitchenSink : Plugin
 
     public override void HandleFoodLoss(Player.Context ctx, int from, ref int to) =>
         to = Math.Clamp(to, 0, 20);
+
+    public override void HandleHeal(Player.Context ctx, ref double health, World.HealingSource source)
+    {
+        health = Math.Max(0, health);
+        _ = source;
+    }
+
+    public override void HandleHurt(
+        Player.Context ctx,
+        ref double damage,
+        bool immune,
+        ref TimeSpan attackImmunity,
+        World.DamageSource source)
+    {
+        damage = Math.Max(0, damage);
+        _ = (immune, attackImmunity, source.ReducedByArmour(), source.ReducedByResistance(),
+            source.Fire(), source.IgnoreTotem());
+    }
+
+    public override void HandleDeath(Player player, World.DamageSource source, ref bool keepInv) =>
+        _ = (player, source, keepInv);
+
+    public override void HandleRespawn(Player player, ref Vector3 pos, ref World world) =>
+        _ = (player, pos, world);
+
+    public override void HandleSkinChange(Player.Context ctx, ref Skin skin) =>
+        _ = (skin.Bounds(), skin.Pix, skin.ModelConfig, skin.Model, skin.Cape, skin.Animations);
 
     public override void HandleFireExtinguish(Player.Context ctx, Cube.Pos pos) => _ = pos;
     public override void HandleStartBreak(Player.Context ctx, Cube.Pos pos) => _ = pos;
@@ -104,10 +137,24 @@ public sealed class KitchenSink : Plugin
         Cube.Face face,
         Vector3 clickPos) => _ = (pos, face, clickPos);
 
+    public override void HandleItemUseOnEntity(Player.Context ctx, World.Entity entity) => _ = entity;
+
     public override void HandleItemRelease(Player.Context ctx, Item.Stack item, TimeSpan duration) =>
         _ = (item, duration);
 
     public override void HandleItemConsume(Player.Context ctx, Item.Stack item) => _ = item;
+
+    public override void HandleAttackEntity(
+        Player.Context ctx,
+        World.Entity entity,
+        ref double force,
+        ref double height,
+        ref bool critical)
+    {
+        force = Math.Max(0, force);
+        height = Math.Max(0, height);
+        _ = (entity, critical);
+    }
     public override void HandleExperienceGain(Player.Context ctx, ref int amount) => amount = Math.Max(0, amount);
 
     public override void HandleSignEdit(
@@ -133,8 +180,31 @@ public sealed class KitchenSink : Plugin
     public override void HandleHeldSlotChange(Player.Context ctx, int from, int to) => _ = (from, to);
     public override void HandleItemDrop(Player.Context ctx, Item.Stack item) => _ = item;
 
+    public override void HandleTransfer(Player.Context ctx, ref Net.UDPAddr address)
+    {
+        address.Port = Math.Clamp(address.Port, 0, 65535);
+        Increment(ref _transfers);
+    }
+
+    public override void HandleCommandExecution(Player.Context ctx, Cmd.Command command, string[] args)
+    {
+        for (var index = 0; index < args.Length; index++) args[index] = args[index].Trim();
+        _ = (command.Name(), command.Description(), command.Usage(), command.Aliases());
+        Increment(ref _commandExecutions);
+    }
+
     public override void HandlePunchAir(Player.Context ctx) => Increment(ref _punches);
     public override void HandleQuit(Player player) => Increment(ref _quits);
+
+    public override void HandleDiagnostics(Player player, Session.Diagnostics diagnostics)
+    {
+        _ = (player, diagnostics.AverageFramesPerSecond, diagnostics.AverageServerSimTickTime,
+            diagnostics.AverageClientSimTickTime, diagnostics.AverageBeginFrameTime,
+            diagnostics.AverageInputTime, diagnostics.AverageRenderTime,
+            diagnostics.AverageEndFrameTime, diagnostics.AverageRemainderTimePercent,
+            diagnostics.AverageUnaccountedTimePercent);
+        Increment(ref _diagnostics);
+    }
 
     private static void Increment(ref long counter) => Interlocked.Increment(ref counter);
 

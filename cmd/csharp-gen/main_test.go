@@ -17,6 +17,17 @@ import (
 	"github.com/df-mc/dragonfly/server/world"
 )
 
+var expectedPlayerHandlerNames = []string{
+	"HandleMove", "HandleJump", "HandleTeleport", "HandleChangeWorld", "HandleToggleSprint",
+	"HandleToggleSneak", "HandleChat", "HandleFoodLoss", "HandleHeal", "HandleHurt", "HandleDeath",
+	"HandleRespawn", "HandleSkinChange", "HandleFireExtinguish", "HandleStartBreak", "HandleBlockBreak",
+	"HandleBlockPlace", "HandleBlockPick", "HandleItemUse", "HandleItemUseOnBlock", "HandleItemUseOnEntity",
+	"HandleItemRelease", "HandleItemConsume", "HandleAttackEntity", "HandleExperienceGain", "HandlePunchAir",
+	"HandleSignEdit", "HandleSleep", "HandleLecternPageTurn", "HandleItemDamage", "HandleItemPickup",
+	"HandleHeldSlotChange", "HandleItemDrop", "HandleTransfer", "HandleCommandExecution", "HandleQuit",
+	"HandleDiagnostics",
+}
+
 func TestPlayerHandlerMethodsUsesGoAST(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "handler.go")
 	source := `package player
@@ -24,10 +35,16 @@ type Handler interface {
 	HandleMove(ctx *Context, newPos mgl64.Vec3, newRot cube.Rotation)
 	HandleJump(p *Player)
 	HandleTeleport(ctx *Context, pos mgl64.Vec3)
+	HandleChangeWorld(p *Player, before, after *world.World)
 	HandleToggleSprint(ctx *Context, after bool)
 	HandleToggleSneak(ctx *Context, after bool)
 	HandleChat(ctx *Context, message *string)
 	HandleFoodLoss(ctx *Context, from int, to *int)
+	HandleHeal(ctx *Context, health *float64, src world.HealingSource)
+	HandleHurt(ctx *Context, damage *float64, immune bool, attackImmunity *time.Duration, src world.DamageSource)
+	HandleDeath(p *Player, src world.DamageSource, keepInv *bool)
+	HandleRespawn(p *Player, pos *mgl64.Vec3, w **world.World)
+	HandleSkinChange(ctx *Context, skin *skin.Skin)
 	HandleFireExtinguish(ctx *Context, pos cube.Pos)
 	HandleStartBreak(ctx *Context, pos cube.Pos)
 	HandleBlockBreak(ctx *Context, pos cube.Pos, drops *[]item.Stack, xp *int)
@@ -35,8 +52,10 @@ type Handler interface {
 	HandleBlockPick(ctx *Context, pos cube.Pos, b world.Block)
 	HandleItemUse(ctx *Context)
 	HandleItemUseOnBlock(ctx *Context, pos cube.Pos, face cube.Face, clickPos mgl64.Vec3)
+	HandleItemUseOnEntity(ctx *Context, e world.Entity)
 	HandleItemRelease(ctx *Context, item item.Stack, dur time.Duration)
 	HandleItemConsume(ctx *Context, item item.Stack)
+	HandleAttackEntity(ctx *Context, e world.Entity, force, height *float64, critical *bool)
 	HandleExperienceGain(ctx *Context, amount *int)
 	HandlePunchAir(ctx *Context)
 	HandleSignEdit(ctx *Context, pos cube.Pos, frontSide bool, oldText, newText string)
@@ -46,7 +65,10 @@ type Handler interface {
 	HandleItemPickup(ctx *Context, i *item.Stack)
 	HandleHeldSlotChange(ctx *Context, from, to int)
 	HandleItemDrop(ctx *Context, s item.Stack)
+	HandleTransfer(ctx *Context, addr *net.UDPAddr)
+	HandleCommandExecution(ctx *Context, command cmd.Command, args []string)
 	HandleQuit(p *Player)
+	HandleDiagnostics(p *Player, d session.Diagnostics)
 }`
 	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
 		t.Fatal(err)
@@ -55,25 +77,86 @@ type Handler interface {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if len(methods) != 37 || len(supportedPlayerHandlers) != 37 {
+		t.Fatalf("generated %d methods from %d supported handlers, want exactly 37", len(methods), len(supportedPlayerHandlers))
+	}
+	for index, method := range methods {
+		if method.Name != expectedPlayerHandlerNames[index] {
+			t.Fatalf("method %d = %s, want %s", index, method.Name, expectedPlayerHandlerNames[index])
+		}
+		if method.Subscription != supportedPlayerHandlers[method.Name] {
+			t.Fatalf("%s subscription = %d, want %d", method.Name, method.Subscription, supportedPlayerHandlers[method.Name])
+		}
+	}
 	output := string(generatePlayerHandler(methods))
 	for _, expected := range []string{
 		"void HandleMove(Player.Context ctx, Vector3 newPos, Rotation newRot);",
+		"void HandleChangeWorld(Player p, World? before, World after);",
 		"void HandleChat(Player.Context ctx, ref string message);",
 		"void HandleFoodLoss(Player.Context ctx, int from, ref int to);",
+		"void HandleHeal(Player.Context ctx, ref double health, World.HealingSource src);",
+		"void HandleHurt(Player.Context ctx, ref double damage, bool immune, ref TimeSpan attackImmunity, World.DamageSource src);",
+		"void HandleDeath(Player p, World.DamageSource src, ref bool keepInv);",
+		"void HandleRespawn(Player p, ref Vector3 pos, ref World w);",
+		"void HandleSkinChange(Player.Context ctx, ref Skin skin);",
 		"void HandleFireExtinguish(Player.Context ctx, Cube.Pos pos);",
 		"void HandleBlockBreak(Player.Context ctx, Cube.Pos pos, ref Item.Stack[] drops, ref int xp);",
 		"void HandleBlockPlace(Player.Context ctx, Cube.Pos pos, World.Block b);",
 		"void HandleItemUseOnBlock(Player.Context ctx, Cube.Pos pos, Cube.Face face, Vector3 clickPos);",
+		"void HandleItemUseOnEntity(Player.Context ctx, World.Entity e);",
 		"void HandleItemRelease(Player.Context ctx, Item.Stack item, TimeSpan dur);",
+		"void HandleAttackEntity(Player.Context ctx, World.Entity e, ref double force, ref double height, ref bool critical);",
 		"void HandleItemPickup(Player.Context ctx, ref Item.Stack i);",
+		"void HandleTransfer(Player.Context ctx, ref Net.UDPAddr addr);",
+		"void HandleCommandExecution(Player.Context ctx, Cmd.Command command, string[] args);",
 		"void HandleQuit(Player p);",
+		"void HandleDiagnostics(Player p, Session.Diagnostics d);",
 		"[HandlerSubscription(1UL)]",
+		"[HandlerSubscription(16UL)]",
+		"[HandlerSubscription(536870912UL)]",
 		"[HandlerSubscription(137438953472UL)]",
+		"[HandlerSubscription(274877906944UL)]",
+		"[HandlerSubscription(549755813888UL)]",
+		"[HandlerSubscription(1099511627776UL)]",
 		"public virtual void HandleMove(Player.Context ctx, Vector3 newPos, Rotation newRot) { }",
 	} {
 		if !strings.Contains(output, expected) {
 			t.Fatalf("generated output missing %q:\n%s", expected, output)
 		}
+	}
+}
+
+func TestPinnedDragonflyPlayerHandlerHasExactSupportedSurface(t *testing.T) {
+	command := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "github.com/df-mc/dragonfly")
+	output, err := command.Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	methods, err := playerHandlerMethods(filepath.Join(
+		string(bytes.TrimSpace(output)), "server", "player", "handler.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(methods) != len(expectedPlayerHandlerNames) {
+		t.Fatalf("generated %d pinned Dragonfly handlers, want %d", len(methods), len(expectedPlayerHandlerNames))
+	}
+	for index, method := range methods {
+		if method.Name != expectedPlayerHandlerNames[index] {
+			t.Fatalf("pinned method %d = %s, want %s", index, method.Name, expectedPlayerHandlerNames[index])
+		}
+	}
+}
+
+func TestPlayerHandlerMethodsRejectUnknownMethod(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "handler.go")
+	if err := os.WriteFile(path, []byte(`package player
+type Handler interface { HandleFuture(ctx *Context) }
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := playerHandlerMethods(path)
+	if err == nil || !strings.Contains(err.Error(), "unsupported player.Handler.HandleFuture method") {
+		t.Fatalf("playerHandlerMethods() error = %v, want unsupported-method error", err)
 	}
 }
 
