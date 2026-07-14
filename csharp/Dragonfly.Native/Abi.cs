@@ -5,7 +5,7 @@ namespace Dragonfly.Native;
 public static class Abi
 {
     public const uint PluginVersion = 7;
-    public const uint HostVersion = 34;
+    public const uint HostVersion = 35;
     public const int Ok = 0;
     public const int Error = 1;
     public const uint PlayerMoveEvent = 1;
@@ -330,6 +330,13 @@ public unsafe struct HostApi
     public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, byte, ulong*, int> WorldEntityIteratorOpen;
     public delegate* unmanaged[Cdecl]<ulong, ulong, ulong, EntityId*, byte*, int> WorldEntityIteratorNext;
     public delegate* unmanaged[Cdecl]<ulong, ulong, ulong, void> WorldEntityIteratorClose;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, EntityId, EntityHandleId*, int> EntityHandle;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, EntityHandleId, EntityId*, byte*, int> EntityHandleEntity;
+    public delegate* unmanaged[Cdecl]<ulong, EntityHandleId, NativeUuid*, int> EntityHandleUuid;
+    public delegate* unmanaged[Cdecl]<ulong, EntityHandleId, byte*, int> EntityHandleClosed;
+    public delegate* unmanaged[Cdecl]<ulong, EntityHandleId, int> EntityHandleClose;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, EntityId, EntityHandleId*, int> WorldEntityRemove;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, EntityHandleId, Vec3*, EntityId*, int> WorldEntityAdd;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -363,6 +370,19 @@ public unsafe struct EntityId
 {
     public fixed byte Bytes[16];
     public ulong Generation;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct EntityHandleId
+{
+    public ulong Value;
+    public ulong Generation;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct NativeUuid
+{
+    public fixed byte Bytes[16];
 }
 
 [StructLayout(LayoutKind.Sequential)]

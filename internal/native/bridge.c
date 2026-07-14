@@ -177,8 +177,10 @@ _Static_assert(offsetof(DfWorldOpenSpecV1, fixed_time) == 40, "DfWorldOpenSpecV1
 _Static_assert(offsetof(DfWorldOpenSpecV1, open_mode) == 48, "DfWorldOpenSpecV1.open_mode ABI offset changed");
 _Static_assert(offsetof(DfWorldOpenSpecV1, read_only) == 76, "DfWorldOpenSpecV1.read_only ABI offset changed");
 _Static_assert(sizeof(DfBlockRange) == 8, "DfBlockRange ABI layout changed");
-_Static_assert(sizeof(DfHostApiV27) == 688, "DfHostApiV27 ABI layout changed");
-_Static_assert(DF_HOST_ABI_VERSION == 34u, "host ABI version changed without bridge review");
+_Static_assert(sizeof(DfEntityHandleId) == 16, "DfEntityHandleId ABI layout changed");
+_Static_assert(sizeof(DfUuid) == 16, "DfUuid ABI layout changed");
+_Static_assert(sizeof(DfHostApiV27) == 744, "DfHostApiV27 ABI layout changed");
+_Static_assert(DF_HOST_ABI_VERSION == 35u, "host ABI version changed without bridge review");
 _Static_assert(offsetof(DfHostApiV27, player_skin_open) == 80, "DfHostApiV27.player_skin_open ABI offset changed");
 _Static_assert(offsetof(DfHostApiV27, player_skin_set) == 112, "DfHostApiV27.player_skin_set ABI offset changed");
 _Static_assert(offsetof(DfHostApiV27, inventory_size) == 120, "DfHostApiV27.inventory_size ABI offset changed");
@@ -219,6 +221,13 @@ _Static_assert(offsetof(DfHostApiV27, world_current) == 656, "DfHostApiV27.world
 _Static_assert(offsetof(DfHostApiV27, world_entity_iterator_open) == 664, "DfHostApiV27.world_entity_iterator_open ABI offset changed");
 _Static_assert(offsetof(DfHostApiV27, world_entity_iterator_next) == 672, "DfHostApiV27.world_entity_iterator_next ABI offset changed");
 _Static_assert(offsetof(DfHostApiV27, world_entity_iterator_close) == 680, "DfHostApiV27.world_entity_iterator_close ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, entity_handle) == 688, "DfHostApiV27.entity_handle ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, entity_handle_entity) == 696, "DfHostApiV27.entity_handle_entity ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, entity_handle_uuid) == 704, "DfHostApiV27.entity_handle_uuid ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, entity_handle_closed) == 712, "DfHostApiV27.entity_handle_closed ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, entity_handle_close) == 720, "DfHostApiV27.entity_handle_close ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, world_entity_remove) == 728, "DfHostApiV27.world_entity_remove ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, world_entity_add) == 736, "DfHostApiV27.world_entity_add ABI offset changed");
 #endif
 
 extern DfStatus bg_go_player_text(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfStringView message);
@@ -308,6 +317,13 @@ extern DfStatus bg_go_world_current(uint64_t context, DfInvocationId invocation,
 extern DfStatus bg_go_world_entity_iterator_open(uint64_t context, DfInvocationId invocation, DfWorldId world, uint8_t players_only, DfEntityIteratorId *iterator);
 extern DfStatus bg_go_world_entity_iterator_next(uint64_t context, DfInvocationId invocation, DfEntityIteratorId iterator, DfEntityId *entity, uint8_t *found);
 extern void bg_go_world_entity_iterator_close(uint64_t context, DfInvocationId invocation, DfEntityIteratorId iterator);
+extern DfStatus bg_go_entity_handle(uint64_t context, DfInvocationId invocation, DfEntityId entity, DfEntityHandleId *handle);
+extern DfStatus bg_go_entity_handle_entity(uint64_t context, DfInvocationId invocation, DfEntityHandleId handle, DfEntityId *entity, uint8_t *found);
+extern DfStatus bg_go_entity_handle_uuid(uint64_t context, DfEntityHandleId handle, DfUuid *uuid);
+extern DfStatus bg_go_entity_handle_closed(uint64_t context, DfEntityHandleId handle, uint8_t *closed);
+extern DfStatus bg_go_entity_handle_close(uint64_t context, DfEntityHandleId handle);
+extern DfStatus bg_go_world_entity_remove(uint64_t context, DfInvocationId invocation, DfEntityId entity, DfEntityHandleId *handle);
+extern DfStatus bg_go_world_entity_add(uint64_t context, DfInvocationId invocation, DfEntityHandleId handle, const DfVec3 *position, DfEntityId *entity);
 
 static DfStatus host_player_text(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfStringView message) {
     return bg_go_player_text(context, invocation, player, kind, message);
@@ -458,6 +474,13 @@ static DfStatus host_world_current(uint64_t context, DfInvocationId invocation, 
 static DfStatus host_world_entity_iterator_open(uint64_t context, DfInvocationId invocation, DfWorldId world, uint8_t players_only, DfEntityIteratorId *iterator) { return bg_go_world_entity_iterator_open(context, invocation, world, players_only, iterator); }
 static DfStatus host_world_entity_iterator_next(uint64_t context, DfInvocationId invocation, DfEntityIteratorId iterator, DfEntityId *entity, uint8_t *found) { return bg_go_world_entity_iterator_next(context, invocation, iterator, entity, found); }
 static void host_world_entity_iterator_close(uint64_t context, DfInvocationId invocation, DfEntityIteratorId iterator) { bg_go_world_entity_iterator_close(context, invocation, iterator); }
+static DfStatus host_entity_handle(uint64_t context, DfInvocationId invocation, DfEntityId entity, DfEntityHandleId *handle) { return bg_go_entity_handle(context, invocation, entity, handle); }
+static DfStatus host_entity_handle_entity(uint64_t context, DfInvocationId invocation, DfEntityHandleId handle, DfEntityId *entity, uint8_t *found) { return bg_go_entity_handle_entity(context, invocation, handle, entity, found); }
+static DfStatus host_entity_handle_uuid(uint64_t context, DfEntityHandleId handle, DfUuid *uuid) { return bg_go_entity_handle_uuid(context, handle, uuid); }
+static DfStatus host_entity_handle_closed(uint64_t context, DfEntityHandleId handle, uint8_t *closed) { return bg_go_entity_handle_closed(context, handle, closed); }
+static DfStatus host_entity_handle_close(uint64_t context, DfEntityHandleId handle) { return bg_go_entity_handle_close(context, handle); }
+static DfStatus host_world_entity_remove(uint64_t context, DfInvocationId invocation, DfEntityId entity, DfEntityHandleId *handle) { return bg_go_world_entity_remove(context, invocation, entity, handle); }
+static DfStatus host_world_entity_add(uint64_t context, DfInvocationId invocation, DfEntityHandleId handle, const DfVec3 *position, DfEntityId *entity) { return bg_go_world_entity_add(context, invocation, handle, position, entity); }
 
 typedef DfStatus (*RuntimeCreateFn)(const DfRuntimeConfig *, DfRuntime **, uint8_t *, uint64_t);
 typedef void (*RuntimeDestroyFn)(DfRuntime *);
@@ -666,6 +689,13 @@ DfStatus bg_runtime_open(
         .world_entity_iterator_open = host_world_entity_iterator_open,
         .world_entity_iterator_next = host_world_entity_iterator_next,
         .world_entity_iterator_close = host_world_entity_iterator_close,
+        .entity_handle = host_entity_handle,
+        .entity_handle_entity = host_entity_handle_entity,
+        .entity_handle_uuid = host_entity_handle_uuid,
+        .entity_handle_closed = host_entity_handle_closed,
+        .entity_handle_close = host_entity_handle_close,
+        .world_entity_remove = host_world_entity_remove,
+        .world_entity_add = host_world_entity_add,
     };
     DfRuntimeConfig config = {
         .plugin_directory = {

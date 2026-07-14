@@ -71,6 +71,111 @@ func bg_go_world_entity_iterator_close(context C.uint64_t, invocation C.DfInvoca
 	}
 }
 
+//export bg_go_entity_handle
+func bg_go_entity_handle(context C.uint64_t, invocation C.DfInvocationId, entity C.DfEntityId, output *C.DfEntityHandleId) C.DfStatus {
+	host, ok := resolveHost(uint64(context))
+	if !ok || output == nil {
+		return C.DF_STATUS_ERROR
+	}
+	id, ok := host.EntityHandle(InvocationID(invocation), entityID(entity))
+	if !ok || !id.Valid() {
+		return C.DF_STATUS_ERROR
+	}
+	*output = cEntityHandleID(id)
+	return C.DF_STATUS_OK
+}
+
+//export bg_go_entity_handle_entity
+func bg_go_entity_handle_entity(context C.uint64_t, invocation C.DfInvocationId, handle C.DfEntityHandleId, output *C.DfEntityId, found *C.uint8_t) C.DfStatus {
+	host, ok := resolveHost(uint64(context))
+	if !ok || output == nil || found == nil {
+		return C.DF_STATUS_ERROR
+	}
+	id, hasValue, valid := host.EntityHandleEntity(InvocationID(invocation), entityHandleID(handle))
+	if !valid || hasValue && id.Generation == 0 {
+		return C.DF_STATUS_ERROR
+	}
+	*output = C.DfEntityId{}
+	*found = 0
+	if hasValue {
+		*output = cEntityID(id)
+		*found = 1
+	}
+	return C.DF_STATUS_OK
+}
+
+//export bg_go_entity_handle_uuid
+func bg_go_entity_handle_uuid(context C.uint64_t, handle C.DfEntityHandleId, output *C.DfUuid) C.DfStatus {
+	host, ok := resolveHost(uint64(context))
+	if !ok || output == nil {
+		return C.DF_STATUS_ERROR
+	}
+	id, ok := host.EntityHandleUUID(entityHandleID(handle))
+	if !ok {
+		return C.DF_STATUS_ERROR
+	}
+	for index := range id {
+		output.bytes[index] = C.uint8_t(id[index])
+	}
+	return C.DF_STATUS_OK
+}
+
+//export bg_go_entity_handle_closed
+func bg_go_entity_handle_closed(context C.uint64_t, handle C.DfEntityHandleId, output *C.uint8_t) C.DfStatus {
+	host, ok := resolveHost(uint64(context))
+	if !ok || output == nil {
+		return C.DF_STATUS_ERROR
+	}
+	closed, ok := host.EntityHandleClosed(entityHandleID(handle))
+	if !ok {
+		return C.DF_STATUS_ERROR
+	}
+	*output = C.uint8_t(boolByte(closed))
+	return C.DF_STATUS_OK
+}
+
+//export bg_go_entity_handle_close
+func bg_go_entity_handle_close(context C.uint64_t, handle C.DfEntityHandleId) C.DfStatus {
+	host, ok := resolveHost(uint64(context))
+	if !ok || !host.CloseEntityHandle(entityHandleID(handle)) {
+		return C.DF_STATUS_ERROR
+	}
+	return C.DF_STATUS_OK
+}
+
+//export bg_go_world_entity_remove
+func bg_go_world_entity_remove(context C.uint64_t, invocation C.DfInvocationId, entity C.DfEntityId, output *C.DfEntityHandleId) C.DfStatus {
+	host, ok := resolveHost(uint64(context))
+	if !ok || output == nil {
+		return C.DF_STATUS_ERROR
+	}
+	handle, ok := host.RemoveEntity(InvocationID(invocation), entityID(entity))
+	if !ok || !handle.Valid() {
+		return C.DF_STATUS_ERROR
+	}
+	*output = cEntityHandleID(handle)
+	return C.DF_STATUS_OK
+}
+
+//export bg_go_world_entity_add
+func bg_go_world_entity_add(context C.uint64_t, invocation C.DfInvocationId, handle C.DfEntityHandleId, position *C.DfVec3, output *C.DfEntityId) C.DfStatus {
+	host, ok := resolveHost(uint64(context))
+	if !ok || output == nil {
+		return C.DF_STATUS_ERROR
+	}
+	var target *Vec3
+	if position != nil {
+		value := nativeEntityVec3(*position)
+		target = &value
+	}
+	entity, ok := host.AddEntity(InvocationID(invocation), entityHandleID(handle), target)
+	if !ok || entity.Generation == 0 {
+		return C.DF_STATUS_ERROR
+	}
+	*output = cEntityID(entity)
+	return C.DF_STATUS_OK
+}
+
 //export bg_go_world_entity_spawn
 func bg_go_world_entity_spawn(context C.uint64_t, invocation C.DfInvocationId, worldID C.DfWorldId, view *C.DfEntitySpawnViewV3, output *C.DfEntityId) C.DfStatus {
 	host, ok := resolveHost(uint64(context))
@@ -217,6 +322,14 @@ func cEntityID(id EntityID) C.DfEntityId {
 	}
 	value.generation = C.uint64_t(id.Generation)
 	return value
+}
+
+func cEntityHandleID(id EntityHandleID) C.DfEntityHandleId {
+	return C.DfEntityHandleId{value: C.uint64_t(id.Value), generation: C.uint64_t(id.Generation)}
+}
+
+func entityHandleID(id C.DfEntityHandleId) EntityHandleID {
+	return EntityHandleID{Value: uint64(id.value), Generation: uint64(id.generation)}
 }
 
 func nativeEntityVec3(value C.DfVec3) Vec3 {

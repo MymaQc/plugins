@@ -61,6 +61,99 @@ func TestWorldManagerEntityLifecycleUsesExactTransaction(t *testing.T) {
 	}
 }
 
+func TestWorldManagerTransfersEntityHandleInExactTransaction(t *testing.T) {
+	players := host.NewPlayers()
+	manager := newWorldManager("", nil, players)
+	w, err := manager.Create("example:handles", world.Config{Synchronous: true, Entities: entity.DefaultRegistry})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = manager.CloseCustom() })
+	worldID, _ := manager.WorldByName(0, "example:handles")
+
+	var first, second native.EntityID
+	var handleID native.EntityHandleID
+	if err := w.Do(func(tx *world.Tx) {
+		invocation, end := players.BeginInvocation(tx)
+		defer end()
+		var ok bool
+		first, ok = manager.SpawnWorldEntity(invocation, worldID, native.EntitySpawn{
+			Kind: native.EntityText, Position: native.Vec3{X: 1, Y: 64, Z: 2}, Text: "transfer",
+		})
+		if !ok {
+			t.Fatal("spawn text failed")
+		}
+		before, ok := manager.EntityHandle(invocation, first)
+		if !ok {
+			t.Fatal("entity handle lookup failed")
+		}
+		handleID, ok = manager.RemoveEntity(invocation, first)
+		if !ok || handleID != before {
+			t.Fatalf("remove handle = %#v, %v; want %#v", handleID, ok, before)
+		}
+		if _, ok := manager.EntityState(invocation, first); ok {
+			t.Fatal("removed entity ID remained live")
+		}
+		if current, found, valid := manager.EntityHandleEntity(invocation, handleID); !valid || found || current.Generation != 0 {
+			t.Fatalf("detached handle entity = %#v, %v, %v", current, found, valid)
+		}
+		if closed, ok := manager.EntityHandleClosed(handleID); !ok || closed {
+			t.Fatalf("detached handle closed = %v, %v", closed, ok)
+		}
+		second, ok = manager.AddEntity(invocation, handleID, &native.Vec3{X: 8, Y: 70, Z: 9})
+		if !ok || second.Generation == 0 || second == first {
+			t.Fatalf("re-added entity = %#v, %v after %#v", second, ok, first)
+		}
+		if current, found, valid := manager.EntityHandleEntity(invocation, handleID); !valid || !found || current != second {
+			t.Fatalf("active handle entity = %#v, %v, %v; want %#v", current, found, valid, second)
+		}
+		state, ok := manager.EntityState(invocation, second)
+		if !ok || state.Position != (native.Vec3{X: 8, Y: 70, Z: 9}) {
+			t.Fatalf("re-added state = %#v, %v", state, ok)
+		}
+	}).Wait(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := manager.EntityState(0, first); ok {
+		t.Fatal("stale entity ID revived outside callback")
+	}
+	if state, ok := manager.EntityState(0, second); !ok || state.Position.X != 8 {
+		t.Fatalf("new entity state = %#v, %v", state, ok)
+	}
+}
+
+func TestWorldManagerRejectsRawPlayerRemoval(t *testing.T) {
+	players := host.NewPlayers()
+	manager := newWorldManager("", nil, players)
+	w, err := manager.Create("example:player-handle", world.Config{Synchronous: true, Entities: entity.DefaultRegistry})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = manager.CloseCustom() })
+
+	if err := w.Do(func(tx *world.Tx) {
+		playerUUID := uuid.MustParse("fd3ac4a0-c539-4cf1-87b5-c61563bf85c1")
+		handle := world.EntitySpawnOpts{ID: playerUUID}.New(player.Type, player.Config{UUID: playerUUID, Name: "Session"})
+		connected := tx.AddEntity(handle).(*player.Player)
+		players.Register(connected, 91)
+		defer players.Unregister(connected)
+		entityID, ok := manager.entityHandles.ID(connected)
+		if !ok {
+			t.Fatal("player entity ID missing")
+		}
+		invocation, end := players.BeginInvocation(tx)
+		defer end()
+		if removed, ok := manager.RemoveEntity(invocation, entityID); ok || removed.Valid() {
+			t.Fatalf("raw player removal = %#v, %v", removed, ok)
+		}
+		if current, ok := manager.entityHandles.Resolve(entityID, tx); !ok || current.H() != connected.H() {
+			t.Fatal("rejected raw removal invalidated player")
+		}
+	}).Wait(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestWorldManagerEntityIteratorsStayInsideInvocation(t *testing.T) {
 	players := host.NewPlayers()
 	manager := newWorldManager("", nil, players)

@@ -64,7 +64,7 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    plugins never handle identifiers, NBT, numeric biome IDs, world handles, iterator handles, or
    host errors. `Liquid` preserves Dragonfly's `(Liquid, bool)` result, and passing `null` to
    `SetLiquid` removes the liquid. Host
-   ABI 34 transports that distinction, signed `time.Duration` nanoseconds, private biome IDs,
+   ABI 35 transports that distinction, signed `time.Duration` nanoseconds, private biome IDs,
    particles, registered/custom game-mode capabilities, and the transaction owner's current tick
    without exposing them publicly. Form response callbacks additionally receive a borrowed full
    player snapshot, and ownership transfer guarantees exactly one response or drop callback.
@@ -121,7 +121,7 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    `SetHeldItems`, and `SetHeldSlot`; `Inventory.Value` exposes `Size`, `Item`, `SetItem`, and
    `AddItem`. C# setters return `void` as the chosen language adaptation, and invalid slots
    throw `ArgumentOutOfRangeException`; host statuses never enter the public API. The existing
-   ABI 34 includes one atomic held-item pair snapshot, so `HeldItems` observes the same player state
+   ABI 35 includes one atomic held-item pair snapshot, so `HeldItems` observes the same player state
    with one host read. Main and ender-chest inventory sizes are read from the live Dragonfly
    inventory, preserving custom `player.Config` sizes. Bounded open/read/close item snapshots preserve damage, unbreakable state, anvil cost, custom
    names, lore, item NBT, plugin values, and enchantments internally. `Stack.WithValue`, `Value`,
@@ -136,7 +136,7 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    value methods, and player method signatures from Dragonfly's Go AST, then validates all 28
    built-ins against the live registry. C# exposes `Effect.Value`, registered `Type`/`LastingType`
    values, all five constructors, `ResultingColour`, `ByID`/`ID`, and the four player effect methods.
-   ABI 34 transports signed nanosecond duration, level, potency, ambient/particle/infinite flags, and
+   ABI 35 transports signed nanosecond duration, level, potency, ambient/particle/infinite flags, and
    tick. C# `TimeSpan` has 100 ns precision and rejects snapshots outside that precision instead of
    truncating them. Re-adding a snapshot is bounded to one million elapsed ticks because Dragonfly
    exposes `Tick` but no constructor or setter for it. Pending initial instant-effect potency is
@@ -153,9 +153,15 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    host status codes remain private. AST-generated `Tx.World`, `Tx.Entities`, and `Tx.Players`
    preserve Dragonfly's exact signatures; entity/player iteration is lazy, reads the live world,
    and is closed on exhaustion, early disposal, or invocation end. The replaced eager private
-   entity/player snapshots have been removed.
-   Next entity slices add the remaining `EntityHandle` surface, `entity.Ent` capabilities,
-   `EntitiesWithin`, transaction add/remove methods, then plugin-defined entity types and callbacks.
+   entity/player snapshots have been removed. ABI 35 adds stable private handle identities and the
+   AST-generated `EntityHandle.Entity`, `UUID`, `Closed`, and `Close` methods plus exact public
+   `Tx.AddEntity`, `AddEntityAt`, and `RemoveEntity` signatures. Removing an entity expires its
+   world-bound identity; adding the same handle creates a fresh identity while preserving handle
+   equality. Abandoned detached custom entities are closed before plugin runtime shutdown.
+   Generic player removal is intentionally rejected for now because Dragonfly's connected session
+   must complete its coordinated world transfer; `Player.ChangeWorld` is the safe current path.
+   Next entity slices add `EntitiesWithin`, `EntitySpawnOpts`, `EntityType`, `EntityConfig`, and the
+   remaining `entity.Ent` capabilities and transaction methods.
 9. Convert practice-core and expand parity tests against Dragonfly.
 
 ## FFA parity
@@ -167,10 +173,10 @@ be an upstream handler method. The host's explicit managed-MCDB extension now co
 world spawn, save/close, and safe `Player.ChangeWorld`; exact `World` instance methods remain
 AST-generated. Stack values and typed enchantments cover selector metadata and Protection kits.
 
-Remaining raw-Dragonfly parity work is concentrated in the world/entity transaction slice:
+Remaining raw-Dragonfly parity work is concentrated in world construction and the rest of the
+entity transaction slice:
 
-- reusable-handle `AddEntity`, `AddEntityAt`, and `RemoveEntity` semantics, plus the remaining
-  entity transaction methods;
+- `EntitiesWithin`, player-capable raw handle transfer, and the remaining entity transaction methods;
 - arbitrary Dragonfly `World.Config`, provider, generator, and entity-type construction beyond the
   bounded managed-MCDB bootstrap extension.
 
@@ -194,6 +200,9 @@ that promoted private Go embeddings round-trip through the typed C# API.
 Its separate `/kitchen biome` overload changes and restores a typed biome while exercising every
 temperature and weather query in this slice.
 `/kitchen tick` reads Dragonfly's transaction-owned current tick; it does not alias world day-time.
+`/kitchen handle` resolves a live non-player handle, checks its UUID and transaction lookup,
+removes it, proves the worldless lookup fails, then re-adds it at the command source while preserving
+handle identity.
 `/kitchen particle` emits all 20 particle types and exercises every one of Dragonfly's 16 note
 instruments through the transaction-owned `AddParticle` call.
 `/kitchen game-mode` exercises registered lookup, player reads, and a custom capability-backed

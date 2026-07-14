@@ -109,6 +109,8 @@ type WorldManager struct {
 	entityIteratorMu sync.Mutex
 	entityIterators  map[native.EntityIteratorID]*worldEntityIterator
 	nextEntityIter   native.EntityIteratorID
+	detachedEntityMu sync.Mutex
+	detachedEntities map[native.EntityHandleID]func()
 }
 
 // NewWorldManager constructs an in-memory manager, primarily useful to embedders and tests.
@@ -142,9 +144,10 @@ func newWorldManager(root string, log *slog.Logger, players *host.Players) *Worl
 	return &WorldManager{
 		worlds: make(map[WorldID]*managedWorld), handles: make(map[native.WorldID]*managedWorld), byWorld: make(map[*world.World]*managedWorld),
 		openings: make(map[WorldID]*worldOpening), providerPaths: make(map[string]WorldID),
-		blockIterators:  make(map[native.BlockIteratorID]*blockPositionIterator),
-		entityIterators: make(map[native.EntityIteratorID]*worldEntityIterator),
-		root:            root, log: log, players: players, entityHandles: entityHandles,
+		blockIterators:   make(map[native.BlockIteratorID]*blockPositionIterator),
+		entityIterators:  make(map[native.EntityIteratorID]*worldEntityIterator),
+		detachedEntities: make(map[native.EntityHandleID]func()),
+		root:             root, log: log, players: players, entityHandles: entityHandles,
 	}
 }
 

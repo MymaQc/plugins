@@ -44,7 +44,8 @@ public sealed class KitchenSink : Plugin
             new KitchenKinematics(),
             new KitchenHeal(),
             new KitchenWorld(),
-            new KitchenEntities()));
+            new KitchenEntities(),
+            new KitchenHandle()));
         Console.WriteLine("kitchen-sink enabled");
     }
 
@@ -594,6 +595,41 @@ public sealed class KitchenSink : Plugin
             var players = tx.Players().OfType<Player>().ToArray();
             foreach (var player in players) player.Message("Kitchen entity iteration is live.");
             output.Printf("world={0}, entities={1}, players={2}", world.Name(), entityCount, players.Length);
+        }
+    }
+
+    internal sealed class KitchenHandle : Cmd.Runnable
+    {
+        public Cmd.SubCommand Handle;
+
+        public void Run(Cmd.Source source, Cmd.Output output, World.Tx? tx)
+        {
+            if (tx is null)
+            {
+                output.Error("A world transaction is required.");
+                return;
+            }
+            var entity = tx.Entities().FirstOrDefault(candidate => candidate is not Player);
+            if (entity is null)
+            {
+                output.Error("A non-player entity is required.");
+                return;
+            }
+            var before = entity.H();
+            var uuid = before.UUID();
+            var (resolvedBefore, foundBefore) = before.Entity(tx);
+            var removed = tx.RemoveEntity(entity);
+            var (_, foundDetached) = removed.Entity(tx);
+            var added = tx.AddEntityAt(removed, source.Position());
+            var (resolvedAfter, foundAfter) = removed.Entity(tx);
+            output.Printf(
+                "same={0}, uuid={1}, before={2}, detached={3}, after={4}, closed={5}",
+                before.Equals(removed) && removed.Equals(added.H()) ? "true" : "false",
+                uuid,
+                foundBefore && resolvedBefore is not null ? "true" : "false",
+                foundDetached ? "true" : "false",
+                foundAfter && resolvedAfter is not null ? "true" : "false",
+                removed.Closed() ? "true" : "false");
         }
     }
 

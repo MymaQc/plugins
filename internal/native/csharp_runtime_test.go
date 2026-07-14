@@ -294,6 +294,16 @@ type csharpWorldHost struct {
 	entityIteratorWorld        WorldID
 	entityIteratorPlayersOnly  []bool
 	entityIteratorClosed       EntityIteratorID
+	entityHandle               EntityHandleID
+	entityHandleEntity         EntityID
+	entityHandleUUID           [16]byte
+	entityHandleActive         bool
+	entityHandleClosed         bool
+	entityHandleCalls          []EntityID
+	entityHandleEntityCalls    int
+	entityHandleRemoved        EntityID
+	entityHandleAddedPosition  *Vec3
+	entityHandleAdded          EntityID
 }
 
 type csharpWorldQueryCall struct {
@@ -401,6 +411,57 @@ func (h *csharpWorldHost) NextWorldEntity(invocation InvocationID, iterator Enti
 func (h *csharpWorldHost) CloseWorldEntities(invocation InvocationID, iterator EntityIteratorID) {
 	h.entityIteratorInvocation, h.entityIteratorClosed = invocation, iterator
 	h.entityIteratorCloseCalls++
+}
+
+func (h *csharpWorldHost) EntityHandle(_ InvocationID, entity EntityID) (EntityHandleID, bool) {
+	h.entityHandleCalls = append(h.entityHandleCalls, entity)
+	return h.entityHandle, h.entityHandle.Valid()
+}
+
+func (h *csharpWorldHost) EntityHandleEntity(_ InvocationID, handle EntityHandleID) (EntityID, bool, bool) {
+	h.entityHandleEntityCalls++
+	if handle != h.entityHandle {
+		return EntityID{}, false, false
+	}
+	return h.entityHandleEntity, h.entityHandleActive, true
+}
+
+func (h *csharpWorldHost) EntityHandleUUID(handle EntityHandleID) ([16]byte, bool) {
+	return h.entityHandleUUID, handle == h.entityHandle
+}
+
+func (h *csharpWorldHost) EntityHandleClosed(handle EntityHandleID) (bool, bool) {
+	return h.entityHandleClosed, handle == h.entityHandle
+}
+
+func (h *csharpWorldHost) CloseEntityHandle(handle EntityHandleID) bool {
+	if handle != h.entityHandle {
+		return false
+	}
+	h.entityHandleClosed = true
+	return true
+}
+
+func (h *csharpWorldHost) RemoveEntity(_ InvocationID, entity EntityID) (EntityHandleID, bool) {
+	h.entityHandleRemoved = entity
+	if !h.entityHandleActive || entity != h.entityHandleEntity {
+		return EntityHandleID{}, false
+	}
+	h.entityHandleActive = false
+	return h.entityHandle, true
+}
+
+func (h *csharpWorldHost) AddEntity(_ InvocationID, handle EntityHandleID, position *Vec3) (EntityID, bool) {
+	if handle != h.entityHandle || h.entityHandleActive {
+		return EntityID{}, false
+	}
+	if position != nil {
+		value := *position
+		h.entityHandleAddedPosition = &value
+	}
+	h.entityHandleEntity = h.entityHandleAdded
+	h.entityHandleActive = true
+	return h.entityHandleAdded, h.entityHandleAdded.Generation != 0
 }
 
 func (h *csharpWorldHost) WorldBlockLoaded(invocation InvocationID, world WorldID, position BlockPos) (WorldBlock, bool, bool) {
@@ -612,7 +673,7 @@ func TestCSharpReflectedCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 	kitchen := commandNamed(t, commands, "kitchen")
-	if !slices.Contains(kitchen.Aliases, "ks") || len(kitchen.Overloads) != 22 {
+	if !slices.Contains(kitchen.Aliases, "ks") || len(kitchen.Overloads) != 23 {
 		t.Fatalf("kitchen descriptor = %#v", kitchen)
 	}
 	if kitchen.Overloads[1].Parameters[0].Name != "echo" ||
@@ -732,6 +793,26 @@ func TestCSharpReflectedCommands(t *testing.T) {
 		host.entityPlayerCalls != 3 || len(host.texts) == 0 ||
 		host.texts[len(host.texts)-1] != "Kitchen entity iteration is live." {
 		t.Fatalf("entity iterator host state: %+v", host)
+	}
+	host.entityHandle = EntityHandleID{Value: 71, Generation: 5}
+	host.entityHandleEntity = nonPlayerEntity
+	host.entityHandleUUID = nonPlayerEntity.UUID
+	host.entityHandleActive = true
+	host.entityHandleAdded = EntityID{UUID: nonPlayerEntity.UUID, Generation: 6}
+	host.entityIteratorEntities = []EntityID{playerEntity, nonPlayerEntity}
+	handle := base
+	handle.Overload = 22
+	handle.Arguments = []string{"handle"}
+	output, err = pluginRuntime.HandleCommand(kitchen.Index, handle)
+	if err != nil || output.Failed || output.Message !=
+		"same=true, uuid=09000000-0000-0000-0000-000000000000, before=true, detached=false, after=true, closed=false" {
+		t.Fatalf("entity handle output=%#v error=%v", output, err)
+	}
+	if host.entityHandleRemoved != nonPlayerEntity || host.entityHandleEntity != host.entityHandleAdded ||
+		host.entityHandleAddedPosition == nil || *host.entityHandleAddedPosition != base.SourcePosition ||
+		!host.entityHandleActive || host.entityHandleEntityCalls != 3 ||
+		!slices.Equal(host.entityHandleCalls, []EntityID{nonPlayerEntity, host.entityHandleAdded}) {
+		t.Fatalf("entity handle host state: %+v", host)
 	}
 	host.reads = nil
 	for _, text := range []struct {

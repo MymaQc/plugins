@@ -388,6 +388,17 @@ func (s *foreignEntityState) destroy() {
 
 type foreignLivingEntity struct{ foreignTickingEntity }
 
+func advancedEntityCleanup(current world.Entity) func() {
+	switch current := current.(type) {
+	case *foreignTickingEntity:
+		return current.state().destroy
+	case *foreignLivingEntity:
+		return current.state().destroy
+	default:
+		return nil
+	}
+}
+
 func (e *foreignLivingEntity) state() *foreignEntityState {
 	return e.foreignTickingEntity.state()
 }

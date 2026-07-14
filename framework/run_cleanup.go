@@ -14,6 +14,7 @@ type runCleanup struct {
 	closeStarted   func() error
 	beginPlugins   func()
 	closeCustom    func() error
+	drainDetached  func()
 	finishPlugins  func()
 	closeUnstarted func()
 	closeRuntime   func()
@@ -29,6 +30,7 @@ func (cleanup *runCleanup) close() {
 	if err := cleanup.closeCustom(); err != nil {
 		cleanup.log.Error("close custom worlds", "error", err)
 	}
+	cleanup.drainDetached()
 	if !cleanup.started {
 		cleanup.closeUnstarted()
 	}

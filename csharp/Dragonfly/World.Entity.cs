@@ -4,15 +4,15 @@ namespace Dragonfly;
 
 public sealed partial class World
 {
-    public sealed class EntityHandle : IEquatable<EntityHandle>
+    public sealed partial class EntityHandle : IEquatable<EntityHandle>
     {
-        internal EntityId Id { get; }
+        internal EntityHandleId Id { get; }
 
-        internal EntityHandle(EntityId id) => Id = id;
+        internal EntityHandle(EntityHandleId id) => Id = id;
 
-        public bool Equals(EntityHandle? other) => other is not null && SameId(Id, other.Id);
+        public bool Equals(EntityHandle? other) => other is not null && Id.Value == other.Id.Value && Id.Generation == other.Id.Generation;
         public override bool Equals(object? obj) => obj is EntityHandle other && Equals(other);
-        public override int GetHashCode() => EntityHashCode(Id);
+        public override int GetHashCode() => HashCode.Combine(Id.Value, Id.Generation);
     }
 
     internal sealed class HostEntity : Entity, IEquatable<HostEntity>
@@ -22,7 +22,7 @@ public sealed partial class World
 
         internal HostEntity(ulong invocation, EntityId id) => (_invocation, Id) = (invocation, id);
 
-        public EntityHandle H() => new(Id);
+        public EntityHandle H() => PluginBridge.Host.EntityHandle(_invocation, Id);
         public Vector3 Position() => PluginBridge.Host.ReadEntityState(_invocation, Id).Position;
         public Rotation Rotation() => PluginBridge.Host.ReadEntityState(_invocation, Id).Rotation;
         public void Close() => PluginBridge.Host.CloseEntity(_invocation, Id);
@@ -33,6 +33,13 @@ public sealed partial class World
     }
 
     internal static Entity HostEntityFrom(ulong invocation, EntityId id) => new HostEntity(invocation, id);
+
+    internal static EntityId EntityIdOf(Entity entity) => entity switch
+    {
+        HostEntity host => host.Id,
+        Player player => player.NativeEntityId(),
+        _ => throw new ArgumentException("entity is not owned by Dragonfly", nameof(entity)),
+    };
 
     internal static unsafe bool SameId(EntityId left, EntityId right)
     {

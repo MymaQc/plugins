@@ -31,7 +31,7 @@ public sealed partial class Player : Cmd.Source, Cmd.NamedTarget, World.Entity
 
     public string Name() => PlayerName;
     public TimeSpan Latency() => _latency;
-    public World.EntityHandle H() => new(EntityId());
+    public World.EntityHandle H() => PluginBridge.Host.EntityHandle(_invocation, EntityId());
     public void Close() => PluginBridge.Host.CloseEntity(_invocation, EntityId());
     public void SendCommandOutput(Cmd.Output output) => _commandOutput?.Merge(output);
 
@@ -100,6 +100,8 @@ public sealed partial class Player : Cmd.Source, Cmd.NamedTarget, World.Entity
         for (var index = 0; index < 16; index++) entity.Bytes[index] = player.Bytes[index];
         return entity;
     }
+
+    internal EntityId NativeEntityId() => EntityId();
 
     public sealed class Context : World.Context
     {

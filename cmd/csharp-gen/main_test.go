@@ -438,6 +438,9 @@ func (tx *Tx) Raining() bool { return false }
 func (tx *Tx) Thundering() bool { return false }
 func (tx *Tx) CurrentTick() int64 { return 0 }
 func (tx *Tx) AddParticle(pos mgl64.Vec3, p Particle) {}
+func (tx *Tx) AddEntity(e *EntityHandle) Entity { return nil }
+func (tx *Tx) AddEntityAt(e *EntityHandle, pos mgl64.Vec3) Entity { return nil }
+func (tx *Tx) RemoveEntity(e Entity) *EntityHandle { return nil }
 func (tx *Tx) Entities() iter.Seq[Entity] { return nil }
 func (tx *Tx) Players() iter.Seq[Entity] { return nil }`
 	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
@@ -482,6 +485,12 @@ func (tx *Tx) Players() iter.Seq[Entity] { return nil }`
 		"public interface Particle { }",
 		"public void AddParticle(Vector3 pos, Particle p)",
 		"PluginBridge.Host.AddWorldParticle(Invocation, pos, p)",
+		"public Entity AddEntity(EntityHandle e)",
+		"PluginBridge.Host.TransactionAddEntity(Invocation, e)",
+		"public Entity AddEntityAt(EntityHandle e, Vector3 pos)",
+		"PluginBridge.Host.TransactionAddEntity(Invocation, e, pos)",
+		"public EntityHandle RemoveEntity(Entity e)",
+		"PluginBridge.Host.TransactionRemoveEntity(Invocation, e)",
 		"public IEnumerable<Entity> Entities()",
 		"PluginBridge.Host.TransactionEntities(Invocation, playersOnly: false)",
 		"public IEnumerable<Entity> Players()",

@@ -462,6 +462,13 @@ type Host interface {
 	OpenWorldEntityIterator(InvocationID, WorldID, bool) (EntityIteratorID, bool)
 	NextWorldEntity(InvocationID, EntityIteratorID) (EntityID, bool, bool)
 	CloseWorldEntities(InvocationID, EntityIteratorID)
+	EntityHandle(InvocationID, EntityID) (EntityHandleID, bool)
+	EntityHandleEntity(InvocationID, EntityHandleID) (EntityID, bool, bool)
+	EntityHandleUUID(EntityHandleID) ([16]byte, bool)
+	EntityHandleClosed(EntityHandleID) (bool, bool)
+	CloseEntityHandle(EntityHandleID) bool
+	RemoveEntity(InvocationID, EntityID) (EntityHandleID, bool)
+	AddEntity(InvocationID, EntityHandleID, *Vec3) (EntityID, bool)
 	EntityState(InvocationID, EntityID) (EntityState, bool)
 	EntityPlayer(InvocationID, EntityID) (PlayerSnapshot, bool)
 	TeleportEntity(InvocationID, EntityID, Vec3) bool
@@ -601,6 +608,21 @@ func (noopHost) NextWorldEntity(InvocationID, EntityIteratorID) (EntityID, bool,
 	return EntityID{}, false, false
 }
 func (noopHost) CloseWorldEntities(InvocationID, EntityIteratorID) {}
+func (noopHost) EntityHandle(InvocationID, EntityID) (EntityHandleID, bool) {
+	return EntityHandleID{}, false
+}
+func (noopHost) EntityHandleEntity(InvocationID, EntityHandleID) (EntityID, bool, bool) {
+	return EntityID{}, false, false
+}
+func (noopHost) EntityHandleUUID(EntityHandleID) ([16]byte, bool) { return [16]byte{}, false }
+func (noopHost) EntityHandleClosed(EntityHandleID) (bool, bool)   { return false, false }
+func (noopHost) CloseEntityHandle(EntityHandleID) bool            { return false }
+func (noopHost) RemoveEntity(InvocationID, EntityID) (EntityHandleID, bool) {
+	return EntityHandleID{}, false
+}
+func (noopHost) AddEntity(InvocationID, EntityHandleID, *Vec3) (EntityID, bool) {
+	return EntityID{}, false
+}
 func (noopHost) EntityState(InvocationID, EntityID) (EntityState, bool) {
 	return EntityState{}, false
 }

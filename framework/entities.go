@@ -13,6 +13,7 @@ import (
 	"github.com/df-mc/dragonfly/server/block/cube"
 	"github.com/df-mc/dragonfly/server/entity"
 	"github.com/df-mc/dragonfly/server/item/potion"
+	"github.com/df-mc/dragonfly/server/player"
 	"github.com/df-mc/dragonfly/server/world"
 	"github.com/go-gl/mathgl/mgl64"
 )
@@ -182,6 +183,137 @@ func (m *WorldManager) closeWorldEntities(invocation native.InvocationID, id nat
 	m.entityIteratorMu.Unlock()
 	if iterator != nil {
 		iterator.close()
+	}
+}
+
+// EntityHandle returns the stable Dragonfly handle for an entity in the
+// invocation's exact transaction.
+func (m *WorldManager) EntityHandle(invocation native.InvocationID, id native.EntityID) (native.EntityHandleID, bool) {
+	tx, ok := m.invocationTx(invocation)
+	if !ok {
+		return native.EntityHandleID{}, false
+	}
+	if _, ok := m.entityHandles.Resolve(id, tx); !ok {
+		return native.EntityHandleID{}, false
+	}
+	return m.entityHandles.EntityHandleID(id)
+}
+
+// EntityHandleEntity resolves a stable handle in the invocation's exact
+// transaction, matching world.EntityHandle.Entity.
+func (m *WorldManager) EntityHandleEntity(invocation native.InvocationID, id native.EntityHandleID) (native.EntityID, bool, bool) {
+	tx, ok := m.invocationTx(invocation)
+	if !ok {
+		return native.EntityID{}, false, false
+	}
+	current, found := m.entityHandles.ResolveHandle(id, tx)
+	if !found {
+		return native.EntityID{}, false, true
+	}
+	entityID := m.entityHandles.Register(current)
+	return entityID, entityID.Generation != 0, entityID.Generation != 0
+}
+
+func (m *WorldManager) EntityHandleUUID(id native.EntityHandleID) ([16]byte, bool) {
+	return m.entityHandles.HandleUUID(id)
+}
+
+func (m *WorldManager) EntityHandleClosed(id native.EntityHandleID) (bool, bool) {
+	return m.entityHandles.HandleClosed(id)
+}
+
+func (m *WorldManager) CloseEntityHandle(id native.EntityHandleID) bool {
+	m.detachedEntityMu.Lock()
+	defer m.detachedEntityMu.Unlock()
+	cleanup := m.detachedEntities[id]
+	delete(m.detachedEntities, id)
+	if cleanup != nil {
+		cleanup()
+	}
+	return m.entityHandles.CloseHandle(id)
+}
+
+// RemoveEntity removes an entity through the invocation's exact transaction.
+// Player handles remain owned by their session; Player.ChangeWorld is the safe
+// player transfer path until Dragonfly exposes that session operation directly.
+func (m *WorldManager) RemoveEntity(invocation native.InvocationID, id native.EntityID) (result native.EntityHandleID, ok bool) {
+	tx, ok := m.invocationTx(invocation)
+	if !ok {
+		return native.EntityHandleID{}, false
+	}
+	current, ok := m.entityHandles.Resolve(id, tx)
+	if !ok {
+		return native.EntityHandleID{}, false
+	}
+	if _, playerEntity := current.(*player.Player); playerEntity {
+		return native.EntityHandleID{}, false
+	}
+	cleanup := advancedEntityCleanup(current)
+	m.detachedEntityMu.Lock()
+	defer m.detachedEntityMu.Unlock()
+	defer func() {
+		if recover() != nil {
+			result, ok = native.EntityHandleID{}, false
+		}
+	}()
+	handle := tx.RemoveEntity(current)
+	if handle == nil {
+		return native.EntityHandleID{}, false
+	}
+	result, detachedHandle, ok := m.entityHandles.Detach(id)
+	if !ok || detachedHandle != handle {
+		_ = handle.Close()
+		if cleanup != nil {
+			cleanup()
+		}
+		return native.EntityHandleID{}, false
+	}
+	m.detachedEntities[result] = cleanup
+	return result, true
+}
+
+// AddEntity adds a worldless Dragonfly handle through the invocation's exact
+// transaction. A non-nil position selects Tx.AddEntityAt.
+func (m *WorldManager) AddEntity(invocation native.InvocationID, id native.EntityHandleID, position *native.Vec3) (result native.EntityID, ok bool) {
+	tx, ok := m.invocationTx(invocation)
+	if !ok {
+		return native.EntityID{}, false
+	}
+	m.detachedEntityMu.Lock()
+	defer m.detachedEntityMu.Unlock()
+	handle, ok := m.entityHandles.DetachedHandle(id)
+	if !ok {
+		return native.EntityID{}, false
+	}
+	defer func() {
+		if recover() != nil {
+			result, ok = native.EntityID{}, false
+		}
+	}()
+	var current world.Entity
+	if position == nil {
+		current = tx.AddEntity(handle)
+	} else {
+		current = tx.AddEntityAt(handle, vec3(*position))
+	}
+	result = m.entityHandles.Register(current)
+	if result.Generation == 0 {
+		return native.EntityID{}, false
+	}
+	delete(m.detachedEntities, id)
+	return result, true
+}
+
+func (m *WorldManager) DrainDetachedEntities() {
+	m.detachedEntityMu.Lock()
+	detached := m.detachedEntities
+	m.detachedEntities = make(map[native.EntityHandleID]func())
+	m.detachedEntityMu.Unlock()
+	for id, cleanup := range detached {
+		if cleanup != nil {
+			cleanup()
+		}
+		m.entityHandles.CloseHandle(id)
 	}
 }
 

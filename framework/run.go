@@ -93,6 +93,7 @@ func Run(ctx context.Context, config Config, log *slog.Logger) error {
 		},
 		beginPlugins:  pluginRuntime.BeginDisable,
 		closeCustom:   worlds.CloseCustom,
+		drainDetached: worlds.DrainDetachedEntities,
 		finishPlugins: pluginRuntime.FinishDisable,
 		closeUnstarted: func() {
 			if err := listenerGate.closeAll(); err != nil {

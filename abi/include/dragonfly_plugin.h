@@ -9,8 +9,8 @@ extern "C" {
 #endif
 
 #define DF_ABI_VERSION 7u
-// Version 34 adds current-transaction world and lazy entity iterators.
-#define DF_HOST_ABI_VERSION 34u
+// Version 35 adds stable entity handles and exact transaction add/remove.
+#define DF_HOST_ABI_VERSION 35u
 #define DF_STATUS_OK 0
 #define DF_STATUS_ERROR 1
 
@@ -19,6 +19,8 @@ typedef uint32_t DfEventId;
 
 typedef struct { uint8_t bytes[16]; uint64_t generation; } DfPlayerId;
 typedef struct { uint8_t bytes[16]; uint64_t generation; } DfEntityId;
+typedef struct { uint64_t value; uint64_t generation; } DfEntityHandleId;
+typedef struct { uint8_t bytes[16]; } DfUuid;
 typedef uint64_t DfInvocationId;
 typedef uint64_t DfBlockIteratorId;
 typedef uint64_t DfEntityIteratorId;
@@ -430,6 +432,13 @@ typedef DfStatus (*DfHostWorldCurrentFn)(uint64_t context, DfInvocationId invoca
 typedef DfStatus (*DfHostWorldEntityIteratorOpenFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, uint8_t players_only, DfEntityIteratorId *iterator);
 typedef DfStatus (*DfHostWorldEntityIteratorNextFn)(uint64_t context, DfInvocationId invocation, DfEntityIteratorId iterator, DfEntityId *entity, uint8_t *found);
 typedef void (*DfHostWorldEntityIteratorCloseFn)(uint64_t context, DfInvocationId invocation, DfEntityIteratorId iterator);
+typedef DfStatus (*DfHostEntityHandleFn)(uint64_t context, DfInvocationId invocation, DfEntityId entity, DfEntityHandleId *handle);
+typedef DfStatus (*DfHostEntityHandleEntityFn)(uint64_t context, DfInvocationId invocation, DfEntityHandleId handle, DfEntityId *entity, uint8_t *found);
+typedef DfStatus (*DfHostEntityHandleUuidFn)(uint64_t context, DfEntityHandleId handle, DfUuid *uuid);
+typedef DfStatus (*DfHostEntityHandleClosedFn)(uint64_t context, DfEntityHandleId handle, uint8_t *closed);
+typedef DfStatus (*DfHostEntityHandleCloseFn)(uint64_t context, DfEntityHandleId handle);
+typedef DfStatus (*DfHostWorldEntityRemoveFn)(uint64_t context, DfInvocationId invocation, DfEntityId entity, DfEntityHandleId *handle);
+typedef DfStatus (*DfHostWorldEntityAddFn)(uint64_t context, DfInvocationId invocation, DfEntityHandleId handle, const DfVec3 *position, DfEntityId *entity);
 typedef struct {
     uint32_t abi_version;
     uint32_t struct_size;
@@ -518,6 +527,13 @@ typedef struct {
     DfHostWorldEntityIteratorOpenFn world_entity_iterator_open;
     DfHostWorldEntityIteratorNextFn world_entity_iterator_next;
     DfHostWorldEntityIteratorCloseFn world_entity_iterator_close;
+    DfHostEntityHandleFn entity_handle;
+    DfHostEntityHandleEntityFn entity_handle_entity;
+    DfHostEntityHandleUuidFn entity_handle_uuid;
+    DfHostEntityHandleClosedFn entity_handle_closed;
+    DfHostEntityHandleCloseFn entity_handle_close;
+    DfHostWorldEntityRemoveFn world_entity_remove;
+    DfHostWorldEntityAddFn world_entity_add;
 
 } DfHostApiV27;
 #define DF_COMMAND_PARAMETER_SUBCOMMAND 1u

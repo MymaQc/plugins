@@ -92,6 +92,15 @@ public sealed partial class World
         public void AddParticle(Vector3 pos, Particle p) =>
             PluginBridge.Host.AddWorldParticle(Invocation, pos, p);
 
+        public Entity AddEntity(EntityHandle e) =>
+            PluginBridge.Host.TransactionAddEntity(Invocation, e);
+
+        public Entity AddEntityAt(EntityHandle e, Vector3 pos) =>
+            PluginBridge.Host.TransactionAddEntity(Invocation, e, pos);
+
+        public EntityHandle RemoveEntity(Entity e) =>
+            PluginBridge.Host.TransactionRemoveEntity(Invocation, e);
+
         public IEnumerable<Entity> Entities() =>
             PluginBridge.Host.TransactionEntities(Invocation, playersOnly: false);
 

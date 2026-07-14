@@ -497,6 +497,9 @@ var selectedWorldTxMethods = []string{
 	"Thundering",
 	"CurrentTick",
 	"AddParticle",
+	"AddEntity",
+	"AddEntityAt",
+	"RemoveEntity",
 	"Entities",
 	"Players",
 }
@@ -522,6 +525,10 @@ func main() {
 		fatal(err)
 	}
 	entityMethods, err := inspectWorldEntity(filepath.Join(directory, "server", "world", "entity.go"))
+	if err != nil {
+		fatal(err)
+	}
+	entityHandleMethods, err := inspectWorldEntityHandle(filepath.Join(directory, "server", "world", "entity.go"))
 	if err != nil {
 		fatal(err)
 	}
@@ -612,7 +619,7 @@ func main() {
 	files := []generatedFile{
 		{
 			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "World.Entity.g.cs"),
-			Content: generateWorldEntity(entityMethods),
+			Content: generateWorldEntity(entityMethods, entityHandleMethods),
 		},
 		{
 			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "Player.Handler.g.cs"),
@@ -1374,6 +1381,15 @@ func validateWorldTxMethod(method commandMethod) error {
 		"AddParticle": {Name: "AddParticle", ReturnType: "void", Parameters: []parameter{
 			{Name: "pos", Type: "Vector3"}, {Name: "p", Type: "Particle"},
 		}},
+		"AddEntity": {Name: "AddEntity", ReturnType: "Entity", Parameters: []parameter{
+			{Name: "e", Type: "EntityHandle"},
+		}},
+		"AddEntityAt": {Name: "AddEntityAt", ReturnType: "Entity", Parameters: []parameter{
+			{Name: "e", Type: "EntityHandle"}, {Name: "pos", Type: "Vector3"},
+		}},
+		"RemoveEntity": {Name: "RemoveEntity", ReturnType: "EntityHandle", Parameters: []parameter{
+			{Name: "e", Type: "Entity"},
+		}},
 		"Entities": {Name: "Entities", ReturnType: "IEnumerable<Entity>"},
 		"Players":  {Name: "Players", ReturnType: "IEnumerable<Entity>"},
 	}[method.Name]
@@ -1419,6 +1435,9 @@ func translateWorldTxParameters(method string, fields *ast.FieldList) ([]paramet
 			if !ok {
 				return nil, fmt.Errorf("unsupported parameter type %s", formatGoExpression(field.Type))
 			}
+			if (method == "AddEntity" || method == "AddEntityAt") && typeName == "EntityHandle?" {
+				typeName = "EntityHandle"
+			}
 			parameters = append(parameters, parameter{Name: name.Name, Type: typeName})
 		}
 	}
@@ -1450,6 +1469,9 @@ func translateWorldTxResult(method string, fields *ast.FieldList) (string, error
 			}
 			return "World", nil
 		}
+		if method == "RemoveEntity" && results[0] == "EntityHandle?" {
+			return "EntityHandle", nil
+		}
 		return results[0], nil
 	}
 	if method == "BlockLoaded" || method == "Liquid" {
@@ -1478,18 +1500,19 @@ func worldTxCSharpType(expression ast.Expr, parameter bool) (string, bool) {
 		return strings.TrimSuffix(typeName, "?") + "?", true
 	case *ast.Ident:
 		typeName, ok := map[string]string{
-			"Block":    "Block",
-			"Biome":    "Biome",
-			"Entity":   "Entity",
-			"Liquid":   "Liquid",
-			"Particle": "Particle",
-			"SetOpts":  "SetOpts",
-			"World":    "World",
-			"bool":     "bool",
-			"float64":  "double",
-			"int":      "int",
-			"int64":    "long",
-			"uint8":    "byte",
+			"Block":        "Block",
+			"Biome":        "Biome",
+			"Entity":       "Entity",
+			"EntityHandle": "EntityHandle",
+			"Liquid":       "Liquid",
+			"Particle":     "Particle",
+			"SetOpts":      "SetOpts",
+			"World":        "World",
+			"bool":         "bool",
+			"float64":      "double",
+			"int":          "int",
+			"int64":        "long",
+			"uint8":        "byte",
 		}[value.Name]
 		if !ok {
 			return "", false
@@ -4954,6 +4977,13 @@ func generateWorldBlock(setOpts []string, methods []commandMethod) []byte {
 		case "AddParticle":
 			fmt.Fprintf(&output, "            PluginBridge.Host.AddWorldParticle(Invocation, %s, %s);\n",
 				method.Parameters[0].Name, method.Parameters[1].Name)
+		case "AddEntity":
+			fmt.Fprintf(&output, "            PluginBridge.Host.TransactionAddEntity(Invocation, %s);\n", method.Parameters[0].Name)
+		case "AddEntityAt":
+			fmt.Fprintf(&output, "            PluginBridge.Host.TransactionAddEntity(Invocation, %s, %s);\n",
+				method.Parameters[0].Name, method.Parameters[1].Name)
+		case "RemoveEntity":
+			fmt.Fprintf(&output, "            PluginBridge.Host.TransactionRemoveEntity(Invocation, %s);\n", method.Parameters[0].Name)
 		case "Entities":
 			output.WriteString("            PluginBridge.Host.TransactionEntities(Invocation, playersOnly: false);\n")
 		case "Players":

@@ -216,6 +216,115 @@ internal static unsafe class PluginBridge
             _ = api->EntityDespawn(api->Context, invocation, entity);
         }
 
+        internal static World.EntityHandle EntityHandle(ulong invocation, EntityId entity)
+        {
+            var api = Api;
+            if (api is null || api->EntityHandle == null)
+                throw new InvalidOperationException("entity handle is unavailable");
+            EntityHandleId handle;
+            if (api->EntityHandle(api->Context, invocation, entity, &handle) != Abi.Ok ||
+                handle.Value == 0 || handle.Generation == 0)
+                throw new InvalidOperationException("entity is no longer available");
+            return new World.EntityHandle(handle);
+        }
+
+        internal static (World.Entity? Entity, bool Ok) EntityHandleEntity(
+            ulong invocation,
+            World.EntityHandle handle)
+        {
+            ArgumentNullException.ThrowIfNull(handle);
+            var api = Api;
+            if (api is null || api->EntityHandleEntity == null)
+                throw new InvalidOperationException("entity handle is unavailable");
+            EntityId entity;
+            byte found;
+            if (api->EntityHandleEntity(api->Context, invocation, handle.Id, &entity, &found) != Abi.Ok || found > 1)
+                throw new InvalidOperationException("world transaction is no longer valid");
+            if (found == 0) return (null, false);
+            if (entity.Generation == 0)
+                throw new InvalidOperationException("entity handle returned an invalid entity");
+            return (ResolveEntityPlayer(invocation, entity) ?? World.HostEntityFrom(invocation, entity), true);
+        }
+
+        internal static Guid EntityHandleUuid(World.EntityHandle handle)
+        {
+            ArgumentNullException.ThrowIfNull(handle);
+            var api = Api;
+            if (api is null || api->EntityHandleUuid == null)
+                throw new InvalidOperationException("entity handle is unavailable");
+            NativeUuid uuid;
+            if (api->EntityHandleUuid(api->Context, handle.Id, &uuid) != Abi.Ok)
+                throw new InvalidOperationException("entity handle is no longer available");
+            return new Guid(new ReadOnlySpan<byte>(uuid.Bytes, 16), bigEndian: true);
+        }
+
+        internal static bool EntityHandleClosed(World.EntityHandle handle)
+        {
+            ArgumentNullException.ThrowIfNull(handle);
+            var api = Api;
+            if (api is null || api->EntityHandleClosed == null)
+                throw new InvalidOperationException("entity handle is unavailable");
+            byte closed;
+            if (api->EntityHandleClosed(api->Context, handle.Id, &closed) != Abi.Ok || closed > 1)
+                throw new InvalidOperationException("entity handle is no longer available");
+            return closed != 0;
+        }
+
+        internal static void CloseEntityHandle(World.EntityHandle handle)
+        {
+            ArgumentNullException.ThrowIfNull(handle);
+            var api = Api;
+            if (api is null || api->EntityHandleClose == null) return;
+            _ = api->EntityHandleClose(api->Context, handle.Id);
+        }
+
+        internal static World.Entity TransactionAddEntity(
+            ulong invocation,
+            World.EntityHandle handle) =>
+            TransactionAddEntity(invocation, handle, null);
+
+        internal static World.Entity TransactionAddEntity(
+            ulong invocation,
+            World.EntityHandle handle,
+            Vector3 position) =>
+            TransactionAddEntity(invocation, handle, (Vector3?)position);
+
+        private static World.Entity TransactionAddEntity(
+            ulong invocation,
+            World.EntityHandle handle,
+            Vector3? position)
+        {
+            ArgumentNullException.ThrowIfNull(handle);
+            var api = Api;
+            if (api is null || api->WorldEntityAdd == null)
+                throw new InvalidOperationException("world transaction is unavailable");
+            Vec3 nativePosition;
+            Vec3* positionPointer = null;
+            if (position is { } value)
+            {
+                nativePosition = new Vec3 { X = value.X, Y = value.Y, Z = value.Z };
+                positionPointer = &nativePosition;
+            }
+            EntityId entity;
+            if (api->WorldEntityAdd(api->Context, invocation, handle.Id, positionPointer, &entity) != Abi.Ok ||
+                entity.Generation == 0)
+                throw new InvalidOperationException("entity handle cannot be added to this transaction");
+            return ResolveEntityPlayer(invocation, entity) ?? World.HostEntityFrom(invocation, entity);
+        }
+
+        internal static World.EntityHandle TransactionRemoveEntity(ulong invocation, World.Entity entity)
+        {
+            ArgumentNullException.ThrowIfNull(entity);
+            var api = Api;
+            if (api is null || api->WorldEntityRemove == null)
+                throw new InvalidOperationException("world transaction is unavailable");
+            EntityHandleId handle;
+            if (api->WorldEntityRemove(api->Context, invocation, World.EntityIdOf(entity), &handle) != Abi.Ok ||
+                handle.Value == 0 || handle.Generation == 0)
+                throw new InvalidOperationException("entity cannot be removed from this transaction");
+            return new World.EntityHandle(handle);
+        }
+
         internal static World? LookupManagedWorld(string name)
         {
             var api = Api;
@@ -2039,7 +2148,7 @@ internal static unsafe class PluginBridge
     {
         if (host is null) return Abi.Error;
         var header = (HostHeader*)host;
-        if (header->Version != Abi.HostVersion || header->Size < 688) return Abi.Error;
+        if (header->Version != Abi.HostVersion || header->Size < 744) return Abi.Error;
         Host.Api = (HostApi*)host;
         return Abi.Ok;
     }

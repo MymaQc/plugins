@@ -628,6 +628,12 @@ func (h *recordingHost) NextWorldEntity(_ InvocationID, _ EntityIteratorID) (Ent
 	return EntityID{}, false, true
 }
 func (h *recordingHost) CloseWorldEntities(InvocationID, EntityIteratorID) {}
+func (h *recordingHost) EntityHandle(_ InvocationID, entity EntityID) (EntityHandleID, bool) {
+	if entity.Generation == 0 {
+		return EntityHandleID{}, false
+	}
+	return EntityHandleID{Value: entity.Generation, Generation: entity.Generation}, true
+}
 func (h *recordingHost) AddWorldParticle(_ InvocationID, id WorldID, position Vec3, value WorldParticle) bool {
 	h.particleWorldID = id
 	h.particlePositions = append(h.particlePositions, position)
