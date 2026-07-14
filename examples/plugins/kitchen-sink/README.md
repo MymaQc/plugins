@@ -1,6 +1,6 @@
 # Kitchen sink
 
-Runnable parity showcase. Each file demonstrates one coherent part of the public C# API:
+Runnable parity showcase. Its single plugin class demonstrates:
 
 - movement validation and cancellation;
 - chat and food-state mutation;
