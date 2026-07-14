@@ -31,11 +31,14 @@ func openCSharpRuntime(t testing.TB) *Runtime {
 	}
 	t.Cleanup(pluginRuntime.Close)
 
-	if got := pluginRuntime.PluginCount(); got != 2 {
-		t.Fatalf("PluginCount() = %d, want 2", got)
+	if got := pluginRuntime.PluginCount(); got != 4 {
+		t.Fatalf("PluginCount() = %d, want 4", got)
 	}
-	if got := pluginRuntime.Subscriptions(); got != PlayerMoveSubscription|PlayerQuitSubscription {
-		t.Fatalf("Subscriptions() = %d, want %d", got, PlayerMoveSubscription|PlayerQuitSubscription)
+	wantSubscriptions := PlayerMoveSubscription | PlayerChatSubscription | PlayerQuitSubscription |
+		PlayerFoodLossSubscription | PlayerToggleSprintSubscription | PlayerToggleSneakSubscription |
+		PlayerJumpSubscription | PlayerTeleportSubscription | PlayerPunchAirSubscription
+	if got := pluginRuntime.Subscriptions(); got != wantSubscriptions {
+		t.Fatalf("Subscriptions() = %d, want %d", got, wantSubscriptions)
 	}
 	if err := pluginRuntime.Enable(); err != nil {
 		t.Fatal(err)
@@ -61,6 +64,45 @@ func TestCSharpRuntimeLifecycleAndQuit(t *testing.T) {
 	}
 	if cancelled {
 		t.Fatal("ordinary movement was cancelled")
+	}
+	chat, err := pluginRuntime.HandlePlayerChat(4, PlayerChatInput{Message: "BADWORD"}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if chat.Replacement == nil || *chat.Replacement != "***" {
+		t.Fatalf("chat replacement = %v, want ***", chat.Replacement)
+	}
+	food, err := pluginRuntime.HandlePlayerFoodLoss(5, PlayerFoodLossInput{From: 1, To: -1}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if food.To != 0 {
+		t.Fatalf("food = %d, want 0", food.To)
+	}
+	if err := pluginRuntime.HandlePlayerJump(6, PlayerID{}); err != nil {
+		t.Fatal(err)
+	}
+	for name, call := range map[string]func() (bool, error){
+		"teleport": func() (bool, error) {
+			return pluginRuntime.HandlePlayerTeleport(7, PlayerTeleportInput{Position: Vec3{Y: 64}}, false)
+		},
+		"toggle sprint": func() (bool, error) {
+			return pluginRuntime.HandlePlayerToggleSprint(8, PlayerToggleInput{After: true}, false)
+		},
+		"toggle sneak": func() (bool, error) {
+			return pluginRuntime.HandlePlayerToggleSneak(9, PlayerToggleInput{After: true}, false)
+		},
+		"punch air": func() (bool, error) {
+			return pluginRuntime.HandlePlayerPunchAir(10, PlayerID{}, false)
+		},
+	} {
+		cancelled, err := call()
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if cancelled {
+			t.Fatalf("%s unexpectedly cancelled", name)
+		}
 	}
 }
 

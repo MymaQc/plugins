@@ -89,22 +89,86 @@ internal static unsafe class PluginBridge
             var plugin = Get(instance);
             switch (eventId)
             {
+                case Abi.PlayerChatEvent:
+                {
+                    var value = (PlayerChatInput*)input;
+                    var result = (PlayerChatState*)state;
+                    var original = Utf8(value->Message);
+                    var message = original;
+                    var context = Event(value->Player, result->Cancelled);
+                    plugin.HandleChat(context, ref message);
+                    ApplyCancellation(context, &result->Cancelled);
+                    if (message != original)
+                    {
+                        if (!WriteExact(&result->Replacement, message)) return Abi.Error;
+                        result->HasReplacement = 1;
+                    }
+                    return Abi.Ok;
+                }
+                case Abi.PlayerFoodLossEvent:
+                {
+                    var value = (PlayerFoodLossInput*)input;
+                    var result = (PlayerFoodLossState*)state;
+                    var context = Event(value->Player, result->Cancelled);
+                    var to = result->To;
+                    plugin.HandleFoodLoss(context, value->From, ref to);
+                    result->To = to;
+                    ApplyCancellation(context, &result->Cancelled);
+                    return Abi.Ok;
+                }
+                case Abi.PlayerJumpEvent:
+                {
+                    var value = (PlayerEventInput*)input;
+                    plugin.HandleJump(new Player(value->Player));
+                    return Abi.Ok;
+                }
                 case Abi.PlayerMoveEvent:
                 {
                     var value = (PlayerMoveInput*)input;
                     var result = (PlayerMoveState*)state;
-                    var context = new Player.Context(new Player(value->Player), result->Cancelled != 0);
+                    var context = Event(value->Player, result->Cancelled);
                     plugin.HandleMove(
                         context,
                         new Vector3(value->NewPosition.X, value->NewPosition.Y, value->NewPosition.Z),
                         new Rotation(value->Rotation.Yaw, value->Rotation.Pitch));
-                    if (context.Cancelled()) result->Cancelled = 1;
+                    ApplyCancellation(context, &result->Cancelled);
+                    return Abi.Ok;
+                }
+                case Abi.PlayerPunchAirEvent:
+                {
+                    var value = (PlayerEventInput*)input;
+                    var result = (CancellableState*)state;
+                    var context = Event(value->Player, result->Cancelled);
+                    plugin.HandlePunchAir(context);
+                    ApplyCancellation(context, &result->Cancelled);
                     return Abi.Ok;
                 }
                 case Abi.PlayerQuitEvent:
                 {
                     var value = (PlayerQuitInput*)input;
                     plugin.HandleQuit(new Player(value->Player, Utf8(value->Name)));
+                    return Abi.Ok;
+                }
+                case Abi.PlayerTeleportEvent:
+                {
+                    var value = (PlayerTeleportInput*)input;
+                    var result = (CancellableState*)state;
+                    var context = Event(value->Player, result->Cancelled);
+                    plugin.HandleTeleport(context, new Vector3(value->Position.X, value->Position.Y, value->Position.Z));
+                    ApplyCancellation(context, &result->Cancelled);
+                    return Abi.Ok;
+                }
+                case Abi.PlayerToggleSneakEvent:
+                case Abi.PlayerToggleSprintEvent:
+                {
+                    var value = (PlayerToggleInput*)input;
+                    var result = (CancellableState*)state;
+                    var context = Event(value->Player, result->Cancelled);
+                    if (eventId == Abi.PlayerToggleSneakEvent)
+                        plugin.HandleToggleSneak(context, value->After != 0);
+                    else
+                        plugin.HandleToggleSprint(context, value->After != 0);
+                    ApplyCancellation(context, &result->Cancelled);
                     return Abi.Ok;
                 }
                 default:
@@ -115,6 +179,14 @@ internal static unsafe class PluginBridge
     }
 
     private static Plugin Get(void* instance) => (Plugin)GCHandle.FromIntPtr((nint)instance).Target!;
+
+    private static Player.Context Event(PlayerId player, byte cancelled) =>
+        new(new Player(player), cancelled != 0);
+
+    private static void ApplyCancellation(Player.Context context, byte* cancelled)
+    {
+        if (context.Cancelled()) *cancelled = 1;
+    }
 
     private static string Utf8(StringView value) => value.Length == 0
         ? string.Empty
@@ -127,5 +199,15 @@ internal static unsafe class PluginBridge
         var length = Math.Min(bytes.Length, checked((int)output->Capacity));
         bytes.AsSpan(0, length).CopyTo(new Span<byte>(output->Data, length));
         output->Length = (ulong)length;
+    }
+
+    private static bool WriteExact(StringBuffer* output, string message)
+    {
+        if (output is null) return false;
+        var bytes = Encoding.UTF8.GetBytes(message);
+        if ((ulong)bytes.Length > output->Capacity || bytes.Length != 0 && output->Data is null) return false;
+        bytes.CopyTo(new Span<byte>(output->Data, bytes.Length));
+        output->Length = (ulong)bytes.Length;
+        return true;
     }
 }

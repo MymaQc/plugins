@@ -47,12 +47,13 @@ public sealed class PluginEntryGenerator : IIncrementalGenerator
                 foreach (var method in type.GetMembers().OfType<IMethodSymbol>())
                 {
                     if (!method.IsOverride) continue;
-                    subscriptions |= method.Name switch
+                    foreach (var attribute in method.OverriddenMethod?.GetAttributes() ?? [])
                     {
-                        "HandleMove" => 1UL,
-                        "HandleQuit" => 1UL << 3,
-                        _ => 0,
-                    };
+                        if (attribute.AttributeClass?.ToDisplayString() != "Dragonfly.HandlerSubscriptionAttribute" ||
+                            attribute.ConstructorArguments.Length != 1 ||
+                            attribute.ConstructorArguments[0].Value is not ulong value) continue;
+                        subscriptions |= value;
+                    }
                 }
                 return new PluginInfo(
                     type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),

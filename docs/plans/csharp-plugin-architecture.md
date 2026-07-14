@@ -22,9 +22,11 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
 ## Order
 
 1. NativeAOT loading and `OnEnable`/`OnDisable`.
-2. `player.Handler` events, beginning with `HandleMove` and `HandleQuit`.
+2. `player.Handler` events. Movement, chat, food loss, jump, teleport, sprint/sneak toggles, punch-air, and quit are implemented.
 3. Player methods and commands.
 4. Worlds, items, blocks, forms, entities, particles, and sounds.
 5. Convert practice-core and expand parity tests against Dragonfly.
 
 Each slice removes the replaced legacy implementation. Unsupported API remains absent rather than gaining a parallel abstraction.
+
+`examples/plugins/kitchen-sink` must use every exposed API. Its NativeAOT build is the compile-time parity canary for handlers, commands, worlds, items, blocks, forms, entities, particles, and sounds as those slices land.

@@ -15,8 +15,9 @@ import (
 )
 
 type method struct {
-	Name       string
-	Parameters []parameter
+	Name         string
+	Parameters   []parameter
+	Subscription uint64
 }
 
 type parameter struct {
@@ -24,9 +25,16 @@ type parameter struct {
 	Type string
 }
 
-var supportedPlayerHandlers = map[string]bool{
-	"HandleMove": true,
-	"HandleQuit": true,
+var supportedPlayerHandlers = map[string]uint64{
+	"HandleChat":         1 << 1,
+	"HandleFoodLoss":     1 << 8,
+	"HandleJump":         1 << 14,
+	"HandleMove":         1,
+	"HandlePunchAir":     1 << 17,
+	"HandleQuit":         1 << 3,
+	"HandleTeleport":     1 << 15,
+	"HandleToggleSneak":  1 << 13,
+	"HandleToggleSprint": 1 << 12,
 }
 
 func main() {
@@ -87,7 +95,11 @@ func playerHandlerMethods(path string) ([]method, error) {
 			}
 			var methods []method
 			for _, field := range interfaceType.Methods.List {
-				if len(field.Names) != 1 || !supportedPlayerHandlers[field.Names[0].Name] {
+				if len(field.Names) != 1 {
+					continue
+				}
+				subscription, supported := supportedPlayerHandlers[field.Names[0].Name]
+				if !supported {
 					continue
 				}
 				function, ok := field.Type.(*ast.FuncType)
@@ -98,7 +110,7 @@ func playerHandlerMethods(path string) ([]method, error) {
 				if err != nil {
 					return nil, fmt.Errorf("player.Handler.%s: %w", field.Names[0].Name, err)
 				}
-				methods = append(methods, method{Name: field.Names[0].Name, Parameters: translated})
+				methods = append(methods, method{Name: field.Names[0].Name, Parameters: translated, Subscription: subscription})
 			}
 			for name := range supportedPlayerHandlers {
 				found := false
@@ -132,9 +144,22 @@ func translateParameters(fields *ast.FieldList) ([]parameter, error) {
 func csharpType(expression ast.Expr) (string, bool) {
 	switch value := expression.(type) {
 	case *ast.StarExpr:
-		return csharpType(value.X)
+		typeName, ok := csharpType(value.X)
+		if !ok {
+			return "", false
+		}
+		if typeName == "string" || typeName == "int" || typeName == "double" || typeName == "bool" {
+			return "ref " + typeName, true
+		}
+		return typeName, true
 	case *ast.Ident:
-		typeName, ok := map[string]string{"Context": "Player.Context", "Player": "Player"}[value.Name]
+		typeName, ok := map[string]string{
+			"bool":    "bool",
+			"Context": "Player.Context",
+			"int":     "int",
+			"Player":  "Player",
+			"string":  "string",
+		}[value.Name]
 		return typeName, ok
 	case *ast.SelectorExpr:
 		packageName, ok := value.X.(*ast.Ident)
@@ -162,6 +187,7 @@ func generatePlayerHandler(methods []method) []byte {
 	output.WriteString("    }\n}\n\n")
 	output.WriteString("public abstract partial class Plugin\n{\n")
 	for _, method := range methods {
+		fmt.Fprintf(&output, "    [HandlerSubscription(%dUL)]\n", method.Subscription)
 		fmt.Fprintf(&output, "    public virtual void %s(%s) { }\n", method.Name, formatParameters(method.Parameters))
 	}
 	output.WriteString("}\n")
