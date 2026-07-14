@@ -9,8 +9,9 @@ extern "C" {
 #endif
 
 #define DF_ABI_VERSION 5u
-// Version 28 changes player game-mode state payload semantics. The host table layout is unchanged.
-#define DF_HOST_ABI_VERSION 28u
+// Version 29 gives form response callbacks a full player snapshot and defines
+// callback-context ownership. The host table layout is unchanged.
+#define DF_HOST_ABI_VERSION 29u
 #define DF_STATUS_OK 0
 #define DF_STATUS_ERROR 1
 
@@ -311,8 +312,15 @@ typedef struct { uint32_t kind; uint32_t data; int32_t integer; uint32_t flags; 
 
 typedef struct { DfStringView text; DfStringView subtitle; DfStringView action_text; uint64_t fade_in_milliseconds; uint64_t duration_milliseconds; uint64_t fade_out_milliseconds; } DfTitleView;
 typedef struct { DfStringView name; const DfStringView *lines; uint64_t line_count; uint8_t padding; uint8_t descending; } DfScoreboardView;
-typedef DfStatus (*DfFormResponseFn)(void *callback_context, DfInvocationId invocation, DfPlayerId submitter, uint32_t outcome, DfStringView response_json);
+typedef struct { DfPlayerId player; DfStringView name; uint64_t latency_milliseconds; DfVec3 position; } DfPlayerSnapshot;
+/* The snapshot and its name are borrowed for the duration of the callback. */
+typedef DfStatus (*DfFormResponseFn)(void *callback_context, DfInvocationId invocation, const DfPlayerSnapshot *submitter, uint32_t outcome, DfStringView response_json);
 typedef void (*DfFormDropFn)(void *callback_context);
+/*
+ * A structurally valid form transfers callback_context ownership to the host,
+ * even when player_form_send returns an error. The host invokes exactly one of
+ * response or drop. Synchronous send failures invoke drop before returning.
+ */
 typedef struct { DfStringView request_json; void *callback_context; DfFormResponseFn response; DfFormDropFn drop; } DfFormView;
 #define DF_FORM_RESPONSE_SUBMITTED 0u
 #define DF_FORM_RESPONSE_CLOSED 1u

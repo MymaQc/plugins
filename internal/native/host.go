@@ -11,6 +11,16 @@ type PlayerForm struct {
 	RequestJSON []byte
 }
 
+// PlayerSnapshot is a callback-scoped view of a connected player. The ID may
+// be retained, but values that require an invocation are only usable while the
+// callback that supplied the snapshot is running.
+type PlayerSnapshot struct {
+	Player              PlayerID
+	Name                string
+	LatencyMilliseconds uint64
+	Position            Vec3
+}
+
 type PlayerTransformKind uint32
 
 const (
@@ -609,7 +619,7 @@ const maxFormsPerPlayer = 16
 type formRegistration struct {
 	host    uint64
 	player  PlayerID
-	respond func(InvocationID, PlayerID, bool, []byte) bool
+	respond func(InvocationID, PlayerSnapshot, bool, []byte) bool
 	drop    func()
 }
 type formState struct {
@@ -618,7 +628,7 @@ type formState struct {
 	players           map[PlayerID]int
 }
 
-func registerForm(host uint64, player PlayerID, respond func(InvocationID, PlayerID, bool, []byte) bool, drop func()) (uint64, bool) {
+func registerForm(host uint64, player PlayerID, respond func(InvocationID, PlayerSnapshot, bool, []byte) bool, drop func()) (uint64, bool) {
 	formMu.Lock()
 	defer formMu.Unlock()
 	state := formHostState[host]
@@ -636,7 +646,7 @@ func registerForm(host uint64, player PlayerID, respond func(InvocationID, Playe
 	return id, true
 }
 
-func CompletePlayerForm(id uint64, invocation InvocationID, submitter PlayerID, closed bool, response []byte) bool {
+func CompletePlayerForm(id uint64, invocation InvocationID, submitter PlayerSnapshot, closed bool, response []byte) bool {
 	formMu.Lock()
 	registration, ok := forms[id]
 	if !ok {
@@ -652,7 +662,7 @@ func CompletePlayerForm(id uint64, invocation InvocationID, submitter PlayerID, 
 	}
 	state.inflight++
 	formMu.Unlock()
-	if submitter != registration.player || len(response) > maxFormJSONBytes {
+	if submitter.Player != registration.player || len(response) > maxFormJSONBytes {
 		registration.drop()
 		formMu.Lock()
 		state.inflight--
@@ -666,22 +676,6 @@ func CompletePlayerForm(id uint64, invocation InvocationID, submitter PlayerID, 
 	formCond.Broadcast()
 	formMu.Unlock()
 	return ok
-}
-
-func abandonForm(id uint64) {
-	formMu.Lock()
-	defer formMu.Unlock()
-	r, ok := forms[id]
-	if !ok {
-		return
-	}
-	delete(forms, id)
-	s := formHostState[r.host]
-	s.count--
-	s.players[r.player]--
-	if s.players[r.player] == 0 {
-		delete(s.players, r.player)
-	}
 }
 
 func CancelPlayerForms(player PlayerID) {

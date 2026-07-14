@@ -1,6 +1,7 @@
 package native
 
 /*
+#include <stdlib.h>
 #include "bridge.h"
 */
 import "C"
@@ -8,6 +9,7 @@ import "C"
 import (
 	"encoding/json"
 	"math"
+	"sync"
 	"time"
 	"unicode/utf8"
 	"unsafe"
@@ -24,35 +26,91 @@ const (
 
 //export bg_go_player_form_send
 func bg_go_player_form_send(context C.uint64_t, invocation C.DfInvocationId, player C.DfPlayerId, view *C.DfFormView) C.DfStatus {
-	host, ok := resolveHost(uint64(context))
-	if !ok || view == nil || view.response == nil || view.drop == nil || view.request_json.len == 0 || view.request_json.len > maxFormJSONBytes || view.request_json.data == nil {
+	if view == nil || view.response == nil || view.drop == nil {
+		return C.DF_STATUS_ERROR
+	}
+	// A structurally valid view transfers callback-context ownership. From this
+	// point every failure must terminate it through drop exactly once.
+	callbackContext, responseCallback, dropCallback := view.callback_context, view.response, view.drop
+	drop := func() { C.bg_call_form_drop(dropCallback, callbackContext) }
+	if view.request_json.len == 0 || view.request_json.len > maxFormJSONBytes || view.request_json.data == nil {
+		drop()
 		return C.DF_STATUS_ERROR
 	}
 	request := append([]byte(nil), unsafe.Slice((*byte)(unsafe.Pointer(view.request_json.data)), int(view.request_json.len))...)
 	if !json.Valid(request) {
+		drop()
 		return C.DF_STATUS_ERROR
 	}
-	callbackContext, responseCallback, dropCallback := view.callback_context, view.response, view.drop
-	id, ok := registerForm(uint64(context), playerID(player), func(responseInvocation InvocationID, submitter PlayerID, closed bool, response []byte) bool {
+	ok := sendPlayerForm(uint64(context), InvocationID(invocation), playerID(player), request, func(responseInvocation InvocationID, submitter PlayerSnapshot, closed bool, response []byte) bool {
 		outcome := C.uint32_t(C.DF_FORM_RESPONSE_SUBMITTED)
 		if closed {
 			outcome = C.uint32_t(C.DF_FORM_RESPONSE_CLOSED)
+		}
+		name := C.CBytes([]byte(submitter.Name))
+		if name != nil {
+			defer C.free(name)
+		}
+		snapshot := C.DfPlayerSnapshot{
+			player:               cPlayerID(submitter.Player),
+			name:                 C.DfStringView{data: (*C.uint8_t)(name), len: C.uint64_t(len(submitter.Name))},
+			latency_milliseconds: C.uint64_t(submitter.LatencyMilliseconds),
+			position: C.DfVec3{
+				x: C.double(submitter.Position.X), y: C.double(submitter.Position.Y), z: C.double(submitter.Position.Z),
+			},
 		}
 		var responseView C.DfStringView
 		if len(response) != 0 {
 			responseView.data = (*C.uint8_t)(unsafe.Pointer(&response[0]))
 			responseView.len = C.uint64_t(len(response))
 		}
-		return C.bg_call_form_response(responseCallback, callbackContext, C.DfInvocationId(responseInvocation), cPlayerID(submitter), outcome, responseView) == C.DF_STATUS_OK
-	}, func() { C.bg_call_form_drop(dropCallback, callbackContext) })
+		return C.bg_call_form_response(responseCallback, callbackContext, C.DfInvocationId(responseInvocation), &snapshot, outcome, responseView) == C.DF_STATUS_OK
+	}, drop)
 	if !ok {
 		return C.DF_STATUS_ERROR
 	}
-	if !host.SendPlayerForm(InvocationID(invocation), playerID(player), PlayerForm{ID: id, RequestJSON: request}) {
-		abandonForm(id)
-		return C.DF_STATUS_ERROR
-	}
 	return C.DF_STATUS_OK
+}
+
+// sendPlayerForm consumes drop/respond ownership. It invokes exactly one of
+// them, including when the host is unavailable or rejects the send.
+func sendPlayerForm(context uint64, invocation InvocationID, player PlayerID, request []byte, respond func(InvocationID, PlayerSnapshot, bool, []byte) bool, drop func()) bool {
+	terminal := &formTerminal{respondCallback: respond, dropCallback: drop}
+	host, ok := resolveHost(context)
+	if !ok {
+		terminal.drop()
+		return false
+	}
+	id, ok := registerForm(context, player, terminal.respond, terminal.drop)
+	if !ok {
+		terminal.drop()
+		return false
+	}
+	if !host.SendPlayerForm(invocation, player, PlayerForm{ID: id, RequestJSON: request}) {
+		CancelPlayerForm(id)
+		// Cancel may lose a race with a drain or response that already removed the
+		// registration. The terminal guard waits for that winner or drops here,
+		// so callback_context is always released before this error is returned.
+		terminal.drop()
+		return false
+	}
+	return true
+}
+
+type formTerminal struct {
+	once            sync.Once
+	respondCallback func(InvocationID, PlayerSnapshot, bool, []byte) bool
+	dropCallback    func()
+}
+
+func (t *formTerminal) respond(invocation InvocationID, submitter PlayerSnapshot, closed bool, response []byte) bool {
+	accepted := false
+	t.once.Do(func() { accepted = t.respondCallback(invocation, submitter, closed, response) })
+	return accepted
+}
+
+func (t *formTerminal) drop() {
+	t.once.Do(t.dropCallback)
 }
 
 //export bg_go_player_form_close

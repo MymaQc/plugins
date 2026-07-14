@@ -138,8 +138,14 @@ func (p *Players) EntityRegistry() *Entities { return p.entities }
 
 func (p *Players) SendPlayerForm(invocation native.InvocationID, id native.PlayerID, value native.PlayerForm) bool {
 	f := &nativePlayerForm{id: value.ID, request: append([]byte(nil), value.RequestJSON...), players: p}
+	if !p.mutatePlayer(invocation, id, func(connected *player.Player) { connected.SendForm(f) }) {
+		return false
+	}
+	// Arm the finalizer only after Dragonfly accepted the form. A synchronous
+	// send failure is terminated by the native host and must not race a second
+	// drop callback from an unreachable wrapper.
 	runtime.SetFinalizer(f, func(form *nativePlayerForm) { native.CancelPlayerForm(form.id) })
-	return p.mutatePlayer(invocation, id, func(connected *player.Player) { connected.SendForm(f) })
+	return true
 }
 
 func (p *Players) ClosePlayerForm(invocation native.InvocationID, id native.PlayerID) bool {

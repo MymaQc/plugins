@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Text;
 using System.Threading;
 using Dragonfly;
 
@@ -29,7 +30,9 @@ public sealed class KitchenSink : Plugin
             new KitchenBiome(),
             new KitchenTick(),
             new KitchenParticle(),
-            new KitchenGameMode()));
+            new KitchenGameMode(),
+            new KitchenForm(),
+            new KitchenRawFormCommand()));
         Console.WriteLine("kitchen-sink enabled");
     }
 
@@ -413,6 +416,189 @@ public sealed class KitchenSink : Plugin
                 registered && found && roundTripRegistered && roundTripId == id ? "true" : "false",
                 customRegistered ? "true" : "false");
         }
+    }
+
+    internal sealed class KitchenForm : Cmd.Runnable
+    {
+        public Cmd.SubCommand Form;
+
+        public void Run(Cmd.Source source, Cmd.Output output, World.Tx? tx)
+        {
+            if (source is not Player player)
+            {
+                output.Error("This command can only be used by a player.");
+                return;
+            }
+            player.SendForm(KitchenMenu.Create());
+        }
+    }
+
+    internal sealed class KitchenRawFormCommand : Cmd.Runnable
+    {
+        [Cmd.Tag("raw-form")]
+        public Cmd.SubCommand RawForm;
+
+        public void Run(Cmd.Source source, Cmd.Output output, World.Tx? tx)
+        {
+            if (source is not Player player)
+            {
+                output.Error("This command can only be used by a player.");
+                return;
+            }
+            player.SendForm(new KitchenRawForm());
+        }
+    }
+
+    internal sealed class KitchenRawForm : Form.Value
+    {
+        public byte[] MarshalJSON()
+        {
+            var header = Encoding.UTF8.GetString(Form.NewHeader("Custom Form.Value").MarshalJSON());
+            var button = Encoding.UTF8.GetString(Form.NewButton("Submit", string.Empty).MarshalJSON());
+            return Encoding.UTF8.GetBytes(
+                $$"""{"type":"form","title":"Custom Form.Value","content":"Open form interface","elements":[{{header}},{{button}}]}""");
+        }
+
+        public void SubmitJSON(byte[]? response, Form.Submitter submitter, World.Tx tx)
+        {
+            if (submitter is not Player player) return;
+            if (response is null)
+            {
+                player.Message("Custom Form.Value dismissed.");
+                return;
+            }
+            var position = player.Position();
+            player.Message(
+                $"raw={Encoding.UTF8.GetString(response)}, player={player.Name()}, " +
+                $"latency={player.Latency().TotalMilliseconds:0}ms, " +
+                $"position={position.X},{position.Y},{position.Z}");
+        }
+    }
+
+    private sealed class KitchenMenu : Form.MenuSubmittable, Form.Closer
+    {
+        private static readonly Form.Button CloseButton = Form.NewButton("Close", string.Empty);
+
+        public Form.Button OpenCustom = Form.NewButton(
+            "Open every custom element",
+            "textures/ui/icon_recipe_nature");
+        public Form.Button OpenModal = Form.NewButton(
+            "Skip to the modal",
+            "https://raw.githubusercontent.com/df-mc/dragonfly/master/.github/assets/logo.png");
+
+        public static Form.Menu Create()
+        {
+            var menu = Form.NewMenu(new KitchenMenu(), "Kitchen sink forms")
+                .WithBody("Dragonfly's reflected menu API from C#.")
+                .AddHeader(Form.NewHeader("Generated from Dragonfly"))
+                .AddDivider(new Form.Divider())
+                .AddLabel(Form.NewLabel("The first two buttons are reflected fields."))
+                .AddButton(Form.NewButton("Extra button", string.Empty))
+                .WithButtons(CloseButton)
+                .WithElements(
+                    Form.NewLabel("Menu elements may be appended together."),
+                    new Form.Divider());
+            return menu.AddLabel(Form.NewLabel(
+                $"{menu.Title()}: {menu.Body()} " +
+                $"({menu.Buttons().Count} buttons, {menu.Elements().Count} elements)"));
+        }
+
+        public void Submit(Form.Submitter submitter, Form.Button pressed, World.Tx tx)
+        {
+            if (pressed.Equals(OpenModal))
+            {
+                submitter.SendForm(KitchenModal.Create("Opened directly from the menu."));
+                return;
+            }
+            if (pressed.Equals(CloseButton))
+            {
+                submitter.CloseForm();
+                Message(submitter, "Kitchen form closed.");
+                return;
+            }
+            if (pressed.Equals(OpenCustom))
+            {
+                submitter.SendForm(KitchenCustom.Create());
+                return;
+            }
+            submitter.SendForm(KitchenCustom.Create());
+        }
+
+        public void Close(Form.Submitter submitter, World.Tx tx) =>
+            Message(submitter, "Kitchen menu dismissed.");
+    }
+
+    private sealed class KitchenCustom : Form.Submittable, Form.Closer
+    {
+        public Form.Header Header = Form.NewHeader("Every custom element");
+        public Form.Divider Divider = new();
+        public Form.Label Label = Form.NewLabel("Values are reflected back into these fields.");
+        public Form.Input Name = Form.NewInput("Name", "Dragonfly", "Type a name")
+            .WithTooltip("A UTF-8 string value.");
+        public Form.Toggle Enabled = Form.NewToggle("Enabled", true)
+            .WithTooltip("A boolean value.");
+        public Form.Slider Power = Form.NewSlider("Power", 0, 10, 0.5, 5)
+            .WithTooltip("A bounded numeric value.");
+        public Form.Dropdown Colour = Form.NewDropdown(
+                "Colour",
+                ["Red", "Green", "Blue"],
+                1)
+            .WithTooltip("An option index.");
+        public Form.StepSlider Size = Form.NewStepSlider(
+                "Size",
+                ["Small", "Medium", "Large"],
+                1)
+            .WithTooltip("A stepped option index.");
+
+        public static Form.Custom Create()
+        {
+            var screen = new KitchenCustom();
+            var custom = Form.New(screen, "Kitchen custom form");
+            screen.Label = Form.NewLabel(
+                $"{custom.Title()} contains {custom.Elements().Count} reflected elements.");
+            return custom;
+        }
+
+        public void Submit(Form.Submitter submitter, World.Tx tx)
+        {
+            var summary = $"name={Name.Value()}, enabled={Enabled.Value()}, " +
+                          $"power={Power.Value():0.0}, colour={Colour.Value()}, size={Size.Value()}";
+            submitter.SendForm(KitchenModal.Create(summary));
+        }
+
+        public void Close(Form.Submitter submitter, World.Tx tx) =>
+            Message(submitter, "Kitchen custom form dismissed.");
+    }
+
+    private sealed class KitchenModal : Form.ModalSubmittable, Form.Closer
+    {
+        public Form.Button Accept = Form.YesButton();
+        public Form.Button Reject = Form.NoButton();
+
+        private readonly string _summary;
+
+        private KitchenModal(string summary) => _summary = summary;
+
+        public static Form.Modal Create(string summary)
+        {
+            var modal = Form.NewModal(new KitchenModal(summary), "Confirm kitchen values")
+                .WithBody(summary);
+            return modal.WithBody(
+                $"{modal.Title()}: {modal.Body()} ({modal.Buttons().Count} choices)");
+        }
+
+        public void Submit(Form.Submitter submitter, Form.Button pressed, World.Tx tx) =>
+            Message(
+                submitter,
+                $"{(pressed.Equals(Accept) ? "Accepted" : "Rejected")}: {_summary}");
+
+        public void Close(Form.Submitter submitter, World.Tx tx) =>
+            Message(submitter, "Kitchen modal dismissed.");
+    }
+
+    private static void Message(Form.Submitter submitter, string message)
+    {
+        if (submitter is Player player) player.Message(message);
     }
 
     private sealed class CustomGameMode : World.GameMode

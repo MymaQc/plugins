@@ -1,6 +1,7 @@
 package native
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -187,6 +188,34 @@ type csharpWorldParticleCall struct {
 	world      WorldID
 	position   Vec3
 	particle   WorldParticle
+}
+
+type csharpFormHost struct {
+	*recordingHost
+	formCalls  []csharpFormSendCall
+	closeCalls []csharpFormCloseCall
+}
+
+type csharpFormSendCall struct {
+	invocation InvocationID
+	player     PlayerID
+	form       PlayerForm
+}
+
+type csharpFormCloseCall struct {
+	invocation InvocationID
+	player     PlayerID
+}
+
+func (h *csharpFormHost) SendPlayerForm(invocation InvocationID, player PlayerID, form PlayerForm) bool {
+	form.RequestJSON = append([]byte(nil), form.RequestJSON...)
+	h.formCalls = append(h.formCalls, csharpFormSendCall{invocation: invocation, player: player, form: form})
+	return true
+}
+
+func (h *csharpFormHost) ClosePlayerForm(invocation InvocationID, player PlayerID) bool {
+	h.closeCalls = append(h.closeCalls, csharpFormCloseCall{invocation: invocation, player: player})
+	return true
 }
 
 func (h *csharpWorldHost) WorldRange(invocation InvocationID, world WorldID) (BlockRange, bool) {
@@ -395,7 +424,7 @@ func TestCSharpReflectedCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 	kitchen := commandNamed(t, commands, "kitchen")
-	if !slices.Contains(kitchen.Aliases, "ks") || len(kitchen.Overloads) != 12 {
+	if !slices.Contains(kitchen.Aliases, "ks") || len(kitchen.Overloads) != 14 {
 		t.Fatalf("kitchen descriptor = %#v", kitchen)
 	}
 	if kitchen.Overloads[1].Parameters[0].Name != "echo" ||
@@ -696,6 +725,283 @@ func TestCSharpReflectedCommands(t *testing.T) {
 	})
 	if err != nil || !slices.Equal(options, []string{"spawn", "source"}) {
 		t.Fatalf("dynamic enum options=%q error=%v", options, err)
+	}
+}
+
+func TestCSharpTypedFormFlow(t *testing.T) {
+	host := &csharpFormHost{recordingHost: &recordingHost{}}
+	pluginRuntime := openCSharpRuntimeWithHost(t, host)
+	commands, err := pluginRuntime.Commands()
+	if err != nil {
+		t.Fatal(err)
+	}
+	kitchen := commandNamed(t, commands, "kitchen")
+	formOverload, rawFormOverload := -1, -1
+	for index, overload := range kitchen.Overloads {
+		if len(overload.Parameters) != 1 || overload.Parameters[0].Kind != CommandParameterSubcommand {
+			continue
+		}
+		switch overload.Parameters[0].Name {
+		case "form":
+			formOverload = index
+		case "raw-form":
+			rawFormOverload = index
+		}
+	}
+	if formOverload < 0 || rawFormOverload < 0 {
+		t.Fatalf("kitchen form overloads missing: %#v", kitchen.Overloads)
+	}
+
+	player := PlayerID{UUID: [16]byte{0x42}, Generation: 17}
+	snapshot := PlayerSnapshot{
+		Player: player, Name: "FormPlayer", LatencyMilliseconds: 41,
+		Position: Vec3{X: 12.5, Y: 64, Z: -3.25},
+	}
+	invocation := InvocationID(100)
+	sendMenu := func() PlayerForm {
+		t.Helper()
+		before := len(host.formCalls)
+		output, err := pluginRuntime.HandleCommand(kitchen.Index, CommandInput{
+			Invocation: invocation, Overload: uint64(formOverload),
+			Source: "FormPlayer", SourceKind: CommandSourcePlayer, SourcePlayer: &player,
+			SourcePosition: snapshot.Position,
+			Arguments:      []string{"form"},
+			OnlinePlayers: []CommandPlayer{{
+				Player: player, Name: snapshot.Name, LatencyMilliseconds: snapshot.LatencyMilliseconds,
+				Position: snapshot.Position,
+			}},
+		})
+		if err != nil || output.Failed || output.Message != "" {
+			t.Fatalf("form command: output=%#v error=%v", output, err)
+		}
+		if len(host.formCalls) != before+1 {
+			t.Fatalf("form sends = %d, want %d", len(host.formCalls), before+1)
+		}
+		call := host.formCalls[before]
+		if call.invocation != invocation || call.player != player {
+			t.Fatalf("menu send = invocation %d player %+v, want %d %+v", call.invocation, call.player, invocation, player)
+		}
+		invocation++
+		return call.form
+	}
+	complete := func(form PlayerForm, closed bool, response string) bool {
+		t.Helper()
+		var body []byte
+		if !closed {
+			body = []byte(response)
+		}
+		accepted := CompletePlayerForm(form.ID, invocation, snapshot, closed, body)
+		invocation++
+		return accepted
+	}
+
+	menu := sendMenu()
+	requireJSONEqual(t, menu.RequestJSON, `{
+		"type":"form",
+		"title":"Kitchen sink forms",
+		"content":"Dragonfly's reflected menu API from C#.",
+		"elements":[
+			{"type":"button","text":"Open every custom element","image":{"type":"path","data":"textures/ui/icon_recipe_nature"}},
+			{"type":"button","text":"Skip to the modal","image":{"type":"url","data":"https://raw.githubusercontent.com/df-mc/dragonfly/master/.github/assets/logo.png"}},
+			{"type":"header","text":"Generated from Dragonfly"},
+			{"type":"divider","text":""},
+			{"type":"label","text":"The first two buttons are reflected fields."},
+			{"type":"button","text":"Extra button"},
+			{"type":"button","text":"Close"},
+			{"type":"label","text":"Menu elements may be appended together."},
+			{"type":"divider","text":""},
+			{"type":"label","text":"Kitchen sink forms: Dragonfly's reflected menu API from C#. (4 buttons, 9 elements)"}
+		]
+	}`)
+	if !complete(menu, false, "0") {
+		t.Fatal("menu response rejected")
+	}
+	_ = CompletePlayerForm(menu.ID, invocation, snapshot, false, []byte("0"))
+	if len(host.formCalls) != 2 {
+		t.Fatalf("duplicate response changed form sends: got %d, want 2", len(host.formCalls))
+	}
+	customCall := host.formCalls[1]
+	if customCall.invocation != invocation-1 || customCall.player != player {
+		t.Fatalf("custom send = invocation %d player %+v, want %d %+v", customCall.invocation, customCall.player, invocation-1, player)
+	}
+	requireJSONEqual(t, customCall.form.RequestJSON, `{
+		"type":"custom_form",
+		"title":"Kitchen custom form",
+		"content":[
+			{"type":"header","text":"Every custom element"},
+			{"type":"divider","text":""},
+			{"type":"label","text":"Kitchen custom form contains 8 reflected elements."},
+			{"type":"input","text":"Name","default":"Dragonfly","placeholder":"Type a name","tooltip":"A UTF-8 string value."},
+			{"type":"toggle","text":"Enabled","default":true,"tooltip":"A boolean value."},
+			{"type":"slider","text":"Power","min":0,"max":10,"step":0.5,"default":5,"tooltip":"A bounded numeric value."},
+			{"type":"dropdown","text":"Colour","default":1,"options":["Red","Green","Blue"],"tooltip":"An option index."},
+			{"type":"step_slider","text":"Size","default":1,"steps":["Small","Medium","Large"],"tooltip":"A stepped option index."}
+		]
+	}`)
+	if !complete(customCall.form, false, `[null,null,null,"Alex",false,7.5,2,0]`) {
+		t.Fatal("custom response rejected")
+	}
+	if len(host.formCalls) != 3 {
+		t.Fatalf("form sends after custom = %d, want 3", len(host.formCalls))
+	}
+	modalCall := host.formCalls[2]
+	if modalCall.invocation != invocation-1 || modalCall.player != player {
+		t.Fatalf("modal send = invocation %d player %+v, want %d %+v", modalCall.invocation, modalCall.player, invocation-1, player)
+	}
+	requireJSONEqual(t, modalCall.form.RequestJSON, `{
+		"type":"modal",
+		"title":"Confirm kitchen values",
+		"content":"Confirm kitchen values: name=Alex, enabled=False, power=7.5, colour=2, size=0 (2 choices)",
+		"button1":"gui.yes",
+		"button2":"gui.no"
+	}`)
+	if !complete(modalCall.form, false, "true") {
+		t.Fatal("modal response rejected")
+	}
+	if len(host.texts) == 0 || host.texts[len(host.texts)-1] != "Accepted: name=Alex, enabled=False, power=7.5, colour=2, size=0" ||
+		host.textPlayers[len(host.textPlayers)-1] != player {
+		t.Fatalf("modal response messages: players=%+v texts=%q", host.textPlayers, host.texts)
+	}
+
+	t.Run("dismissals and close", func(t *testing.T) {
+		menu := sendMenu()
+		if !complete(menu, true, "") || host.texts[len(host.texts)-1] != "Kitchen menu dismissed." {
+			t.Fatalf("menu dismissal texts=%q", host.texts)
+		}
+
+		menu = sendMenu()
+		if !complete(menu, false, "0") {
+			t.Fatal("menu response rejected")
+		}
+		custom := host.formCalls[len(host.formCalls)-1].form
+		if !complete(custom, true, "") || host.texts[len(host.texts)-1] != "Kitchen custom form dismissed." {
+			t.Fatalf("custom dismissal texts=%q", host.texts)
+		}
+
+		menu = sendMenu()
+		if !complete(menu, false, "1") {
+			t.Fatal("direct modal response rejected")
+		}
+		modal := host.formCalls[len(host.formCalls)-1]
+		requireJSONEqual(t, modal.form.RequestJSON, `{
+			"type":"modal",
+			"title":"Confirm kitchen values",
+			"content":"Confirm kitchen values: Opened directly from the menu. (2 choices)",
+			"button1":"gui.yes",
+			"button2":"gui.no"
+		}`)
+		if !complete(modal.form, true, "") || host.texts[len(host.texts)-1] != "Kitchen modal dismissed." {
+			t.Fatalf("modal dismissal texts=%q", host.texts)
+		}
+
+		menu = sendMenu()
+		beforeClose := len(host.closeCalls)
+		if !complete(menu, false, "3") {
+			t.Fatal("close button response rejected")
+		}
+		if len(host.closeCalls) != beforeClose+1 ||
+			host.closeCalls[beforeClose] != (csharpFormCloseCall{invocation: invocation - 1, player: player}) ||
+			host.texts[len(host.texts)-1] != "Kitchen form closed." {
+			t.Fatalf("close calls=%+v texts=%q", host.closeCalls, host.texts)
+		}
+	})
+
+	t.Run("invalid terminal responses", func(t *testing.T) {
+		menu := sendMenu()
+		wrong := snapshot
+		wrong.Player.Generation++
+		if CompletePlayerForm(menu.ID, invocation, wrong, false, []byte("0")) {
+			t.Fatal("wrong-player response accepted")
+		}
+		invocation++
+		beforeForms := len(host.formCalls)
+		_ = CompletePlayerForm(menu.ID, invocation, snapshot, false, []byte("0"))
+		if len(host.formCalls) != beforeForms {
+			t.Fatal("response after wrong-player terminal response had an effect")
+		}
+		invocation++
+
+		menu = sendMenu()
+		beforeForms = len(host.formCalls)
+		if complete(menu, false, `[]`) {
+			t.Fatal("malformed menu response accepted")
+		}
+		if len(host.formCalls) != beforeForms {
+			t.Fatalf("malformed menu response sent another form: %d -> %d", beforeForms, len(host.formCalls))
+		}
+		_ = CompletePlayerForm(menu.ID, invocation, snapshot, false, []byte("0"))
+		if len(host.formCalls) != beforeForms {
+			t.Fatal("second response after malformed JSON had an effect")
+		}
+		invocation++
+
+		menu = sendMenu()
+		if !complete(menu, false, "0") {
+			t.Fatal("menu response rejected")
+		}
+		custom := host.formCalls[len(host.formCalls)-1].form
+		beforeForms = len(host.formCalls)
+		if complete(custom, false, `[null,null,null,"Alex",true,99,1,1]`) {
+			t.Fatal("out-of-range custom response accepted")
+		}
+		if len(host.formCalls) != beforeForms {
+			t.Fatalf("invalid custom response sent modal: %d -> %d", beforeForms, len(host.formCalls))
+		}
+	})
+
+	t.Run("open custom form value", func(t *testing.T) {
+		send := func() PlayerForm {
+			t.Helper()
+			before := len(host.formCalls)
+			output, err := pluginRuntime.HandleCommand(kitchen.Index, CommandInput{
+				Invocation: invocation, Overload: uint64(rawFormOverload),
+				Source: "FormPlayer", SourceKind: CommandSourcePlayer, SourcePlayer: &player,
+				SourcePosition: snapshot.Position, Arguments: []string{"raw-form"},
+				OnlinePlayers: []CommandPlayer{{
+					Player: player, Name: snapshot.Name, LatencyMilliseconds: snapshot.LatencyMilliseconds,
+					Position: snapshot.Position,
+				}},
+			})
+			if err != nil || output.Failed || output.Message != "" || len(host.formCalls) != before+1 {
+				t.Fatalf("raw form command: output=%#v calls=%d error=%v", output, len(host.formCalls), err)
+			}
+			invocation++
+			return host.formCalls[before].form
+		}
+
+		raw := send()
+		requireJSONEqual(t, raw.RequestJSON, `{
+			"type":"form",
+			"title":"Custom Form.Value",
+			"content":"Open form interface",
+			"elements":[
+				{"type":"header","text":"Custom Form.Value"},
+				{"type":"button","text":"Submit"}
+			]
+		}`)
+		if !complete(raw, false, "0") || host.texts[len(host.texts)-1] !=
+			"raw=0, player=FormPlayer, latency=41ms, position=12.5,64,-3.25" {
+			t.Fatalf("raw form response texts=%q", host.texts)
+		}
+
+		raw = send()
+		if !complete(raw, true, "") || host.texts[len(host.texts)-1] != "Custom Form.Value dismissed." {
+			t.Fatalf("raw form dismissal texts=%q", host.texts)
+		}
+	})
+}
+
+func requireJSONEqual(t *testing.T, got []byte, want string) {
+	t.Helper()
+	var gotValue, wantValue any
+	if err := json.Unmarshal(got, &gotValue); err != nil {
+		t.Fatalf("invalid form JSON %q: %v", got, err)
+	}
+	if err := json.Unmarshal([]byte(want), &wantValue); err != nil {
+		t.Fatalf("invalid expected JSON %q: %v", want, err)
+	}
+	if !reflect.DeepEqual(gotValue, wantValue) {
+		t.Fatalf("form JSON:\n got: %s\nwant: %s", got, want)
 	}
 }
 

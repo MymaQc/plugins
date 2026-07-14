@@ -530,7 +530,7 @@ func TestFormResponseRoundTrip(t *testing.T) {
 		t.Fatalf("menu form not sent: %+v", host.forms)
 	}
 	menu := host.forms[len(host.forms)-1]
-	if !CompletePlayerForm(menu.ID, 0, id, false, []byte("0")) {
+	if !CompletePlayerForm(menu.ID, 0, PlayerSnapshot{Player: id, Name: "FormPlayer"}, false, []byte("0")) {
 		t.Fatal("menu response rejected")
 	}
 	if len(host.forms) < 2 || !bytes.Contains(host.forms[len(host.forms)-1].RequestJSON, []byte(`"type":"custom_form"`)) {
@@ -538,7 +538,7 @@ func TestFormResponseRoundTrip(t *testing.T) {
 	}
 	custom := host.forms[len(host.forms)-1]
 	response := []byte(`[null,null,null,"Alex",true,5,1,2]`)
-	if !CompletePlayerForm(custom.ID, 0, id, false, response) {
+	if !CompletePlayerForm(custom.ID, 0, PlayerSnapshot{Player: id, Name: "FormPlayer"}, false, response) {
 		t.Fatal("custom response rejected")
 	}
 	if !slices.Contains(host.texts, "Hello Alex: volume 5, colour #1, speed #2") {
@@ -551,18 +551,18 @@ func TestFormRegistryIsBoundedAndDrained(t *testing.T) {
 	player := PlayerID{Generation: 9}
 	dropped := 0
 	for index := 0; index < maxFormsPerPlayer; index++ {
-		if _, ok := registerForm(host, player, func(InvocationID, PlayerID, bool, []byte) bool { return true }, func() { dropped++ }); !ok {
+		if _, ok := registerForm(host, player, func(InvocationID, PlayerSnapshot, bool, []byte) bool { return true }, func() { dropped++ }); !ok {
 			t.Fatalf("registration %d rejected", index)
 		}
 	}
-	if _, ok := registerForm(host, player, func(InvocationID, PlayerID, bool, []byte) bool { return true }, func() { dropped++ }); ok {
+	if _, ok := registerForm(host, player, func(InvocationID, PlayerSnapshot, bool, []byte) bool { return true }, func() { dropped++ }); ok {
 		t.Fatal("registration beyond per-player bound accepted")
 	}
 	drainHostForms(host, false)
 	if dropped != maxFormsPerPlayer {
 		t.Fatalf("dropped = %d, want %d", dropped, maxFormsPerPlayer)
 	}
-	if _, ok := registerForm(host, player, func(InvocationID, PlayerID, bool, []byte) bool { return true }, func() { dropped++ }); !ok {
+	if _, ok := registerForm(host, player, func(InvocationID, PlayerSnapshot, bool, []byte) bool { return true }, func() { dropped++ }); !ok {
 		t.Fatal("registry did not reopen after non-closing drain")
 	}
 	unregisterHost(host)
@@ -575,7 +575,7 @@ func TestFormDrainWaitsForConcurrentDrop(t *testing.T) {
 	host := registerHost(noopHost{})
 	player := PlayerID{Generation: 10}
 	started, release := make(chan struct{}), make(chan struct{})
-	id, ok := registerForm(host, player, func(InvocationID, PlayerID, bool, []byte) bool { return true }, func() { close(started); <-release })
+	id, ok := registerForm(host, player, func(InvocationID, PlayerSnapshot, bool, []byte) bool { return true }, func() { close(started); <-release })
 	if !ok {
 		t.Fatal("form registration rejected")
 	}
@@ -600,7 +600,7 @@ func TestFormDrainWaitsForConcurrentDrop(t *testing.T) {
 func TestClosingFormDrainKeepsRegistrationGateClosed(t *testing.T) {
 	host := registerHost(noopHost{})
 	drainHostForms(host, true)
-	if _, ok := registerForm(host, PlayerID{Generation: 11}, func(InvocationID, PlayerID, bool, []byte) bool {
+	if _, ok := registerForm(host, PlayerID{Generation: 11}, func(InvocationID, PlayerSnapshot, bool, []byte) bool {
 		return true
 	}, func() {}); ok {
 		t.Fatal("form registered after closing drain")
@@ -648,7 +648,7 @@ func TestRuntimeHostActivatesOnlyWhileEnabled(t *testing.T) {
 	if _, ok := resolveHost(runtime.hostContext); !ok {
 		t.Fatal("runtime host inactive before entity shutdown finished")
 	}
-	if _, ok := registerForm(runtime.hostContext, PlayerID{Generation: 11}, func(InvocationID, PlayerID, bool, []byte) bool {
+	if _, ok := registerForm(runtime.hostContext, PlayerID{Generation: 11}, func(InvocationID, PlayerSnapshot, bool, []byte) bool {
 		return true
 	}, func() {}); ok {
 		t.Fatal("runtime admitted a form after begin disable")
@@ -663,7 +663,7 @@ func TestRuntimeHostActivatesOnlyWhileEnabled(t *testing.T) {
 	if err := runtime.Enable(); err != nil {
 		t.Fatal(err)
 	}
-	if id, ok := registerForm(runtime.hostContext, PlayerID{Generation: 12}, func(InvocationID, PlayerID, bool, []byte) bool {
+	if id, ok := registerForm(runtime.hostContext, PlayerID{Generation: 12}, func(InvocationID, PlayerSnapshot, bool, []byte) bool {
 		return true
 	}, func() {}); !ok {
 		t.Fatal("runtime did not reopen form admission after re-enable")
@@ -715,7 +715,7 @@ func TestFormRejectsWrongPlayerAndOversizedResponse(t *testing.T) {
 	player := PlayerID{Generation: 11}
 	dropped := 0
 	register := func() uint64 {
-		id, ok := registerForm(host, player, func(InvocationID, PlayerID, bool, []byte) bool {
+		id, ok := registerForm(host, player, func(InvocationID, PlayerSnapshot, bool, []byte) bool {
 			t.Fatal("invalid response reached Rust callback")
 			return true
 		}, func() { dropped++ })
@@ -724,10 +724,10 @@ func TestFormRejectsWrongPlayerAndOversizedResponse(t *testing.T) {
 		}
 		return id
 	}
-	if CompletePlayerForm(register(), 0, PlayerID{Generation: 12}, false, []byte("0")) {
+	if CompletePlayerForm(register(), 0, PlayerSnapshot{Player: PlayerID{Generation: 12}}, false, []byte("0")) {
 		t.Fatal("response from wrong player accepted")
 	}
-	if CompletePlayerForm(register(), 0, player, false, make([]byte, maxFormJSONBytes+1)) {
+	if CompletePlayerForm(register(), 0, PlayerSnapshot{Player: player}, false, make([]byte, maxFormJSONBytes+1)) {
 		t.Fatal("oversized response accepted")
 	}
 	if dropped != 2 {

@@ -42,12 +42,16 @@ public sealed class Example : Plugin
 
 The project name is the plugin ID. A compile-time generator emits the hidden native entry point.
 
-Current C# slice: loading, lifecycle, reflected commands, player text actions, game mode, movement,
-chat, food loss, jump, teleport, sprint/sneak toggles, punch-air, and quit handlers. Player handler,
-command-interface, player-text, and game-mode surfaces are generated from Dragonfly's Go AST.
+Current C# slice: loading, lifecycle, reflected commands, player text actions, game mode, typed
+forms, movement, chat, food loss, jump, teleport, sprint/sneak toggles, punch-air, and quit
+handlers. Player handler, command-interface, player-text, game-mode, and form surfaces are
+generated from Dragonfly's Go AST.
 `World.GameMode` includes Dragonfly's four registered values and exact `GameModeByID`/`GameModeID`
 lookups. `Player.SetGameMode` accepts custom implementations just like Dragonfly, and
 `Player.GameMode` returns their capabilities without exposing the transport descriptor.
+Forms use Dragonfly's reflected public-field model through `Form.New`, `NewMenu`, and `NewModal`,
+with typed elements, submitted values, `Closer`, and callback-owned `World.Tx`. `Form.Value`
+remains open for custom implementations, matching Dragonfly's public `form.Form` interface.
 `examples/plugins/kitchen-sink` compiles against every exposed C# API and grows with each parity
 slice.
 
@@ -88,7 +92,9 @@ Dragonfly iterator and closes it on exhaustion, early exit, or callback completi
 
 Public block, liquid, biome, particle, colour, and instrument types come from Dragonfly's Go AST.
 Live registries feed internal generated codecs, so Minecraft identifiers, state NBT, numeric biome
-IDs, particle kinds, and instrument IDs never enter plugin code. Private host ABI 28 preserves the
+IDs, particle kinds, and instrument IDs never enter plugin code. Private host ABI 29 preserves the
 separate “no liquid” result, nullable liquid removal, signed nanosecond scheduling delays,
-biome/weather queries, particle payloads, and registered/custom game-mode capabilities. World
-handles, capability descriptors, and ABI errors also remain private transport details.
+biome/weather queries, particle payloads, registered/custom game-mode capabilities, and full
+callback-scoped player snapshots for form responses. Structurally valid form contexts receive
+exactly one response or drop callback, including synchronous send failures. World handles,
+capability descriptors, and ABI errors also remain private transport details.

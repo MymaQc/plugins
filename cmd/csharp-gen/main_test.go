@@ -84,6 +84,157 @@ func (p *Player) Disconnect(msg ...any) {}`
 	}
 }
 
+func TestFormsUseGoAST(t *testing.T) {
+	directory := t.TempDir()
+	source := `package form
+type Element interface { json.Marshaler; elem() }
+type MenuElement interface { json.Marshaler; menuElem() }
+type Form interface { json.Marshaler; SubmitJSON([]byte, Submitter, *world.Tx) error }
+type Divider struct{}
+type Header struct { Text string }
+type Label struct { Text string }
+type Input struct { Text, Default, Placeholder, Tooltip string; value string }
+type Toggle struct { Text string; Default bool; Tooltip string; value bool }
+type Slider struct { Text string; Min, Max float64; StepSize float64; Default float64; Tooltip string; value float64 }
+type Dropdown struct { Text string; Options []string; DefaultIndex int; Tooltip string; value int }
+type StepSlider Dropdown
+type Button struct { Text, Image string }
+type Custom struct{}
+type Menu struct{}
+type Modal struct{}
+type Submittable interface { Submit(Submitter, *world.Tx) }
+type MenuSubmittable interface { Submit(Submitter, Button, *world.Tx) }
+type ModalSubmittable MenuSubmittable
+type Closer interface { Close(Submitter, *world.Tx) }
+type Submitter interface { SendForm(Form); CloseForm() }
+func NewHeader(text string) Header { return Header{} }
+func NewLabel(text string) Label { return Label{} }
+func NewInput(text, defaultValue, placeholder string) Input { return Input{} }
+func NewToggle(text string, defaultValue bool) Toggle { return Toggle{} }
+func NewSlider(text string, min, max, stepSize, defaultValue float64) Slider { return Slider{} }
+func NewDropdown(text string, options []string, defaultIndex int) Dropdown { return Dropdown{} }
+func NewStepSlider(text string, options []string, defaultIndex int) StepSlider { return StepSlider{} }
+func NewButton(text, image string) Button { return Button{} }
+func New(Submittable, ...any) Custom { return Custom{} }
+func NewMenu(MenuSubmittable, ...any) Menu { return Menu{} }
+func NewModal(ModalSubmittable, ...any) Modal { return Modal{} }
+func YesButton() Button { return Button{} }
+func NoButton() Button { return Button{} }
+func (Divider) elem() {}
+func (Header) elem() {}
+func (Label) elem() {}
+func (Input) elem() {}
+func (Toggle) elem() {}
+func (Slider) elem() {}
+func (Dropdown) elem() {}
+func (StepSlider) elem() {}
+func (Divider) menuElem() {}
+func (Header) menuElem() {}
+func (Label) menuElem() {}
+func (Button) menuElem() {}
+func (Divider) MarshalJSON() ([]byte, error) { return nil, nil }
+func (Header) MarshalJSON() ([]byte, error) { return nil, nil }
+func (Label) MarshalJSON() ([]byte, error) { return nil, nil }
+func (Input) MarshalJSON() ([]byte, error) { return nil, nil }
+func (Toggle) MarshalJSON() ([]byte, error) { return nil, nil }
+func (Slider) MarshalJSON() ([]byte, error) { return nil, nil }
+func (Dropdown) MarshalJSON() ([]byte, error) { return nil, nil }
+func (StepSlider) MarshalJSON() ([]byte, error) { return nil, nil }
+func (Button) MarshalJSON() ([]byte, error) { return nil, nil }
+func (Input) WithTooltip(string) Input { return Input{} }
+func (Input) Value() string { return "" }
+func (Toggle) WithTooltip(string) Toggle { return Toggle{} }
+func (Toggle) Value() bool { return false }
+func (Slider) WithTooltip(string) Slider { return Slider{} }
+func (Slider) Value() float64 { return 0 }
+func (Dropdown) WithTooltip(string) Dropdown { return Dropdown{} }
+func (Dropdown) Value() int { return 0 }
+func (StepSlider) WithTooltip(string) StepSlider { return StepSlider{} }
+func (StepSlider) Value() int { return 0 }
+func (Custom) Title() string { return "" }
+func (Custom) Elements() []Element { return nil }
+func (Custom) SubmitJSON([]byte, Submitter, *world.Tx) error { return nil }
+func (Custom) MarshalJSON() ([]byte, error) { return nil, nil }
+func (Menu) WithBody(...any) Menu { return Menu{} }
+func (Menu) AddButton(Button) Menu { return Menu{} }
+func (Menu) AddDivider(Divider) Menu { return Menu{} }
+func (Menu) AddHeader(Header) Menu { return Menu{} }
+func (Menu) AddLabel(Label) Menu { return Menu{} }
+func (Menu) WithButtons(...Button) Menu { return Menu{} }
+func (Menu) WithElements(...MenuElement) Menu { return Menu{} }
+func (Menu) Title() string { return "" }
+func (Menu) Body() string { return "" }
+func (Menu) Buttons() []Button { return nil }
+func (Menu) Elements() []MenuElement { return nil }
+func (Menu) SubmitJSON([]byte, Submitter, *world.Tx) error { return nil }
+func (Menu) MarshalJSON() ([]byte, error) { return nil, nil }
+func (Modal) WithBody(...any) Modal { return Modal{} }
+func (Modal) Title() string { return "" }
+func (Modal) Body() string { return "" }
+func (Modal) Buttons() []Button { return nil }
+func (Modal) SubmitJSON([]byte, Submitter, *world.Tx) error { return nil }
+func (Modal) MarshalJSON() ([]byte, error) { return nil, nil }`
+	if err := os.WriteFile(filepath.Join(directory, "form.go"), []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	spec, err := inspectForms(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := string(generateForms(spec))
+	for _, expected := range []string{
+		"public interface Value\n    {\n        byte[] MarshalJSON();\n        void SubmitJSON(byte[]? response, Submitter submitter, World.Tx tx);\n    }",
+		"public interface Element\n    {\n        byte[] MarshalJSON();\n    }",
+		"public interface MenuElement\n    {\n        byte[] MarshalJSON();\n    }",
+		"public interface ModalSubmittable : MenuSubmittable { }",
+		"public struct Divider : Element, MenuElement",
+		"public readonly byte[] MarshalJSON() => FormCodec.EncodeElement(this);",
+		"public struct Input : Element",
+		"public readonly Input WithTooltip(string tooltip)",
+		"public readonly string Value() => _value ?? string.Empty;",
+		"public static Slider NewSlider(string text, double min, double max, double stepSize, double defaultValue)",
+		"public struct Button : MenuElement",
+		"public readonly byte[] MarshalJSON() => FormCodec.EncodeMenuElement(this);",
+		"public static Custom New(Submittable submittable, params object?[] title)",
+		"public static Menu NewMenu(MenuSubmittable submittable, params object?[] title)",
+		"public static Modal NewModal(ModalSubmittable submittable, params object?[] title)",
+		"public Menu WithElements(params MenuElement[] elements)",
+		"public static Button YesButton()",
+		"public void SubmitJSON(byte[]? response, Submitter submitter, World.Tx tx)",
+		"FormCodec.Respond(this, submitter, tx, response is null, response ?? Array.Empty<byte>());",
+	} {
+		if !strings.Contains(output, expected) {
+			t.Fatalf("generated forms missing %q:\n%s", expected, output)
+		}
+	}
+}
+
+func TestPlayerFormMethodsUseGoAST(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "player.go")
+	source := `package player
+func (p *Player) SendForm(f form.Form) {}
+func (p *Player) CloseForm() {}`
+	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	methods, err := inspectPlayerFormMethods(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := string(generatePlayerFormMethods(methods))
+	for _, expected := range []string{
+		"public sealed partial class Player : Form.Submitter",
+		"public void SendForm(Form.Value f)",
+		"PluginBridge.Host.SendPlayerForm(Invocation, Id, f);",
+		"public void CloseForm()",
+		"PluginBridge.Host.ClosePlayerForm(Invocation, Id);",
+	} {
+		if !strings.Contains(output, expected) {
+			t.Fatalf("generated player form surface missing %q:\n%s", expected, output)
+		}
+	}
+}
+
 func TestCommandInterfacesUseGoAST(t *testing.T) {
 	directory := t.TempDir()
 	source := `package cmd

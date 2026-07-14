@@ -16,6 +16,10 @@ Runnable parity showcase. Its single plugin class demonstrates:
 - transaction-owned `CurrentTick` in `/kitchen tick`;
 - all 20 generated particle types and all 16 typed note instruments in `/kitchen particle`;
 - registered lookup, player reads, and custom `World.GameMode` in `/kitchen game-mode`;
+- the full reflected form API in `/kitchen form`: menu, custom, and modal callbacks; every
+  element type; URL and resource-pack button images; tooltips; closers; and submitted values;
+- open `Form.Value`, `Element.MarshalJSON`, and `MenuElement.MarshalJSON` implementations in
+  `/kitchen raw-form`;
 - plugin lifecycle.
 
 New APIs belong here only when the example can do something real with them. This plugin is not a

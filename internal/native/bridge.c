@@ -40,6 +40,10 @@ _Static_assert(sizeof(DfItemStackViewV3) == 120, "DfItemStackViewV3 ABI layout c
 _Static_assert(sizeof(DfItemStackSnapshot) == 88, "DfItemStackSnapshot ABI layout changed");
 _Static_assert(sizeof(DfScoreboardView) == 40, "DfScoreboardView ABI layout changed");
 _Static_assert(offsetof(DfScoreboardView, lines) == 16, "DfScoreboardView.lines ABI offset changed");
+_Static_assert(sizeof(DfPlayerSnapshot) == 72, "DfPlayerSnapshot ABI layout changed");
+_Static_assert(offsetof(DfPlayerSnapshot, name) == 24, "DfPlayerSnapshot.name ABI offset changed");
+_Static_assert(offsetof(DfPlayerSnapshot, latency_milliseconds) == 40, "DfPlayerSnapshot.latency_milliseconds ABI offset changed");
+_Static_assert(offsetof(DfPlayerSnapshot, position) == 48, "DfPlayerSnapshot.position ABI offset changed");
 _Static_assert(sizeof(DfFormView) == 40, "DfFormView ABI layout changed");
 _Static_assert(sizeof(DfWorldId) == 8, "DfWorldId ABI layout changed");
 _Static_assert(sizeof(DfBlockData) == 48, "DfBlockData ABI layout changed");
@@ -79,7 +83,7 @@ _Static_assert(offsetof(DfWorldOpenSpecV1, open_mode) == 48, "DfWorldOpenSpecV1.
 _Static_assert(offsetof(DfWorldOpenSpecV1, read_only) == 76, "DfWorldOpenSpecV1.read_only ABI offset changed");
 _Static_assert(sizeof(DfBlockRange) == 8, "DfBlockRange ABI layout changed");
 _Static_assert(sizeof(DfHostApiV27) == 656, "DfHostApiV27 ABI layout changed");
-_Static_assert(DF_HOST_ABI_VERSION == 28u, "host ABI version changed without bridge review");
+_Static_assert(DF_HOST_ABI_VERSION == 29u, "host ABI version changed without bridge review");
 _Static_assert(offsetof(DfHostApiV27, player_skin_open) == 80, "DfHostApiV27.player_skin_open ABI offset changed");
 _Static_assert(offsetof(DfHostApiV27, player_skin_set) == 112, "DfHostApiV27.player_skin_set ABI offset changed");
 _Static_assert(offsetof(DfHostApiV27, inventory_size) == 120, "DfHostApiV27.inventory_size ABI offset changed");
@@ -123,7 +127,7 @@ extern DfStatus bg_go_player_scoreboard_remove(uint64_t context, DfInvocationId 
 extern DfStatus bg_go_player_form_send(uint64_t context, DfInvocationId invocation, DfPlayerId player, const DfFormView *form);
 extern DfStatus bg_go_player_form_close(uint64_t context, DfInvocationId invocation, DfPlayerId player);
 
-DfStatus bg_call_form_response(DfFormResponseFn callback, void *callback_context, DfInvocationId invocation, DfPlayerId submitter, uint32_t outcome, DfStringView response_json) { return callback(callback_context, invocation, submitter, outcome, response_json); }
+DfStatus bg_call_form_response(DfFormResponseFn callback, void *callback_context, DfInvocationId invocation, const DfPlayerSnapshot *submitter, uint32_t outcome, DfStringView response_json) { return callback(callback_context, invocation, submitter, outcome, response_json); }
 void bg_call_form_drop(DfFormDropFn callback, void *callback_context) { callback(callback_context); }
 extern DfStatus bg_go_player_transform(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfVec3 vector, double yaw, double pitch);
 extern DfStatus bg_go_player_transfer(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfWorldId world, DfVec3 position);

@@ -45,17 +45,26 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    plugins never handle identifiers, NBT, numeric biome IDs, world handles, iterator handles, or
    host errors. `Liquid` preserves Dragonfly's `(Liquid, bool)` result, and passing `null` to
    `SetLiquid` removes the liquid. Host
-   ABI 28 transports that distinction, signed `time.Duration` nanoseconds, private biome IDs,
+   ABI 29 transports that distinction, signed `time.Duration` nanoseconds, private biome IDs,
    particles, registered/custom game-mode capabilities, and the transaction owner's current tick
-   without exposing them publicly.
+   without exposing them publicly. Form response callbacks additionally receive a borrowed full
+   player snapshot, and ownership transfer guarantees exactly one response or drop callback.
    `ScheduleBlockUpdate`
    maps Go `time.Duration` to C# `TimeSpan`
    and preserves the transaction-owned call. `BuildStructure` remains absent until its synchronous `At` and
    `blockAt` callbacks can be implemented without materialising or changing Dragonfly semantics.
    Remaining stateful blocks, structures, world methods, custom blocks, and block models land
    incrementally.
-5. Items, forms, entities, remaining sounds, and remaining world/block methods.
-6. Convert practice-core and expand parity tests against Dragonfly.
+5. Forms. `Form` interfaces, element fields and memberships, constructors, fluent methods,
+   response value types, `Custom`/`Menu`/`Modal`, and `Player.SendForm`/`CloseForm` are generated
+   from Dragonfly's `server/player/form` and `player.go` AST. Hand-written `FormCodec` code is
+   limited to Dragonfly's reflection, JSON, response-validation, and callback semantics; the
+   private ABI transports only JSON plus the borrowed submitting-player snapshot. `Form.Value`
+   remains open for plugin-defined forms and exposes byte-oriented `MarshalJSON`/`SubmitJSON`;
+   a null response preserves Dragonfly's close signal. `Element` and `MenuElement` retain their
+   public JSON-marshalling contract too.
+6. Items, entities, remaining sounds, and remaining world/block methods.
+7. Convert practice-core and expand parity tests against Dragonfly.
 
 Each slice removes the replaced legacy implementation. Unsupported API remains absent rather than gaining a parallel abstraction.
 
@@ -76,6 +85,9 @@ temperature and weather query in this slice.
 instruments through the transaction-owned `AddParticle` call.
 `/kitchen game-mode` exercises registered lookup, player reads, and a custom capability-backed
 game mode.
+`/kitchen form` exercises reflected menu, custom, and modal forms, every built-in element,
+submitted values, closers, and nested sends. `/kitchen raw-form` exercises the open `Form.Value`
+contract plus public element/menu-element JSON marshalling.
 NativeAOT and host-call tests verify the public shape, lazy iterator cleanup, and transaction-safe
 transport.
 

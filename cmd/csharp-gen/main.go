@@ -114,6 +114,30 @@ type gameModeSpec struct {
 	Modes   []gameModeValue
 }
 
+type formFieldSpec struct {
+	Name string
+	Type string
+}
+
+type formElementSpec struct {
+	Name        string
+	Fields      []formFieldSpec
+	Element     bool
+	MenuElement bool
+	Constructor []parameter
+	Tooltip     bool
+	ValueType   string
+}
+
+type formSpec struct {
+	Elements []formElementSpec
+}
+
+type goSignature struct {
+	Parameters string
+	Results    string
+}
+
 var gameModeMethodNames = []string{
 	"AllowsEditing",
 	"AllowsTakingDamage",
@@ -204,6 +228,23 @@ var selectedPlayerTextMethods = []string{
 	"Disconnect",
 }
 
+var selectedPlayerFormMethods = []string{
+	"SendForm",
+	"CloseForm",
+}
+
+var selectedFormElements = []string{
+	"Divider",
+	"Header",
+	"Label",
+	"Input",
+	"Toggle",
+	"Slider",
+	"Dropdown",
+	"StepSlider",
+	"Button",
+}
+
 var selectedWorldTxMethods = []string{
 	"Range",
 	"SetBlock",
@@ -250,6 +291,14 @@ func main() {
 		fatal(err)
 	}
 	playerMethods, err := playerTextMethods(filepath.Join(directory, "server", "player", "player.go"))
+	if err != nil {
+		fatal(err)
+	}
+	playerFormMethods, err := inspectPlayerFormMethods(filepath.Join(directory, "server", "player", "player.go"))
+	if err != nil {
+		fatal(err)
+	}
+	forms, err := inspectForms(filepath.Join(directory, "server", "player", "form"))
 	if err != nil {
 		fatal(err)
 	}
@@ -301,6 +350,14 @@ func main() {
 		{
 			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "Player.Text.g.cs"),
 			Content: generatePlayerTextMethods(playerMethods),
+		},
+		{
+			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "Player.Form.g.cs"),
+			Content: generatePlayerFormMethods(playerFormMethods),
+		},
+		{
+			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "Form.Types.g.cs"),
+			Content: generateForms(forms),
 		},
 		{
 			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "Cmd.Interfaces.g.cs"),
@@ -378,6 +435,400 @@ func selectedPlayerTextMethod(name string) bool {
 		}
 	}
 	return false
+}
+
+func inspectPlayerFormMethods(path string) ([]method, error) {
+	file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+	if err != nil {
+		return nil, err
+	}
+	found := map[string]method{}
+	for _, declaration := range file.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if !ok || !playerMethod(function) {
+			continue
+		}
+		selected := false
+		for _, name := range selectedPlayerFormMethods {
+			selected = selected || function.Name.Name == name
+		}
+		if !selected {
+			continue
+		}
+		if function.Type.Results != nil && len(function.Type.Results.List) != 0 {
+			return nil, fmt.Errorf("player.Player.%s returns values", function.Name.Name)
+		}
+		parameters, err := translateFormParameters(function.Type.Params)
+		if err != nil {
+			return nil, fmt.Errorf("player.Player.%s: %w", function.Name.Name, err)
+		}
+		found[function.Name.Name] = method{Name: function.Name.Name, Parameters: parameters}
+	}
+	methods := make([]method, 0, len(selectedPlayerFormMethods))
+	for _, name := range selectedPlayerFormMethods {
+		definition, ok := found[name]
+		if !ok {
+			return nil, fmt.Errorf("Dragonfly player.Player has no supported %s method", name)
+		}
+		methods = append(methods, definition)
+	}
+	return methods, nil
+}
+
+func inspectForms(directory string) (formSpec, error) {
+	packages, err := parser.ParseDir(token.NewFileSet(), directory, nil, 0)
+	if err != nil {
+		return formSpec{}, err
+	}
+	pkg, ok := packages["form"]
+	if !ok {
+		return formSpec{}, fmt.Errorf("Dragonfly form package not found")
+	}
+	types := map[string]*ast.TypeSpec{}
+	functions := map[string]*ast.FuncDecl{}
+	methods := map[string]map[string]*ast.FuncDecl{}
+	markers := map[string]map[string]bool{}
+	for _, file := range pkg.Files {
+		for _, declaration := range file.Decls {
+			switch value := declaration.(type) {
+			case *ast.GenDecl:
+				for _, raw := range value.Specs {
+					if spec, ok := raw.(*ast.TypeSpec); ok {
+						types[spec.Name.Name] = spec
+					}
+				}
+			case *ast.FuncDecl:
+				if value.Recv == nil {
+					functions[value.Name.Name] = value
+					continue
+				}
+				receiver, ok := receiverName(value)
+				if !ok {
+					continue
+				}
+				if methods[receiver] == nil {
+					methods[receiver] = map[string]*ast.FuncDecl{}
+				}
+				methods[receiver][value.Name.Name] = value
+				if value.Name.Name == "elem" || value.Name.Name == "menuElem" {
+					if markers[receiver] == nil {
+						markers[receiver] = map[string]bool{}
+					}
+					markers[receiver][value.Name.Name] = true
+				}
+			}
+		}
+	}
+
+	if err := validateFormInterfaces(types); err != nil {
+		return formSpec{}, err
+	}
+	if err := validateFormContainers(types, functions, methods); err != nil {
+		return formSpec{}, err
+	}
+
+	definitions := make([]formElementSpec, 0, len(selectedFormElements))
+	for _, name := range selectedFormElements {
+		typeSpec, ok := types[name]
+		if !ok {
+			return formSpec{}, fmt.Errorf("form.%s not found", name)
+		}
+		fields, err := formElementFields(name, typeSpec, types)
+		if err != nil {
+			return formSpec{}, err
+		}
+		definition := formElementSpec{
+			Name: name, Fields: fields,
+			Element: markers[name]["elem"], MenuElement: markers[name]["menuElem"],
+		}
+		marshal, ok := methods[name]["MarshalJSON"]
+		if !ok || !valueReceiver(marshal, name) || rawParameterTypes(marshal.Type.Params) != "" || rawResultTypes(marshal.Type.Results) != "[]byte,error" {
+			return formSpec{}, fmt.Errorf("form.%s.MarshalJSON signature changed", name)
+		}
+		constructorName := "New" + name
+		if name != "Divider" {
+			constructor, ok := functions[constructorName]
+			if !ok {
+				return formSpec{}, fmt.Errorf("form.%s not found", constructorName)
+			}
+			if err := requireSingleResult(constructor, name); err != nil {
+				return formSpec{}, fmt.Errorf("form.%s: %w", constructorName, err)
+			}
+			definition.Constructor, err = translateFormParameters(constructor.Type.Params)
+			if err != nil {
+				return formSpec{}, fmt.Errorf("form.%s: %w", constructorName, err)
+			}
+		}
+		if tooltip := methods[name]["WithTooltip"]; tooltip != nil {
+			if !valueReceiver(tooltip, name) || requireMethodSignature(tooltip, []string{"string"}, name) != nil {
+				return formSpec{}, fmt.Errorf("form.%s.WithTooltip signature changed", name)
+			}
+			definition.Tooltip = true
+		}
+		if value := methods[name]["Value"]; value != nil {
+			if !valueReceiver(value, name) || value.Type.Params.NumFields() != 0 || value.Type.Results == nil || len(value.Type.Results.List) != 1 {
+				return formSpec{}, fmt.Errorf("form.%s.Value signature changed", name)
+			}
+			translated, ok := formCSharpType(value.Type.Results.List[0].Type)
+			if !ok {
+				return formSpec{}, fmt.Errorf("form.%s.Value has unsupported result %s", name, formatGoExpression(value.Type.Results.List[0].Type))
+			}
+			definition.ValueType = translated
+		}
+		definitions = append(definitions, definition)
+	}
+	return formSpec{Elements: definitions}, nil
+}
+
+func receiverName(function *ast.FuncDecl) (string, bool) {
+	if function.Recv == nil || len(function.Recv.List) != 1 {
+		return "", false
+	}
+	expression := function.Recv.List[0].Type
+	if pointer, ok := expression.(*ast.StarExpr); ok {
+		expression = pointer.X
+	}
+	identifier, ok := expression.(*ast.Ident)
+	return identifier.Name, ok
+}
+
+func valueReceiver(function *ast.FuncDecl, name string) bool {
+	if function.Recv == nil || len(function.Recv.List) != 1 {
+		return false
+	}
+	identifier, ok := function.Recv.List[0].Type.(*ast.Ident)
+	return ok && identifier.Name == name
+}
+
+func formElementFields(name string, spec *ast.TypeSpec, types map[string]*ast.TypeSpec) ([]formFieldSpec, error) {
+	if identifier, ok := spec.Type.(*ast.Ident); ok {
+		underlying, found := types[identifier.Name]
+		if !found {
+			return nil, fmt.Errorf("form.%s has unknown underlying type %s", name, identifier.Name)
+		}
+		return formElementFields(name, underlying, types)
+	}
+	structure, ok := spec.Type.(*ast.StructType)
+	if !ok {
+		return nil, fmt.Errorf("form.%s is not a struct", name)
+	}
+	var fields []formFieldSpec
+	for _, field := range structure.Fields.List {
+		typeName, ok := formCSharpType(field.Type)
+		if !ok {
+			return nil, fmt.Errorf("form.%s has unsupported field type %s", name, formatGoExpression(field.Type))
+		}
+		for _, fieldName := range field.Names {
+			if fieldName.IsExported() {
+				fields = append(fields, formFieldSpec{Name: fieldName.Name, Type: typeName})
+			}
+		}
+	}
+	return fields, nil
+}
+
+func validateFormInterfaces(types map[string]*ast.TypeSpec) error {
+	want := map[string]map[string]goSignature{
+		"Submittable":     {"Submit": {Parameters: "Submitter,*world.Tx"}},
+		"MenuSubmittable": {"Submit": {Parameters: "Submitter,Button,*world.Tx"}},
+		"Closer":          {"Close": {Parameters: "Submitter,*world.Tx"}},
+		"Submitter":       {"SendForm": {Parameters: "Form"}, "CloseForm": {}},
+		"Form":            {"SubmitJSON": {Parameters: "[]byte,Submitter,*world.Tx", Results: "error"}},
+	}
+	for name, methods := range want {
+		typeSpec, ok := types[name]
+		if !ok {
+			return fmt.Errorf("form.%s interface not found", name)
+		}
+		interfaceType, ok := typeSpec.Type.(*ast.InterfaceType)
+		if !ok {
+			return fmt.Errorf("form.%s is not an interface", name)
+		}
+		found := map[string]goSignature{}
+		for _, field := range interfaceType.Methods.List {
+			if len(field.Names) != 1 {
+				continue
+			}
+			function, ok := field.Type.(*ast.FuncType)
+			if !ok {
+				return fmt.Errorf("form.%s.%s is not a method", name, field.Names[0].Name)
+			}
+			found[field.Names[0].Name] = goSignature{
+				Parameters: rawParameterTypes(function.Params),
+				Results:    rawResultTypes(function.Results),
+			}
+		}
+		if !reflect.DeepEqual(found, methods) {
+			return fmt.Errorf("form.%s methods changed: %v", name, found)
+		}
+	}
+	for name, marker := range map[string]string{"Element": "elem", "MenuElement": "menuElem"} {
+		typeSpec, ok := types[name]
+		if !ok {
+			return fmt.Errorf("form.%s interface not found", name)
+		}
+		interfaceType, ok := typeSpec.Type.(*ast.InterfaceType)
+		if !ok || len(interfaceType.Methods.List) != 2 {
+			return fmt.Errorf("form.%s interface changed", name)
+		}
+		var marshaler, markerMethod bool
+		for _, field := range interfaceType.Methods.List {
+			if len(field.Names) == 0 {
+				marshaler = formatGoExpression(field.Type) == "json.Marshaler"
+				continue
+			}
+			function, ok := field.Type.(*ast.FuncType)
+			markerMethod = ok && field.Names[0].Name == marker && rawParameterTypes(function.Params) == "" && rawResultTypes(function.Results) == ""
+		}
+		if !marshaler || !markerMethod {
+			return fmt.Errorf("form.%s interface changed", name)
+		}
+	}
+	modal, ok := types["ModalSubmittable"]
+	if !ok {
+		return fmt.Errorf("form.ModalSubmittable not found")
+	}
+	identifier, ok := modal.Type.(*ast.Ident)
+	if !ok || identifier.Name != "MenuSubmittable" {
+		return fmt.Errorf("form.ModalSubmittable underlying type changed")
+	}
+	return nil
+}
+
+func validateFormContainers(types map[string]*ast.TypeSpec, functions map[string]*ast.FuncDecl, methods map[string]map[string]*ast.FuncDecl) error {
+	constructors := map[string]struct {
+		Result string
+		Params string
+	}{
+		"New":      {"Custom", "Submittable,...any"},
+		"NewMenu":  {"Menu", "MenuSubmittable,...any"},
+		"NewModal": {"Modal", "ModalSubmittable,...any"},
+	}
+	for name, expected := range constructors {
+		function, ok := functions[name]
+		if !ok || rawParameterTypes(function.Type.Params) != expected.Params || requireSingleResult(function, expected.Result) != nil {
+			return fmt.Errorf("form.%s signature changed", name)
+		}
+	}
+	for _, name := range []string{"Custom", "Menu", "Modal"} {
+		if _, ok := types[name]; !ok {
+			return fmt.Errorf("form.%s not found", name)
+		}
+	}
+	wantMethods := map[string]map[string]goSignature{
+		"Custom": {
+			"Title": {Results: "string"}, "Elements": {Results: "[]Element"},
+			"SubmitJSON": {Parameters: "[]byte,Submitter,*world.Tx", Results: "error"}, "MarshalJSON": {Results: "[]byte,error"},
+		},
+		"Menu": {
+			"WithBody": {Parameters: "...any", Results: "Menu"}, "AddButton": {Parameters: "Button", Results: "Menu"},
+			"AddDivider": {Parameters: "Divider", Results: "Menu"}, "AddHeader": {Parameters: "Header", Results: "Menu"},
+			"AddLabel": {Parameters: "Label", Results: "Menu"}, "WithButtons": {Parameters: "...Button", Results: "Menu"},
+			"WithElements": {Parameters: "...MenuElement", Results: "Menu"}, "Title": {Results: "string"}, "Body": {Results: "string"},
+			"Buttons": {Results: "[]Button"}, "Elements": {Results: "[]MenuElement"},
+			"SubmitJSON": {Parameters: "[]byte,Submitter,*world.Tx", Results: "error"}, "MarshalJSON": {Results: "[]byte,error"},
+		},
+		"Modal": {
+			"WithBody": {Parameters: "...any", Results: "Modal"}, "Title": {Results: "string"}, "Body": {Results: "string"},
+			"Buttons": {Results: "[]Button"}, "SubmitJSON": {Parameters: "[]byte,Submitter,*world.Tx", Results: "error"},
+			"MarshalJSON": {Results: "[]byte,error"},
+		},
+	}
+	for receiver, expected := range wantMethods {
+		for name, signature := range expected {
+			function, ok := methods[receiver][name]
+			if !ok || !valueReceiver(function, receiver) || rawParameterTypes(function.Type.Params) != signature.Parameters || rawResultTypes(function.Type.Results) != signature.Results {
+				return fmt.Errorf("form.%s.%s signature changed", receiver, name)
+			}
+		}
+	}
+	for _, name := range []string{"YesButton", "NoButton"} {
+		function, ok := functions[name]
+		if !ok || rawParameterTypes(function.Type.Params) != "" || requireSingleResult(function, "Button") != nil {
+			return fmt.Errorf("form.%s signature changed", name)
+		}
+	}
+	return nil
+}
+
+func rawParameterTypes(fields *ast.FieldList) string {
+	if fields == nil {
+		return ""
+	}
+	var values []string
+	for _, field := range fields.List {
+		count := len(field.Names)
+		if count == 0 {
+			count = 1
+		}
+		for range count {
+			values = append(values, formatGoExpression(field.Type))
+		}
+	}
+	return strings.Join(values, ",")
+}
+
+func rawResultTypes(fields *ast.FieldList) string {
+	return rawParameterTypes(fields)
+}
+
+func requireSingleResult(function *ast.FuncDecl, result string) error {
+	if function.Type.Results == nil || len(function.Type.Results.List) != 1 || len(function.Type.Results.List[0].Names) > 1 || formatGoExpression(function.Type.Results.List[0].Type) != result {
+		return fmt.Errorf("must return %s", result)
+	}
+	return nil
+}
+
+func requireMethodSignature(function *ast.FuncDecl, parameters []string, result string) error {
+	if rawParameterTypes(function.Type.Params) != strings.Join(parameters, ",") {
+		return fmt.Errorf("parameters changed")
+	}
+	return requireSingleResult(function, result)
+}
+
+func translateFormParameters(fields *ast.FieldList) ([]parameter, error) {
+	var parameters []parameter
+	if fields == nil {
+		return parameters, nil
+	}
+	for _, field := range fields.List {
+		typeName, ok := formCSharpType(field.Type)
+		if !ok {
+			return nil, fmt.Errorf("unsupported parameter type %s", formatGoExpression(field.Type))
+		}
+		for _, name := range field.Names {
+			parameters = append(parameters, parameter{Name: name.Name, Type: typeName})
+		}
+	}
+	return parameters, nil
+}
+
+func formCSharpType(expression ast.Expr) (string, bool) {
+	switch value := expression.(type) {
+	case *ast.Ellipsis:
+		typeName, ok := formCSharpType(value.Elt)
+		return "params " + typeName + "[]", ok
+	case *ast.ArrayType:
+		if value.Len != nil {
+			return "", false
+		}
+		element, ok := formCSharpType(value.Elt)
+		return element + "[]", ok
+	case *ast.Ident:
+		translated, ok := map[string]string{
+			"any": "object?", "bool": "bool", "float64": "double", "int": "int", "string": "string", "Form": "Form.Value",
+		}[value.Name]
+		return translated, ok
+	case *ast.SelectorExpr:
+		packageName, ok := value.X.(*ast.Ident)
+		if !ok {
+			return "", false
+		}
+		translated, ok := map[string]string{"form.Form": "Form.Value"}[packageName.Name+"."+value.Sel.Name]
+		return translated, ok
+	default:
+		return "", false
+	}
 }
 
 func playerMethod(function *ast.FuncDecl) bool {
@@ -1835,6 +2286,8 @@ func formatGoExpression(expression ast.Expr) string {
 		return "*" + formatGoExpression(value.X)
 	case *ast.ArrayType:
 		return "[]" + formatGoExpression(value.Elt)
+	case *ast.Ellipsis:
+		return "..." + formatGoExpression(value.Elt)
 	default:
 		return fmt.Sprintf("%T", expression)
 	}
@@ -1885,6 +2338,246 @@ func generatePlayerTextMethods(methods []method) []byte {
 	}
 	output.WriteString("}\n")
 	return output.Bytes()
+}
+
+func generatePlayerFormMethods(methods []method) []byte {
+	var output bytes.Buffer
+	output.WriteString("// Code generated from Dragonfly server/player/player.go. DO NOT EDIT.\n")
+	output.WriteString("#nullable enable\n\nnamespace Dragonfly;\n\n")
+	output.WriteString("public sealed partial class Player : Form.Submitter\n{\n")
+	for _, method := range methods {
+		fmt.Fprintf(&output, "    public void %s(%s) =>\n", method.Name, formatParameters(method.Parameters))
+		switch method.Name {
+		case "SendForm":
+			fmt.Fprintf(&output, "        PluginBridge.Host.SendPlayerForm(Invocation, Id, %s);\n", method.Parameters[0].Name)
+		case "CloseForm":
+			output.WriteString("        PluginBridge.Host.ClosePlayerForm(Invocation, Id);\n")
+		default:
+			panic("unsupported player form method: " + method.Name)
+		}
+		if method.Name != methods[len(methods)-1].Name {
+			output.WriteByte('\n')
+		}
+	}
+	output.WriteString("}\n")
+	return output.Bytes()
+}
+
+func generateForms(spec formSpec) []byte {
+	var output bytes.Buffer
+	output.WriteString("// Code generated from Dragonfly server/player/form Go AST. DO NOT EDIT.\n")
+	output.WriteString("#nullable enable\nusing System;\nusing System.Collections.Generic;\n\nnamespace Dragonfly;\n\n")
+	output.WriteString(`public static partial class Form
+{
+    public interface Value
+    {
+        byte[] MarshalJSON();
+        void SubmitJSON(byte[]? response, Submitter submitter, World.Tx tx);
+    }
+
+    public interface Element
+    {
+        byte[] MarshalJSON();
+    }
+
+    public interface MenuElement
+    {
+        byte[] MarshalJSON();
+    }
+
+    public interface Submittable
+    {
+        void Submit(Submitter submitter, World.Tx tx);
+    }
+
+    public interface MenuSubmittable
+    {
+        void Submit(Submitter submitter, Button pressed, World.Tx tx);
+    }
+
+    public interface ModalSubmittable : MenuSubmittable { }
+
+    public interface Closer
+    {
+        void Close(Submitter submitter, World.Tx tx);
+    }
+
+    public interface Submitter
+    {
+        void SendForm(Value form);
+        void CloseForm();
+    }
+
+`)
+	for _, element := range spec.Elements {
+		generateFormElement(&output, element)
+		output.WriteByte('\n')
+	}
+	output.WriteString(`    public readonly struct Custom : Value
+    {
+        internal Custom(Submittable submittable, string title) =>
+            (Submittable, FormTitle) = (submittable, title);
+
+        internal Submittable Submittable { get; }
+        internal string FormTitle { get; }
+
+        public string Title() => FormTitle;
+        public IReadOnlyList<Element> Elements() => FormCodec.Elements(this);
+        public byte[] MarshalJSON() => FormCodec.Encode(this);
+        public void SubmitJSON(byte[]? response, Submitter submitter, World.Tx tx) =>
+            FormCodec.Respond(this, submitter, tx, response is null, response ?? Array.Empty<byte>());
+    }
+
+    public readonly struct Menu : Value
+    {
+        internal Menu(MenuSubmittable submittable, string title, string body, MenuElement[] elements) =>
+            (Submittable, FormTitle, FormBody, ExtraElements) = (submittable, title, body, elements);
+
+        internal MenuSubmittable Submittable { get; }
+        internal string FormTitle { get; }
+        internal string FormBody { get; }
+        internal MenuElement[] ExtraElements { get; }
+
+        public Menu WithBody(params object?[] body) =>
+            new(Submittable, FormTitle, FormCodec.Format(body), ExtraElements);
+
+        public Menu AddButton(Button button) => WithElements(button);
+        public Menu AddDivider(Divider divider) => WithElements(divider);
+        public Menu AddHeader(Header header) => WithElements(header);
+        public Menu AddLabel(Label label) => WithElements(label);
+
+        public Menu WithButtons(params Button[] buttons)
+        {
+            var elements = new MenuElement[buttons.Length];
+            for (var index = 0; index < buttons.Length; index++) elements[index] = buttons[index];
+            return WithElements(elements);
+        }
+
+        public Menu WithElements(params MenuElement[] elements)
+        {
+            var combined = new MenuElement[ExtraElements.Length + elements.Length];
+            ExtraElements.CopyTo(combined, 0);
+            elements.CopyTo(combined, ExtraElements.Length);
+            return new Menu(Submittable, FormTitle, FormBody, combined);
+        }
+
+        public string Title() => FormTitle;
+        public string Body() => FormBody;
+        public IReadOnlyList<Button> Buttons() => FormCodec.Buttons(this);
+        public IReadOnlyList<MenuElement> Elements() => FormCodec.Elements(this);
+        public byte[] MarshalJSON() => FormCodec.Encode(this);
+        public void SubmitJSON(byte[]? response, Submitter submitter, World.Tx tx) =>
+            FormCodec.Respond(this, submitter, tx, response is null, response ?? Array.Empty<byte>());
+    }
+
+    public readonly struct Modal : Value
+    {
+        internal Modal(ModalSubmittable submittable, string title, string body) =>
+            (Submittable, FormTitle, FormBody) = (submittable, title, body);
+
+        internal ModalSubmittable Submittable { get; }
+        internal string FormTitle { get; }
+        internal string FormBody { get; }
+
+        public Modal WithBody(params object?[] body) =>
+            new(Submittable, FormTitle, FormCodec.Format(body));
+
+        public string Title() => FormTitle;
+        public string Body() => FormBody;
+        public IReadOnlyList<Button> Buttons() => FormCodec.Buttons(this);
+        public byte[] MarshalJSON() => FormCodec.Encode(this);
+        public void SubmitJSON(byte[]? response, Submitter submitter, World.Tx tx) =>
+            FormCodec.Respond(this, submitter, tx, response is null, response ?? Array.Empty<byte>());
+    }
+
+    public static Custom New(Submittable submittable, params object?[] title)
+    {
+        ArgumentNullException.ThrowIfNull(submittable);
+        FormCodec.VerifyCustom(submittable);
+        return new Custom(submittable, FormCodec.Format(title));
+    }
+
+    public static Menu NewMenu(MenuSubmittable submittable, params object?[] title)
+    {
+        ArgumentNullException.ThrowIfNull(submittable);
+        FormCodec.VerifyMenu(submittable);
+        return new Menu(submittable, FormCodec.Format(title), string.Empty, Array.Empty<MenuElement>());
+    }
+
+    public static Modal NewModal(ModalSubmittable submittable, params object?[] title)
+    {
+        ArgumentNullException.ThrowIfNull(submittable);
+        FormCodec.VerifyModal(submittable);
+        return new Modal(submittable, FormCodec.Format(title), string.Empty);
+    }
+
+    public static Button YesButton() => NewButton("gui.yes", string.Empty);
+    public static Button NoButton() => NewButton("gui.no", string.Empty);
+}
+`)
+	return output.Bytes()
+}
+
+func generateFormElement(output *bytes.Buffer, element formElementSpec) {
+	fmt.Fprintf(output, "    public struct %s", element.Name)
+	var interfaces []string
+	if element.Element {
+		interfaces = append(interfaces, "Element")
+	}
+	if element.MenuElement {
+		interfaces = append(interfaces, "MenuElement")
+	}
+	if len(interfaces) != 0 {
+		fmt.Fprintf(output, " : %s", strings.Join(interfaces, ", "))
+	}
+	output.WriteString("\n    {\n")
+	for _, field := range element.Fields {
+		fmt.Fprintf(output, "        public %s %s;\n", field.Type, field.Name)
+	}
+	if element.ValueType != "" {
+		if element.ValueType == "string" {
+			output.WriteString("        private string? _value;\n")
+		} else {
+			fmt.Fprintf(output, "        private %s _value;\n", element.ValueType)
+		}
+	}
+	output.WriteString("\n        public readonly byte[] MarshalJSON() => ")
+	if element.Element {
+		output.WriteString("FormCodec.EncodeElement(this);\n")
+	} else {
+		output.WriteString("FormCodec.EncodeMenuElement(this);\n")
+	}
+	if element.Tooltip {
+		fmt.Fprintf(output, "\n        public readonly %s WithTooltip(string tooltip)\n        {\n", element.Name)
+		output.WriteString("            var copy = this;\n            copy.Tooltip = tooltip;\n            return copy;\n        }\n")
+	}
+	if element.ValueType != "" {
+		fmt.Fprintf(output, "\n        public readonly %s Value() => _value", element.ValueType)
+		if element.ValueType == "string" {
+			output.WriteString(" ?? string.Empty")
+		}
+		output.WriteString(";\n")
+		fmt.Fprintf(output, "\n        internal readonly %s WithValue(%s value)\n        {\n", element.Name, element.ValueType)
+		output.WriteString("            var copy = this;\n            copy._value = value;\n            return copy;\n        }\n")
+	}
+	output.WriteString("    }\n\n")
+	if element.Name == "Divider" {
+		return
+	}
+	fmt.Fprintf(output, "    public static %s New%s(%s) => new()\n    {\n", element.Name, element.Name, formatParameters(element.Constructor))
+	fields := make([]formFieldSpec, 0, len(element.Fields))
+	for _, field := range element.Fields {
+		if field.Name != "Tooltip" {
+			fields = append(fields, field)
+		}
+	}
+	if len(fields) != len(element.Constructor) {
+		panic("form." + element.Name + " constructor no longer maps to exported fields")
+	}
+	for index, field := range fields {
+		fmt.Fprintf(output, "        %s = %s,\n", field.Name, element.Constructor[index].Name)
+	}
+	output.WriteString("    };\n")
 }
 
 func generateCommandInterfaces(interfaces []commandInterface) []byte {

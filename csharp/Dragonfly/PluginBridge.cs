@@ -51,6 +51,92 @@ internal static unsafe class PluginBridge
         internal static World.GameMode PlayerGameMode(ulong invocation, PlayerId player) =>
             World.GameModeFromDescriptor(GetPlayerState(invocation, player, 0).Integer);
 
+        internal static void SendPlayerForm(ulong invocation, PlayerId player, Form.Value form)
+        {
+            ArgumentNullException.ThrowIfNull(form);
+            var request = form.MarshalJSON();
+            ArgumentNullException.ThrowIfNull(request);
+            var api = Api;
+            if (api is null || api->PlayerFormSend == null) return;
+            var handle = GCHandle.Alloc(new PendingForm(form));
+            fixed (byte* requestData = request)
+            {
+                var view = new FormView
+                {
+                    RequestJson = new StringView { Data = requestData, Length = (ulong)request.Length },
+                    CallbackContext = (void*)GCHandle.ToIntPtr(handle),
+                    Response = &FormResponse,
+                    Drop = &FormDrop,
+                };
+                // A structurally valid view transfers callback-context ownership to the host even on error.
+                _ = api->PlayerFormSend(api->Context, invocation, player, &view);
+            }
+        }
+
+        internal static void ClosePlayerForm(ulong invocation, PlayerId player)
+        {
+            var api = Api;
+            if (api is null || api->PlayerFormClose == null) return;
+            _ = api->PlayerFormClose(api->Context, invocation, player);
+        }
+
+        [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+        private static int FormResponse(
+            void* callbackContext,
+            ulong invocation,
+            PlayerSnapshot* snapshot,
+            uint outcome,
+            StringView response)
+        {
+            PendingForm? pending = null;
+            try
+            {
+                pending = TakePendingForm(callbackContext);
+                if (pending is null || snapshot is null || outcome > 1 ||
+                    response.Length > 1024 * 1024 || (response.Length != 0 && response.Data is null))
+                    return Abi.Error;
+                var latency = Math.Min((double)snapshot->LatencyMilliseconds, TimeSpan.MaxValue.TotalMilliseconds);
+                var submitter = new Player(
+                    snapshot->Player,
+                    Utf8(snapshot->Name),
+                    TimeSpan.FromMilliseconds(latency),
+                    new Vector3(snapshot->Position.X, snapshot->Position.Y, snapshot->Position.Z),
+                    invocation: invocation);
+                byte[]? responseBytes = outcome == 1
+                    ? null
+                    : response.Length == 0
+                        ? Array.Empty<byte>()
+                        : new ReadOnlySpan<byte>(response.Data, checked((int)response.Length)).ToArray();
+                pending.Form.SubmitJSON(responseBytes, submitter, new World.Tx(invocation));
+                return Abi.Ok;
+            }
+            catch
+            {
+                return Abi.Error;
+            }
+        }
+
+        [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+        private static void FormDrop(void* callbackContext)
+        {
+            try { _ = TakePendingForm(callbackContext); }
+            catch { }
+        }
+
+        private static PendingForm? TakePendingForm(void* callbackContext)
+        {
+            if (callbackContext is null) return null;
+            var handle = GCHandle.FromIntPtr((nint)callbackContext);
+            var pending = handle.Target as PendingForm;
+            handle.Free();
+            return pending;
+        }
+
+        private sealed class PendingForm(Form.Value form)
+        {
+            internal Form.Value Form { get; } = form;
+        }
+
         internal static World.Block WorldBlock(ulong invocation, Cube.Pos position)
         {
             var api = Api;
