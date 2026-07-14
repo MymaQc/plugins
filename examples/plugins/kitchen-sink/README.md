@@ -7,6 +7,8 @@ Runnable parity showcase. Its single plugin class demonstrates:
 - all 37 Dragonfly player handlers, including typed damage/healing sources, worlds, entities,
   mutable skins and respawns, transfer addresses, command arguments, diagnostics, typed block/item
   payloads, mutable break drops, item-pickup replacement, signed durations, and full snapshots;
+- the cancellable host `OnJoin` lifecycle extension emitted after the framework installs its
+  Dragonfly player handler;
 - player-action telemetry;
 - reflected command arguments and overloads;
 - direct `Player.Message` output;
@@ -21,10 +23,14 @@ Runnable parity showcase. Its single plugin class demonstrates:
 - all 20 generated particle types and all 16 typed note instruments in `/kitchen particle`;
 - registered lookup, player reads, and custom `World.GameMode` in `/kitchen game-mode`;
 - food, health, experience, scale, visibility, and mobility state round-trips in `/kitchen state`;
+- direct typed healing in `/kitchen heal`;
+- managed MCDB opening, AST-generated world name/spawn/save methods, and safe cross-world player
+  movement in `/kitchen world`;
 - generated typed items (including finite stateful families, NBT-backed books, typed fireworks,
   seven armour tiers, four armour pieces, and 11 trim materials), firework explosions and shapes,
   armour defence/durability/repair/smelting behavior, all 28 armour round-trips, private dyed/trim
-  NBT, stack metadata, main/ender-chest inventories, armour slots, and held items in `/kitchen item`;
+  NBT, stack values, typed Protection/Unbreaking enchantments, normal compatibility filtering,
+  main/ender-chest inventories, armour slots, and held items in `/kitchen item`;
 - the full reflected form API in `/kitchen form`: menu, custom, and modal callbacks; every
   element type; URL and resource-pack button images; tooltips; closers; and submitted values;
 - open `Form.Value`, `Element.MarshalJSON`, and `MenuElement.MarshalJSON` implementations in

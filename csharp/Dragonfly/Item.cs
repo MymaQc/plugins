@@ -109,6 +109,107 @@ public static partial class Item
             return Copy(lore: (string[])lines.Clone());
         }
 
+        public Stack WithValue(string key, object? value)
+        {
+            ArgumentNullException.ThrowIfNull(key);
+            var values = StackValueCodec.Decode(_valuesNbt);
+            if (value is null) values.Remove(key);
+            else values[key] = value;
+            return Copy(valuesNbt: StackValueCodec.Encode(values));
+        }
+
+        public (object? Value, bool Ok) Value(string key)
+        {
+            ArgumentNullException.ThrowIfNull(key);
+            if (Empty()) return (null, false);
+            var values = StackValueCodec.Decode(_valuesNbt);
+            return values.TryGetValue(key, out var value) ? (value, true) : (null, false);
+        }
+
+        public IReadOnlyDictionary<string, object> Values() => Empty()
+            ? new Dictionary<string, object>(StringComparer.Ordinal)
+            : StackValueCodec.Decode(_valuesNbt);
+
+        public Stack WithEnchantments(params Enchantment[] enchantments)
+        {
+            ArgumentNullException.ThrowIfNull(enchantments);
+            var item = _item is Book ? new EnchantedBook() : _item;
+            var applied = EncodedEnchantments.ToDictionary(value => value.Id);
+            foreach (var enchantment in enchantments)
+            {
+                var type = enchantment.Type();
+                if (type is null || !TryEnchantmentID(type, out var id)) continue;
+                if (item is not EnchantedBook && !ItemCapabilities.EnchantmentCompatibleWithItem(id, item)) continue;
+                var encodedID = checked((uint)id);
+
+                var compatible = true;
+                foreach (var existing in applied.Values)
+                {
+                    if (existing.Id == encodedID) continue;
+                    var existingType = EnchantmentTypeByID(checked((int)existing.Id));
+                    if (existingType is null ||
+                        !EnchantmentsCompatible(type, existingType) ||
+                        !EnchantmentsCompatible(existingType, type))
+                    {
+                        compatible = false;
+                        break;
+                    }
+                }
+                if (compatible)
+                    applied[encodedID] = new ItemEnchantment { Id = encodedID, Level = checked((uint)enchantment.Level()) };
+            }
+            return Copy(item: item, enchantments: applied.Values.OrderBy(value => value.Id).ToArray());
+        }
+
+        public Stack WithForcedEnchantments(params Enchantment[] enchantments)
+        {
+            ArgumentNullException.ThrowIfNull(enchantments);
+            var applied = EncodedEnchantments.ToDictionary(value => value.Id);
+            foreach (var enchantment in enchantments)
+            {
+                var type = enchantment.Type();
+                if (type is null || !TryEnchantmentID(type, out var id)) continue;
+                var encodedID = checked((uint)id);
+                applied[encodedID] = new ItemEnchantment { Id = encodedID, Level = checked((uint)enchantment.Level()) };
+            }
+            return Copy(enchantments: applied.Values.OrderBy(value => value.Id).ToArray());
+        }
+
+        public Stack WithoutEnchantments(params EnchantmentType[] enchantments)
+        {
+            ArgumentNullException.ThrowIfNull(enchantments);
+            var applied = EncodedEnchantments.ToDictionary(value => value.Id);
+            foreach (var enchantment in enchantments)
+            {
+                ArgumentNullException.ThrowIfNull(enchantment);
+                if (TryEnchantmentID(enchantment, out var id)) applied.Remove(checked((uint)id));
+            }
+            World.Item? item = _item;
+            if (item is EnchantedBook && applied.Count == 0) item = new Book();
+            return Copy(item: item, enchantments: applied.Values.OrderBy(value => value.Id).ToArray());
+        }
+
+        public (Enchantment Enchantment, bool Ok) Enchantment(EnchantmentType enchantment)
+        {
+            ArgumentNullException.ThrowIfNull(enchantment);
+            if (Empty() || !TryEnchantmentID(enchantment, out var id)) return (default, false);
+            foreach (var existing in EncodedEnchantments)
+            {
+                if (existing.Id == checked((uint)id))
+                    return (NewEnchantment(enchantment, checked((int)existing.Level)), true);
+            }
+            return (default, false);
+        }
+
+        public Enchantment[] Enchantments() => Empty()
+            ? []
+            : EncodedEnchantments
+                .Select(value => EnchantmentTypeByID(checked((int)value.Id)) is { } type
+                    ? NewEnchantment(type, checked((int)value.Level))
+                    : default)
+                .Where(value => value.Type() is not null)
+                .ToArray();
+
         public int AnvilCost() => _anvilCost;
 
         public Stack WithAnvilCost(int anvilCost) => ItemCapabilities.AllowsAnvilCost(Item())
@@ -146,7 +247,7 @@ public static partial class Item
         internal byte[] RawItemNbt => _itemNbt ?? [];
         internal byte[] ItemNbt => ItemNbtCodec.TryEncode(_item, out var encoded) ? encoded : _itemNbt ?? [];
         internal byte[] ValuesNbt => _valuesNbt ?? [];
-        internal ItemEnchantment[] Enchantments => _enchantments ?? [];
+        internal ItemEnchantment[] EncodedEnchantments => _enchantments ?? [];
 
         internal bool TryEncode(out string identifier, out int metadata)
         {
@@ -157,13 +258,16 @@ public static partial class Item
         }
 
         private Stack Copy(
+            World.Item? item = null,
             int? count = null,
             uint? damage = null,
             bool? unbreakable = null,
             int? anvilCost = null,
             string? customName = null,
-            string[]? lore = null) => new(
-                _item,
+            string[]? lore = null,
+            byte[]? valuesNbt = null,
+            ItemEnchantment[]? enchantments = null) => new(
+                item ?? _item,
                 count ?? _count,
                 damage ?? _damage,
                 unbreakable ?? _unbreakable,
@@ -171,8 +275,8 @@ public static partial class Item
                 customName ?? _customName,
                 lore ?? _lore,
                 _itemNbt,
-                _valuesNbt,
-                _enchantments);
+                valuesNbt ?? _valuesNbt,
+                enchantments ?? _enchantments);
 
         private static bool SequenceEqual<T>(T[]? left, T[]? right) where T : IEquatable<T> =>
             (left ?? []).AsSpan().SequenceEqual(right ?? []);

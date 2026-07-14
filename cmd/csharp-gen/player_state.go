@@ -14,6 +14,7 @@ var selectedPlayerStateMethods = []string{
 	"Health",
 	"MaxHealth",
 	"SetMaxHealth",
+	"Heal",
 	"ExperienceLevel",
 	"SetExperienceLevel",
 	"ExperienceProgress",
@@ -51,6 +52,7 @@ func inspectPlayerStateMethods(path string) ([]playerStateMethod, error) {
 		"Health":                {Results: "float64"},
 		"MaxHealth":             {Results: "float64"},
 		"SetMaxHealth":          {Parameters: "float64"},
+		"Heal":                  {Parameters: "float64, world.HealingSource", Results: "float64"},
 		"ExperienceLevel":       {Results: "int"},
 		"SetExperienceLevel":    {Parameters: "int"},
 		"ExperienceProgress":    {Results: "float64"},
@@ -86,7 +88,7 @@ func inspectPlayerStateMethods(path string) ([]playerStateMethod, error) {
 		}
 		wantParameters := 0
 		if want[name].Parameters != "" {
-			wantParameters = 1
+			wantParameters = len(function.Type.Params.List)
 		}
 		if len(method.Parameters) != wantParameters {
 			return nil, fmt.Errorf("Dragonfly player.Player.%s parameter names changed", name)
@@ -117,6 +119,8 @@ func generatePlayerStateMethods(methods []playerStateMethod) []byte {
 			output.WriteString("    public double MaxHealth() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateMaxHealth).Number;\n")
 		case "SetMaxHealth":
 			fmt.Fprintf(&output, "    public void SetMaxHealth(double %s) => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateMaxHealth, new PlayerStateValue { Number = %s });\n", parameter, parameter)
+		case "Heal":
+			fmt.Fprintf(&output, "    public double Heal(double %s, World.HealingSource %s) => PluginBridge.Host.HealPlayer(_invocation, Id, %s, %s);\n", methodsParameter(method, 0), methodsParameter(method, 1), methodsParameter(method, 0), methodsParameter(method, 1))
 		case "ExperienceLevel":
 			output.WriteString("    public int ExperienceLevel() => checked((int)PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateExperienceLevel).Integer);\n")
 		case "SetExperienceLevel":
@@ -158,4 +162,8 @@ func generatePlayerStateMethods(methods []playerStateMethod) []byte {
 	}
 	output.WriteString("}\n")
 	return output.Bytes()
+}
+
+func methodsParameter(method playerStateMethod, index int) string {
+	return method.Parameters[index]
 }

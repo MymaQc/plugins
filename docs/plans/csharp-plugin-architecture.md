@@ -21,7 +21,11 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
 
 ## Order
 
-1. NativeAOT loading and `OnEnable`/`OnDisable`.
+1. NativeAOT loading and `OnEnable`/`OnDisable`. The host also exposes `OnJoin(Player.Context)` as
+   an explicit lifecycle extension. It is not presented as AST-generated `player.Handler`: raw
+   Dragonfly leaves player acceptance to the server loop and that interface has no join method. The
+   host invokes the callback after installing its handler. It is transaction-owned, cancellable,
+   and subscribed only when overridden.
 2. `player.Handler` events. All 37 methods in the pinned Dragonfly interface are generated and
    transported: movement, chat, world changes, damage/healing/death, respawn, skin changes, every
    block/item interaction, entity use/attacks, transfer, command execution, diagnostics, and quit.
@@ -120,9 +124,13 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    ABI 32 includes one atomic held-item pair snapshot, so `HeldItems` observes the same player state
    with one host read. Main and ender-chest inventory sizes are read from the live Dragonfly
    inventory, preserving custom `player.Config` sizes. Bounded open/read/close item snapshots preserve damage, unbreakable state, anvil cost, custom
-   names, lore, item NBT, plugin values, and enchantments internally. Unknown registered stateful
+   names, lore, item NBT, plugin values, and enchantments internally. `Stack.WithValue`, `Value`,
+   and `Values` expose the cross-language NBT-compatible value set. The generator discovers all 27
+   registered enchantments from Dragonfly's AST and live registry; normal and forced addition,
+   removal, lookup, deterministic listing, item compatibility, and enchantment compatibility mirror
+   `item.Stack`. Unknown registered stateful
    NBT-backed items decode to a private opaque item and round-trip losslessly. Public
-   enchantment/value mutation, `WithItem`, and custom items remain next; no public identifier
+   `WithItem` and custom items remain next; no public identifier
    fallback is added.
 7. Effects. The generator reads `server/entity/effect` registrations, interfaces, constructors,
    value methods, and player method signatures from Dragonfly's Go AST, then validates all 28
@@ -144,6 +152,26 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    Next entity slices add the remaining `EntityHandle` surface, `entity.Ent` capabilities,
    transaction add/remove/list methods, then plugin-defined entity types and callbacks.
 9. Convert practice-core and expand parity tests against Dragonfly.
+
+## FFA parity
+
+The combat callback foundation is present: hurt, attack, death, respawn, typed damage sources,
+mutable damage/knockback/hit delay, live entity transforms, player kinematics, and direct player
+teleportation and healing. `OnJoin` supplies the missing lobby-entry lifecycle without claiming to
+be an upstream handler method. The host's explicit managed-MCDB extension now covers lookup/open,
+world spawn, save/close, and safe `Player.ChangeWorld`; exact `World` instance methods remain
+AST-generated. Stack values and typed enchantments cover selector metadata and Protection kits.
+
+Remaining raw-Dragonfly parity work is concentrated in the world/entity transaction slice:
+
+- `Tx.World`, lazy entity/player iteration, and reusable-handle `AddEntity`, `AddEntityAt`, and
+  `RemoveEntity` semantics;
+- concrete player identity/name resolution for attacked entity handles;
+- arbitrary Dragonfly `World.Config`, provider, generator, and entity-type construction beyond the
+  bounded managed-MCDB bootstrap extension.
+
+Dragonfly's `HandleTransfer` remains a transfer to another server address. It must not be reused or
+documented as cross-world movement.
 
 Each slice removes the replaced legacy implementation. Unsupported API remains absent rather than gaining a parallel abstraction.
 
@@ -179,7 +207,8 @@ capabilities, and round-trips the full nested firework stack. Empty, water, lava
 exercise typed content queries, consumption flags, duration, max counts, and lava fuel residue.
 `/kitchen effect` exercises every effect constructor and value method, registry and colour lookup,
 all potion/stew effect families, and a real player add/read/list/remove round trip.
-The same one-file plugin overrides all 37 `Player.Handler` methods; mutable damage, healing,
+The same one-file plugin overrides the host `OnJoin` lifecycle extension and all 37
+`Player.Handler` methods; mutable damage, healing,
 immunity, keep-inventory, respawn, skin, knockback, transfer, command arguments, drops, pickup,
 experience, page, and reminder values traverse the real private ABI.
 Its entity-use handler reads the target's live position and rotation and checks its stable handle,

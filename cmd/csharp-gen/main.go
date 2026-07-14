@@ -23,6 +23,7 @@ import (
 	"github.com/bedrock-gophers/plugins/internal/host"
 	_ "github.com/df-mc/dragonfly/server/block"
 	dfitem "github.com/df-mc/dragonfly/server/item"
+	_ "github.com/df-mc/dragonfly/server/item/enchantment"
 	dfpotion "github.com/df-mc/dragonfly/server/item/potion"
 	"github.com/df-mc/dragonfly/server/world"
 	_ "github.com/df-mc/dragonfly/server/world/biome"
@@ -210,6 +211,21 @@ type itemSpec struct {
 	Crossbow       crossbowSpec
 	Bucket         bucketSpec
 	AirIdentifier  string
+	Enchantments   []enchantmentSpec
+}
+
+type enchantmentSpec struct {
+	Name                   string
+	ID                     int
+	DisplayName            string
+	MaxLevel               int
+	CompatibleEnchantments uint64
+	CompatibleItems        []encodedItemKey
+}
+
+type encodedItemKey struct {
+	Identifier string
+	Metadata   int
 }
 
 type bucketContentKind uint8
@@ -526,6 +542,10 @@ func main() {
 	if err != nil {
 		fatal(err)
 	}
+	worldLifecycleMethods, err := inspectWorldLifecycleMethods(filepath.Join(directory, "server", "world", "world.go"))
+	if err != nil {
+		fatal(err)
+	}
 	effects, err := inspectEffects(filepath.Join(directory, "server", "entity", "effect"))
 	if err != nil {
 		fatal(err)
@@ -614,6 +634,10 @@ func main() {
 		{
 			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "Player.Kinematics.g.cs"),
 			Content: generatePlayerKinematicsMethods(playerKinematicsMethods),
+		},
+		{
+			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "World.Lifecycle.g.cs"),
+			Content: generateWorldLifecycleMethods(worldLifecycleMethods),
 		},
 		{
 			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "Effect.Types.g.cs"),
@@ -1811,7 +1835,16 @@ func inspectItems(directory string, effects effectSpec) (itemSpec, error) {
 	if err != nil {
 		return itemSpec{}, err
 	}
-	result := itemSpec{ToolTierFields: tierFields, ToolTiers: make([]toolTierSpec, len(liveTiers)), ValueTypes: valueTypes}
+	enchantments, err := inspectEnchantments(filepath.Join(directory, "enchantment"))
+	if err != nil {
+		return itemSpec{}, err
+	}
+	result := itemSpec{
+		ToolTierFields: tierFields,
+		ToolTiers:      make([]toolTierSpec, len(liveTiers)),
+		ValueTypes:     valueTypes,
+		Enchantments:   enchantments,
+	}
 	for index, tier := range liveTiers {
 		result.ToolTiers[index] = toolTierSpec{Variable: tierNames[index], Value: tier}
 	}
@@ -1943,6 +1976,113 @@ func inspectItems(directory string, effects effectSpec) (itemSpec, error) {
 	if len(result.Types) == 0 {
 		return itemSpec{}, fmt.Errorf("no safely representable Dragonfly items found")
 	}
+	return result, nil
+}
+
+func inspectEnchantments(directory string) ([]enchantmentSpec, error) {
+	packages, err := parser.ParseDir(token.NewFileSet(), directory, func(info os.FileInfo) bool {
+		return !strings.HasSuffix(info.Name(), "_test.go")
+	}, 0)
+	if err != nil {
+		return nil, err
+	}
+	pkg, ok := packages["enchantment"]
+	if !ok {
+		return nil, fmt.Errorf("Dragonfly item/enchantment package not found")
+	}
+	exportedVariables := map[string]bool{}
+	registeredNames := map[int]string{}
+	for _, file := range pkg.Files {
+		for _, declaration := range file.Decls {
+			switch value := declaration.(type) {
+			case *ast.GenDecl:
+				if value.Tok != token.VAR {
+					continue
+				}
+				for _, raw := range value.Specs {
+					spec, ok := raw.(*ast.ValueSpec)
+					if !ok {
+						continue
+					}
+					for _, name := range spec.Names {
+						if ast.IsExported(name.Name) {
+							exportedVariables[name.Name] = true
+						}
+					}
+				}
+			case *ast.FuncDecl:
+				if value.Recv != nil || value.Name.Name != "init" || value.Body == nil {
+					continue
+				}
+				ast.Inspect(value.Body, func(node ast.Node) bool {
+					call, ok := node.(*ast.CallExpr)
+					if !ok || len(call.Args) != 2 {
+						return true
+					}
+					selector, ok := call.Fun.(*ast.SelectorExpr)
+					if !ok || selector.Sel.Name != "RegisterEnchantment" {
+						return true
+					}
+					idLiteral, idOK := call.Args[0].(*ast.BasicLit)
+					name, nameOK := call.Args[1].(*ast.Ident)
+					if !idOK || idLiteral.Kind != token.INT || !nameOK {
+						return true
+					}
+					id, parseErr := strconv.Atoi(idLiteral.Value)
+					if parseErr == nil {
+						registeredNames[id] = name.Name
+					}
+					return true
+				})
+			}
+		}
+	}
+	live := dfitem.Enchantments()
+	if len(live) != len(registeredNames) {
+		return nil, fmt.Errorf("Dragonfly enchantment AST/live lengths differ: %d/%d", len(registeredNames), len(live))
+	}
+	result := make([]enchantmentSpec, 0, len(live))
+	for _, enchantment := range live {
+		id, found := dfitem.EnchantmentID(enchantment)
+		if !found || id < 0 || id >= 64 {
+			return nil, fmt.Errorf("Dragonfly enchantment %q has unsupported ID %d", enchantment.Name(), id)
+		}
+		name, found := registeredNames[id]
+		if !found || !exportedVariables[name] {
+			return nil, fmt.Errorf("Dragonfly enchantment ID %d has no exported AST variable", id)
+		}
+		entry := enchantmentSpec{Name: name, ID: id, DisplayName: enchantment.Name(), MaxLevel: enchantment.MaxLevel()}
+		for _, other := range live {
+			otherID, found := dfitem.EnchantmentID(other)
+			if !found || otherID < 0 || otherID >= 64 {
+				return nil, fmt.Errorf("Dragonfly enchantment %q has unsupported ID %d", other.Name(), otherID)
+			}
+			if enchantment.CompatibleWithEnchantment(other) {
+				entry.CompatibleEnchantments |= uint64(1) << otherID
+			}
+		}
+		seenItems := map[encodedItemKey]bool{}
+		for _, value := range world.Items() {
+			if !enchantment.CompatibleWithItem(value) {
+				continue
+			}
+			identifier, metadata := value.EncodeItem()
+			key := encodedItemKey{Identifier: identifier, Metadata: int(metadata)}
+			if !seenItems[key] {
+				seenItems[key] = true
+				entry.CompatibleItems = append(entry.CompatibleItems, key)
+			}
+		}
+		sort.Slice(entry.CompatibleItems, func(i, j int) bool {
+			left, right := entry.CompatibleItems[i], entry.CompatibleItems[j]
+			if left.Identifier != right.Identifier {
+				return left.Identifier < right.Identifier
+			}
+			return left.Metadata < right.Metadata
+		})
+		result = append(result, entry)
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].ID < result[j].ID })
 	return result, nil
 }
 
@@ -4983,13 +5123,14 @@ func generateBiomes(biomes []encodedBiome) []byte {
 func generateItems(spec itemSpec) []byte {
 	var output bytes.Buffer
 	output.WriteString("// Code generated from Dragonfly server/item Go AST and live registry. DO NOT EDIT.\n")
-	output.WriteString("#nullable enable\nusing System;\nusing System.Text;\n\nnamespace Dragonfly\n{\n")
+	output.WriteString("#nullable enable\nusing System;\nusing System.Collections.Generic;\nusing System.Text;\n\nnamespace Dragonfly\n{\n")
 	output.WriteString("    public static partial class Item\n    {\n")
 	fmt.Fprintf(&output, "        public readonly record struct ToolTier(%s);\n\n", formatParameters(spec.ToolTierFields))
 	for _, tier := range spec.ToolTiers {
 		fmt.Fprintf(&output, "        public static readonly ToolTier %s = new(%s);\n", tier.Variable, csharpToolTier(tier.Value))
 	}
 	output.WriteByte('\n')
+	generateEnchantments(&output, spec.Enchantments)
 	for _, valueType := range spec.ValueTypes {
 		if valueType.Container != "Item" {
 			continue
@@ -5132,6 +5273,103 @@ func generateItems(spec itemSpec) []byte {
 	generateItemCapabilities(&output, spec)
 	output.WriteString("}\n")
 	return output.Bytes()
+}
+
+func generateEnchantments(output *bytes.Buffer, enchantments []enchantmentSpec) {
+	output.WriteString(`        public interface EnchantmentType
+        {
+            string Name();
+            int MaxLevel();
+        }
+
+        public readonly record struct Enchantment
+        {
+            private readonly EnchantmentType? _type;
+            private readonly int _level;
+
+            internal Enchantment(EnchantmentType type, int level)
+            {
+                _type = type;
+                _level = level;
+            }
+
+            public int Level() => _level;
+            public EnchantmentType? Type() => _type;
+        }
+
+        public static Enchantment NewEnchantment(EnchantmentType type, int level)
+        {
+            ArgumentNullException.ThrowIfNull(type);
+            if (level < 1) throw new ArgumentOutOfRangeException(nameof(level));
+            return new Enchantment(type, level);
+        }
+
+`)
+	for _, enchantment := range enchantments {
+		fmt.Fprintf(output, "        public static readonly EnchantmentType %s = new BuiltinEnchantmentType(%d, %s, %d, %dUL);\n",
+			enchantment.Name, enchantment.ID, strconv.Quote(enchantment.DisplayName), enchantment.MaxLevel, enchantment.CompatibleEnchantments)
+	}
+	output.WriteString(`
+        public static (EnchantmentType? Type, bool Ok) EnchantmentByID(int id)
+        {
+            var enchantment = EnchantmentTypeByID(id);
+            return (enchantment, enchantment is not null);
+        }
+
+        public static (int ID, bool Ok) EnchantmentID(EnchantmentType type)
+        {
+            ArgumentNullException.ThrowIfNull(type);
+            return TryEnchantmentID(type, out var id) ? (id, true) : (0, false);
+        }
+
+        public static IReadOnlyList<EnchantmentType> Enchantments() => new EnchantmentType[]
+        {
+`)
+	for _, enchantment := range enchantments {
+		fmt.Fprintf(output, "            %s,\n", enchantment.Name)
+	}
+	output.WriteString(`        };
+
+        internal static bool TryEnchantmentID(EnchantmentType? type, out int id)
+        {
+            if (type is BuiltinEnchantmentType builtin)
+            {
+                id = builtin.ID;
+                return true;
+            }
+            id = 0;
+            return false;
+        }
+
+        internal static EnchantmentType? EnchantmentTypeByID(int id) => id switch
+        {
+`)
+	for _, enchantment := range enchantments {
+		fmt.Fprintf(output, "            %d => %s,\n", enchantment.ID, enchantment.Name)
+	}
+	output.WriteString(`            _ => null,
+        };
+
+        internal static bool EnchantmentsCompatible(EnchantmentType adding, EnchantmentType existing)
+        {
+            if (!TryEnchantmentID(adding, out var addingID) ||
+                !TryEnchantmentID(existing, out var existingID) ||
+                EnchantmentTypeByID(addingID) is not BuiltinEnchantmentType builtin)
+                return false;
+            return (builtin.CompatibleEnchantments & (1UL << existingID)) != 0;
+        }
+
+        private sealed record BuiltinEnchantmentType(
+            int ID,
+            string DisplayName,
+            int MaximumLevel,
+            ulong CompatibleEnchantments) : EnchantmentType
+        {
+            public string Name() => DisplayName;
+            public int MaxLevel() => MaximumLevel;
+        }
+
+`)
 }
 
 func generateBucketType(output *bytes.Buffer, spec bucketSpec) {
@@ -5614,7 +5852,16 @@ func generateItemCapabilities(output *bytes.Buffer, spec itemSpec) {
 			}
 		}
 	}
-	output.WriteString("            _ => false,\n        };\n")
+	output.WriteString("            _ => false,\n        };\n\n")
+	output.WriteString("        internal static bool EnchantmentCompatibleWithItem(int enchantment, World.Item? item)\n        {\n")
+	output.WriteString("            if (item is null || !ItemCodec.TryEncode(item, out var identifier, out var metadata)) return false;\n")
+	output.WriteString("            return (enchantment, identifier, metadata) switch\n            {\n")
+	for _, enchantment := range spec.Enchantments {
+		for _, item := range enchantment.CompatibleItems {
+			fmt.Fprintf(output, "                (%d, %s, %d) => true,\n", enchantment.ID, strconv.Quote(item.Identifier), item.Metadata)
+		}
+	}
+	output.WriteString("                _ => false,\n            };\n        }\n")
 	output.WriteString("    }\n")
 }
 

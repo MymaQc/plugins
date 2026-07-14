@@ -501,9 +501,6 @@ func (p *Players) SetPlayerExperience(invocation native.InvocationID, id native.
 }
 
 func (p *Players) HealPlayer(invocation native.InvocationID, id native.PlayerID, health float64, source native.HealingSource) (float64, bool) {
-	if !finite(health) {
-		return 0, false
-	}
 	return readPlayer(p, invocation, id, func(connected *player.Player) float64 {
 		return connected.Heal(health, healingSource(source))
 	})

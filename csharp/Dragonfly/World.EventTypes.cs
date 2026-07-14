@@ -248,16 +248,16 @@ public sealed partial class World : IEquatable<World>
 
     public interface HealingSource { }
 
-    public sealed class CustomHealingSource : HealingSource { internal CustomHealingSource() { } }
+    public sealed class CustomHealingSource : HealingSource { public CustomHealingSource() { } }
 
     public sealed class FoodHealingSource : HealingSource
     {
         private readonly bool _quickRegeneration;
-        internal FoodHealingSource(bool quickRegeneration) =>
+        public FoodHealingSource(bool quickRegeneration = false) =>
             _quickRegeneration = quickRegeneration;
         public bool QuickRegeneration() => _quickRegeneration;
     }
 
-    public sealed class InstantHealingSource : HealingSource { internal InstantHealingSource() { } }
-    public sealed class RegenerationHealingSource : HealingSource { internal RegenerationHealingSource() { } }
+    public sealed class InstantHealingSource : HealingSource { public InstantHealingSource() { } }
+    public sealed class RegenerationHealingSource : HealingSource { public RegenerationHealingSource() { } }
 }

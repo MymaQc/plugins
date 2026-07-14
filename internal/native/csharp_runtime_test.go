@@ -58,7 +58,7 @@ func openCSharpRuntimeWithHost(t testing.TB, host Host) *Runtime {
 	if got := pluginRuntime.PluginCount(); got != 5 {
 		t.Fatalf("PluginCount() = %d, want 5", got)
 	}
-	wantSubscriptions := PlayerMoveSubscription | PlayerChatSubscription | PlayerQuitSubscription |
+	wantSubscriptions := PlayerMoveSubscription | PlayerChatSubscription | PlayerJoinSubscription | PlayerQuitSubscription |
 		PlayerHurtSubscription | PlayerHealSubscription | PlayerDeathSubscription |
 		PlayerBlockBreakSubscription | PlayerBlockPlaceSubscription |
 		PlayerFoodLossSubscription | PlayerToggleSprintSubscription | PlayerToggleSneakSubscription |
@@ -527,7 +527,12 @@ func TestCSharpReflectedCommands(t *testing.T) {
 			Type: "minecraft:player", Position: Vec3{X: 1, Y: 64, Z: 2},
 			Velocity: Vec3{X: 0.25, Y: 0.5, Z: -0.25},
 			Rotation: Rotation{Yaw: 90, Pitch: -15},
-		}},
+		}, worldID: 91, worldName: "kitchen:arena", worldSpawn: BlockPos{X: 8, Y: 70, Z: -4},
+			healed: 4,
+			stateValues: map[PlayerStateKind]PlayerStateValue{
+				PlayerStateHealth:    {Number: 16},
+				PlayerStateMaxHealth: {Number: 20},
+			}},
 		worldRange:         BlockRange{Min: -64, Max: 319},
 		worldBlockLoaded:   WorldBlock{Identifier: "minecraft:sand"},
 		worldBlockLoadedOK: true,
@@ -555,7 +560,7 @@ func TestCSharpReflectedCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 	kitchen := commandNamed(t, commands, "kitchen")
-	if !slices.Contains(kitchen.Aliases, "ks") || len(kitchen.Overloads) != 19 {
+	if !slices.Contains(kitchen.Aliases, "ks") || len(kitchen.Overloads) != 21 {
 		t.Fatalf("kitchen descriptor = %#v", kitchen)
 	}
 	if kitchen.Overloads[1].Parameters[0].Name != "echo" ||
@@ -629,6 +634,29 @@ func TestCSharpReflectedCommands(t *testing.T) {
 		host.vectors[3] != (Vec3{X: 0.25, Y: 0.5, Z: -0.25}) {
 		t.Fatalf("kinematics transforms=%v vectors=%+v", host.transforms, host.vectors)
 	}
+	heal := base
+	heal.Overload = 19
+	heal.Arguments = []string{"heal"}
+	output, err = pluginRuntime.HandleCommand(kitchen.Index, heal)
+	if err != nil || output.Failed || output.Message != "healed=4, health=16" || len(host.heals) != 1 ||
+		host.heals[0].Health != 20 || host.heals[0].Source.Kind != HealingSourceInstant {
+		t.Fatalf("heal output=%#v calls=%+v error=%v", output, host.heals, err)
+	}
+	managedWorld := base
+	managedWorld.Overload = 20
+	managedWorld.Arguments = []string{"world"}
+	output, err = pluginRuntime.HandleCommand(kitchen.Index, managedWorld)
+	if err != nil || output.Failed || output.Message != "world=kitchen:arena, spawn=8,70,-4" {
+		t.Fatalf("managed world output=%#v error=%v", output, err)
+	}
+	if host.worldOpened != "kitchen:arena" || host.worldOpenSpec.ProviderPath != "kitchen/arena" ||
+		host.worldOpenSpec.Dimension != WorldDimensionOverworld || !host.worldSaved ||
+		host.worldSpawn != (BlockPos{X: 8, Y: 70, Z: -4}) || host.transferInvocation != 42 ||
+		host.transferPlayer != player || host.transferWorld != 91 ||
+		host.transferPosition != (Vec3{X: 8.5, Y: 70, Z: -3.5}) {
+		t.Fatalf("managed world host state: %+v", host.recordingHost)
+	}
+	host.reads = nil
 	for _, text := range []struct {
 		action string
 		kind   PlayerTextKind
@@ -1271,6 +1299,15 @@ func TestCSharpRuntimeReflectedPlayerHandlers(t *testing.T) {
 		if cancelled {
 			t.Fatalf("%s cancelled by default", name)
 		}
+	}
+	allowed("join", func() (bool, error) {
+		return pluginRuntime.HandlePlayerJoin(next(), PlayerJoinInput{Player: player, Name: player.Name}, false)
+	})
+	blankName := player
+	blankName.Name = ""
+	rejected, err := pluginRuntime.HandlePlayerJoin(next(), PlayerJoinInput{Player: blankName}, false)
+	if err != nil || !rejected {
+		t.Fatalf("blank join rejected=%v error=%v", rejected, err)
 	}
 
 	allowed("fire extinguish", func() (bool, error) {

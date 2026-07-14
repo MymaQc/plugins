@@ -11,6 +11,7 @@ public sealed partial class Player
     public double Health() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateHealth).Number;
     public double MaxHealth() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateMaxHealth).Number;
     public void SetMaxHealth(double health) => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateMaxHealth, new PlayerStateValue { Number = health });
+    public double Heal(double health, World.HealingSource source) => PluginBridge.Host.HealPlayer(_invocation, Id, health, source);
     public int ExperienceLevel() => checked((int)PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateExperienceLevel).Integer);
     public void SetExperienceLevel(int level)
     {

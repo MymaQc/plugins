@@ -12,6 +12,8 @@ public static class Abi
     public const ulong PlayerMoveSubscription = 1UL;
     public const uint PlayerChatEvent = 2;
     public const ulong PlayerChatSubscription = 1UL << 1;
+    public const uint PlayerJoinEvent = 3;
+    public const ulong PlayerJoinSubscription = 1UL << 2;
     public const uint PlayerQuitEvent = 4;
     public const ulong PlayerQuitSubscription = 1UL << 3;
     public const uint PlayerHurtEvent = 5;
@@ -126,6 +128,9 @@ public static class Abi
     public const uint DamageSourceBlastProtection = 1 << 6;
     public const uint DamageSourceProjectileProtection = 1 << 7;
     public const uint DamageSourceWither = 18;
+    public const uint HealingSourceCustom = 0;
+    public const uint HealingSourceFood = 1;
+    public const uint HealingSourceInstant = 2;
     public const uint HealingSourceRegeneration = 3;
     public const uint EntityHasVelocity = 1;
     public const uint EntityHasNameTag = 2;
@@ -179,6 +184,12 @@ public struct PlayerStateValue
 {
     public double Number;
     public long Integer;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct PlayerHealResult
+{
+    public double Healed;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -254,17 +265,17 @@ public unsafe struct HostApi
     public void* PlayerScoreboardRemove;
     public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, FormView*, int> PlayerFormSend;
     public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, int> PlayerFormClose;
-    public void* WorldLookup;
-    public void* WorldOpen;
-    public void* WorldName;
-    public void* WorldUnload;
-    public void* WorldSave;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, StringView, WorldId*, int> WorldLookup;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, StringView, uint, WorldId*, int> WorldOpen;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, StringBuffer*, int> WorldName;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, int> WorldUnload;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, int> WorldSave;
     public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, BlockPos, BlockData*, int> WorldBlockGet;
     public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, BlockPos, BlockView*, uint, int> WorldBlockSet;
     public void* WorldTimeGet;
     public void* WorldTimeSet;
-    public void* WorldSpawnGet;
-    public void* WorldSpawnSet;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, BlockPos*, int> WorldSpawnGet;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, BlockPos, int> WorldSpawnSet;
     public void* WorldEntitySpawn;
     public void* WorldEntities;
     public void* WorldPlayers;
@@ -276,12 +287,12 @@ public unsafe struct HostApi
     public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, Vec3, ParticleView*, int> WorldParticleAdd;
     public void* WorldSoundPlay;
     public void* PlayerSoundPlay;
-    public void* PlayerHeal;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, double, HealingSourceView*, PlayerHealResult*, int> PlayerHeal;
     public void* PlayerHurt;
     public delegate* unmanaged[Cdecl]<ulong, ulong, ulong, SkinInfo*, int> SkinSnapshotInfo;
     public delegate* unmanaged[Cdecl]<ulong, ulong, ulong, SkinView*, int> SkinSnapshotSet;
-    public void* WorldOpenSpec;
-    public void* PlayerTransfer;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, StringView, WorldOpenSpecV1*, WorldId*, int> WorldOpenSpec;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, WorldId, Vec3, int> PlayerTransfer;
     public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, EffectBuffer*, int> PlayerEffects;
     public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, int> PlayerEffectsClear;
     public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, BlockPos, byte*, BlockData*, int> WorldLiquidGet;
@@ -447,6 +458,26 @@ public struct BlockRange
 public struct WorldId
 {
     public ulong Value;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct WorldOpenSpecV1
+{
+    public uint StructSize;
+    public uint Dimension;
+    public StringView ProviderPath;
+    public ulong SaveIntervalMilliseconds;
+    public ulong ChunkUnloadIntervalMilliseconds;
+    public long FixedTime;
+    public uint OpenMode;
+    public uint SavePolicy;
+    public uint RandomTickPolicy;
+    public uint RandomTickRate;
+    public uint TimePolicy;
+    public uint WeatherPolicy;
+    public uint ChunkUnloadPolicy;
+    public byte ReadOnly;
+    public fixed byte Reserved[3];
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -633,6 +664,20 @@ public unsafe struct PlayerChatState
     public byte Cancelled;
     public byte HasReplacement;
     public StringBuffer Replacement;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct PlayerJoinInput
+{
+    public ulong Invocation;
+    public PlayerSnapshot Player;
+    public StringView Name;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct PlayerJoinState
+{
+    public byte Cancelled;
 }
 
 [StructLayout(LayoutKind.Sequential)]

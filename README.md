@@ -33,6 +33,11 @@ public sealed class Example : Plugin
     public override void OnEnable() => Console.WriteLine("enabled");
     public override void OnDisable() => Console.WriteLine("disabled");
 
+    public override void OnJoin(Player.Context ctx)
+    {
+        Console.WriteLine($"{ctx.Player().Name()} joined");
+    }
+
     public override void HandleQuit(Player player)
     {
         Console.WriteLine($"{player.Name()} quit");
@@ -42,15 +47,25 @@ public sealed class Example : Plugin
 
 The project name is the plugin ID. A compile-time generator emits the hidden native entry point.
 
+`OnJoin` is the one player-lifecycle extension supplied by the host rather than a generated
+`player.Handler` method: accepting a player belongs to the server loop in Dragonfly, so its public
+handler interface has no join callback. The host emits it after installing its handler. It receives
+the same transaction-owned `Player.Context` and may cancel admission. The remaining player
+callbacks continue to mirror `player.Handler`.
+
 Current C# slice: loading, lifecycle, reflected commands, player text actions, game mode, typed
 effects, forms, items and player inventories, and all 37 methods in Dragonfly's current
 `player.Handler`. This includes movement, world changes, damage/healing/death, mutable respawns and
 skins, block and item interactions, entity use/attacks, transfers, command execution, client
-diagnostics, and quit. Player handler, command-interface,
+diagnostics, and quit. The separate host `OnJoin` lifecycle hook allows first-join initialization
+before those generated handler callbacks. Player handler, command-interface,
 player-text, player-state, game-mode, effect, form, item, and player-inventory surfaces are generated
 from Dragonfly's Go AST. Generated player state parity currently includes `Food`/`SetFood`,
 `Health`, `MaxHealth`/`SetMaxHealth`, level and progress experience accessors, scale accessors,
-visibility toggles, and mobility toggles.
+visibility toggles, mobility toggles, and direct `Heal`. Managed MCDB worlds may be looked up or
+opened explicitly, and their AST-generated `Name`, `Spawn`, `SetSpawn`, `Save`, and `Close` methods
+use the same `World` type as handler callbacks. `Player.ChangeWorld` is the deliberately named host
+extension for safe cross-world movement; Dragonfly's `Transfer` still means another server.
 `World.GameMode` includes Dragonfly's four registered values and exact `GameModeByID`/`GameModeID`
 lookups. `Player.SetGameMode` accepts custom implementations just like Dragonfly, and
 `Player.GameMode` returns their capabilities without exposing the transport descriptor.
@@ -65,7 +80,9 @@ Item code uses Dragonfly types, never Minecraft identifiers:
 ```csharp
 var sword = Item.NewStack(new Item.Sword(Item.ToolTierDiamond), 1)
     .WithCustomName("Arena sword")
-    .WithLore("Unranked");
+    .WithLore("Unranked")
+    .WithValue("practice:item", "lobby_ffa_selector")
+    .WithEnchantments(Item.NewEnchantment(Item.Unbreaking, 1));
 var inventory = player.Inventory();
 var enderChest = player.EnderChestInventory();
 var previous = inventory.Item(0);

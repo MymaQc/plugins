@@ -184,8 +184,12 @@ func TestCSharpTypedItemInventoryFlow(t *testing.T) {
 	if len(host.sets) != 3500 || len(host.heldSets) != 140 {
 		t.Fatalf("item writes=%d held writes=%d", len(host.sets), len(host.heldSets))
 	}
-	if len(host.armourSets) != 70 || len(host.adds) != 70 || host.adds[0].Identifier != "" || host.adds[0].Count != 0 {
+	if len(host.armourSets) != 140 || len(host.adds) != 70 || host.adds[0].Identifier != "" || host.adds[0].Count != 0 {
 		t.Fatalf("armour writes=%d adds=%d", len(host.armourSets), len(host.adds))
+	}
+	if helmet := host.armourSets[0]; helmet.Identifier != "minecraft:diamond_helmet" ||
+		!reflect.DeepEqual(helmet.Enchantments, []ItemEnchantment{{ID: 0, Level: 1}}) {
+		t.Fatalf("protected helmet transport=%#v", helmet)
 	}
 	if len(host.enderSets) != 140 || host.enderChest.Count != 0 || host.enderChest.Identifier != "" {
 		t.Fatalf("ender writes=%d ender=%#v", len(host.enderSets), host.enderChest)
@@ -193,8 +197,14 @@ func TestCSharpTypedItemInventoryFlow(t *testing.T) {
 	sword := host.sets[0]
 	if sword.Identifier != "minecraft:diamond_sword" || sword.Count != 1 ||
 		sword.CustomName != "Kitchen sword" ||
-		!slices.Equal(sword.Lore, []string{"Generated from Dragonfly", "Restored after this command"}) {
+		!slices.Equal(sword.Lore, []string{"Generated from Dragonfly", "Restored after this command"}) ||
+		!reflect.DeepEqual(sword.Enchantments, []ItemEnchantment{{ID: 17, Level: 1}}) {
 		t.Fatalf("typed sword transport=%#v", sword)
+	}
+	swordValues := map[string]any{}
+	if err := nbt.UnmarshalEncoding(sword.ValuesNBT, &swordValues, nbt.LittleEndian); err != nil ||
+		swordValues["practice:item"] != "lobby_ffa_selector" {
+		t.Fatalf("typed sword values=%#v error=%v", swordValues, err)
 	}
 	wantVariants := []ItemStack{
 		{Identifier: "minecraft:arrow", Metadata: 6, Count: 1},

@@ -24,8 +24,19 @@ func TestInspectItemsUsesASTAndRegistry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if spec.AirIdentifier != "minecraft:air" || len(spec.ToolTiers) != 7 || len(spec.ValueTypes) != 10 || len(spec.Types) != 132 {
-		t.Fatalf("item spec has air=%q tiers=%d types=%d", spec.AirIdentifier, len(spec.ToolTiers), len(spec.Types))
+	if spec.AirIdentifier != "minecraft:air" || len(spec.ToolTiers) != 7 || len(spec.ValueTypes) != 10 || len(spec.Types) != 132 || len(spec.Enchantments) != 27 {
+		t.Fatalf("item spec has air=%q tiers=%d types=%d enchantments=%d", spec.AirIdentifier, len(spec.ToolTiers), len(spec.Types), len(spec.Enchantments))
+	}
+	protection := spec.Enchantments[0]
+	if protection.Name != "Protection" || protection.ID != 0 || protection.DisplayName != "Protection" || protection.MaxLevel != 4 ||
+		protection.CompatibleEnchantments&(1<<1) != 0 || !hasEncodedItem(protection.CompatibleItems, "minecraft:diamond_chestplate", 0) ||
+		hasEncodedItem(protection.CompatibleItems, "minecraft:diamond_sword", 0) {
+		t.Fatalf("protection enchantment spec = %#v", protection)
+	}
+	unbreaking := enchantmentByName(spec.Enchantments, "Unbreaking")
+	if unbreaking == nil || unbreaking.ID != 17 || unbreaking.MaxLevel != 3 ||
+		!hasEncodedItem(unbreaking.CompatibleItems, "minecraft:diamond_sword", 0) {
+		t.Fatalf("unbreaking enchantment spec = %#v", unbreaking)
 	}
 	if bucket := spec.Bucket; !bucket.Present || bucket.ConsumeDuration != 1610*time.Millisecond || bucket.EmptyMaxCount != 16 || bucket.FullMaxCount != 1 {
 		t.Fatalf("bucket spec = %#v", bucket)
@@ -195,6 +206,15 @@ func TestInspectItemsUsesASTAndRegistry(t *testing.T) {
 		`? new FuelInfo(TimeSpan.FromTicks(10000000000), NewStack(new Bucket(), 1))`,
 		"public interface Fuel { FuelInfo FuelInfo(); }",
 		"public readonly record struct FuelInfo(TimeSpan Duration = default, Stack Residue = default)",
+		"public interface EnchantmentType",
+		"public readonly record struct Enchantment",
+		"public static Enchantment NewEnchantment(EnchantmentType type, int level)",
+		"public static readonly EnchantmentType Protection = new BuiltinEnchantmentType(0, \"Protection\", 4",
+		"public static readonly EnchantmentType Unbreaking = new BuiltinEnchantmentType(17, \"Unbreaking\", 3",
+		"public static (EnchantmentType? Type, bool Ok) EnchantmentByID(int id)",
+		"internal static bool EnchantmentCompatibleWithItem(int enchantment, World.Item? item)",
+		"(0, \"minecraft:diamond_chestplate\", 0) => true",
+		"(17, \"minecraft:diamond_sword\", 0) => true",
 		"public FuelInfo WithResidue(Stack residue) => this with { Residue = residue }",
 		"public readonly record struct Crossbow(Stack Item = default) : World.Item, MaxCounter, Durable, Fuel, Enchantable",
 		"public DurabilityInfo DurabilityInfo() => new(464, static () => default)",
@@ -291,4 +311,22 @@ func TestInspectItemsUsesASTAndRegistry(t *testing.T) {
 			t.Fatalf("generated bucket public surface exposes %q", forbidden)
 		}
 	}
+}
+
+func enchantmentByName(values []enchantmentSpec, name string) *enchantmentSpec {
+	for index := range values {
+		if values[index].Name == name {
+			return &values[index]
+		}
+	}
+	return nil
+}
+
+func hasEncodedItem(values []encodedItemKey, identifier string, metadata int) bool {
+	for _, value := range values {
+		if value.Identifier == identifier && value.Metadata == metadata {
+			return true
+		}
+	}
+	return false
 }

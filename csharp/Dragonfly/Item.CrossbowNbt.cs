@@ -23,7 +23,7 @@ internal static class CrossbowStackNbt
             throw new InvalidDataException("nested item stack cannot be encoded");
 
         var loreLines = stack.Lore();
-        var stackEnchantments = stack.Enchantments;
+        var stackEnchantments = stack.EncodedEnchantments;
         if (Encoding.UTF8.GetByteCount(identifier) > MaxIdentifierBytes ||
             Encoding.UTF8.GetByteCount(stack.CustomName()) > MaxTextBytes ||
             loreLines.Length > MaxEntries || stackEnchantments.Length > MaxEntries ||

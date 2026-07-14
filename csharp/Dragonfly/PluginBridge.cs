@@ -48,6 +48,40 @@ internal static unsafe class PluginBridge
             return value;
         }
 
+        internal static double HealPlayer(
+            ulong invocation,
+            PlayerId player,
+            double health,
+            World.HealingSource source)
+        {
+            ArgumentNullException.ThrowIfNull(source);
+            var api = Api;
+            if (api is null || api->PlayerHeal == null) return 0;
+
+            var (kind, data, name) = source switch
+            {
+                World.FoodHealingSource food =>
+                    (Abi.HealingSourceFood, food.QuickRegeneration() ? (byte)1 : (byte)0, ""),
+                World.InstantHealingSource => (Abi.HealingSourceInstant, (byte)0, ""),
+                World.RegenerationHealingSource => (Abi.HealingSourceRegeneration, (byte)0, ""),
+                _ => (Abi.HealingSourceCustom, (byte)0, source.GetType().FullName ?? source.GetType().Name),
+            };
+            var nameBytes = Encoding.UTF8.GetBytes(name);
+            fixed (byte* nameData = nameBytes)
+            {
+                var view = new HealingSourceView
+                {
+                    Name = new StringView { Data = nameData, Length = (ulong)nameBytes.Length },
+                    Kind = kind,
+                    Data = data,
+                };
+                PlayerHealResult result;
+                return api->PlayerHeal(api->Context, invocation, player, health, &view, &result) == Abi.Ok
+                    ? result.Healed
+                    : 0;
+            }
+        }
+
         internal static World.GameMode PlayerGameMode(ulong invocation, PlayerId player) =>
             World.GameModeFromDescriptor(GetPlayerState(invocation, player, 0).Integer);
 
@@ -148,6 +182,197 @@ internal static unsafe class PluginBridge
             var api = Api;
             if (api is null || api->EntityDespawn == null) return;
             _ = api->EntityDespawn(api->Context, invocation, entity);
+        }
+
+        internal static World? LookupManagedWorld(string name)
+        {
+            var api = Api;
+            if (api is null || api->WorldLookup == null || !TryWorldText(name, 256, out var bytes))
+                return null;
+            fixed (byte* data = bytes)
+            {
+                WorldId world;
+                var status = api->WorldLookup(
+                    api->Context,
+                    0,
+                    new StringView { Data = data, Length = (ulong)bytes.Length },
+                    &world);
+                return status == Abi.Ok && world.Value != 0 ? new World(0, world) : null;
+            }
+        }
+
+        internal static World? OpenManagedWorld(string name, World.ManagedDimension dimension)
+        {
+            var api = Api;
+            if (api is null || api->WorldOpen == null ||
+                (uint)dimension > (uint)World.ManagedDimension.End ||
+                !TryWorldText(name, 256, out var bytes))
+                return null;
+            fixed (byte* data = bytes)
+            {
+                WorldId world;
+                var status = api->WorldOpen(
+                    api->Context,
+                    0,
+                    new StringView { Data = data, Length = (ulong)bytes.Length },
+                    (uint)dimension,
+                    &world);
+                return status == Abi.Ok && world.Value != 0 ? new World(0, world) : null;
+            }
+        }
+
+        internal static World? OpenManagedWorld(string name, World.ManagedOpenSpec spec)
+        {
+            ArgumentNullException.ThrowIfNull(spec);
+            var api = Api;
+            if (api is null || api->WorldOpenSpec == null ||
+                !TryWorldText(name, 256, out var nameBytes) ||
+                !TryWorldText(spec.ProviderPath, 4096, out var providerBytes) ||
+                !TryManagedWorldSpec(spec, out var view))
+                return null;
+            fixed (byte* nameData = nameBytes)
+            fixed (byte* providerData = providerBytes)
+            {
+                view.ProviderPath = new StringView
+                {
+                    Data = providerData,
+                    Length = (ulong)providerBytes.Length,
+                };
+                WorldId world;
+                var status = api->WorldOpenSpec(
+                    api->Context,
+                    0,
+                    new StringView { Data = nameData, Length = (ulong)nameBytes.Length },
+                    &view,
+                    &world);
+                return status == Abi.Ok && world.Value != 0 ? new World(0, world) : null;
+            }
+        }
+
+        internal static string? ManagedWorldName(ulong invocation, WorldId world)
+        {
+            var api = Api;
+            if (api is null || api->WorldName == null) return null;
+            const int capacity = 256;
+            byte* data = stackalloc byte[capacity];
+            var output = new StringBuffer { Data = data, Capacity = capacity };
+            if (api->WorldName(api->Context, invocation, world, &output) != Abi.Ok ||
+                output.Length == 0 || output.Length > capacity)
+                return null;
+            return Encoding.UTF8.GetString(data, checked((int)output.Length));
+        }
+
+        internal static Cube.Pos ManagedWorldSpawn(ulong invocation, WorldId world)
+        {
+            var api = Api;
+            if (api is null || api->WorldSpawnGet == null) return default;
+            BlockPos position;
+            return api->WorldSpawnGet(api->Context, invocation, world, &position) == Abi.Ok
+                ? new Cube.Pos(position.X, position.Y, position.Z)
+                : default;
+        }
+
+        internal static void SetManagedWorldSpawn(ulong invocation, WorldId world, Cube.Pos position)
+        {
+            var api = Api;
+            if (api is null || api->WorldSpawnSet == null) return;
+            _ = api->WorldSpawnSet(
+                api->Context,
+                invocation,
+                world,
+                new BlockPos { X = position.X(), Y = position.Y(), Z = position.Z() });
+        }
+
+        internal static void SaveManagedWorld(ulong invocation, WorldId world)
+        {
+            var api = Api;
+            if (api is null || api->WorldSave == null) return;
+            _ = api->WorldSave(api->Context, invocation, world);
+        }
+
+        internal static void CloseManagedWorld(ulong invocation, WorldId world)
+        {
+            var api = Api;
+            if (api is null || api->WorldUnload == null) return;
+            _ = api->WorldUnload(api->Context, invocation, world);
+        }
+
+        internal static void ChangePlayerWorld(
+            ulong invocation,
+            PlayerId player,
+            WorldId world,
+            Vector3 position)
+        {
+            var api = Api;
+            if (api is null || api->PlayerTransfer == null) return;
+            _ = api->PlayerTransfer(
+                api->Context,
+                invocation,
+                player,
+                world,
+                new Vec3 { X = position.X, Y = position.Y, Z = position.Z });
+        }
+
+        private static bool TryManagedWorldSpec(
+            World.ManagedOpenSpec spec,
+            out WorldOpenSpecV1 view)
+        {
+            view = default;
+            if ((uint)spec.Dimension > (uint)World.ManagedDimension.End ||
+                (uint)spec.OpenMode > (uint)World.ManagedOpenMode.CreateNew ||
+                (uint)spec.Save > (uint)World.ManagedSavePolicy.Manual ||
+                (uint)spec.RandomTicks > (uint)World.ManagedRandomTickPolicy.PerSubchunk ||
+                (uint)spec.Time > (uint)World.ManagedTimePolicy.Fixed ||
+                (uint)spec.Weather > (uint)World.ManagedWeatherPolicy.Clear ||
+                !TryPositiveMilliseconds(spec.ChunkUnloadAfter, out var chunkUnloadMilliseconds))
+                return false;
+
+            ulong saveMilliseconds = 0;
+            var save = spec.ReadOnly ? World.ManagedSavePolicy.Manual : spec.Save;
+            if (save == World.ManagedSavePolicy.Automatic &&
+                !TryPositiveMilliseconds(spec.SaveInterval, out saveMilliseconds))
+                return false;
+
+            var randomTickRate = spec.RandomTicks == World.ManagedRandomTickPolicy.Disabled
+                ? 0
+                : spec.RandomTickRate;
+            if (spec.RandomTicks == World.ManagedRandomTickPolicy.PerSubchunk &&
+                (randomTickRate == 0 || randomTickRate > int.MaxValue))
+                return false;
+
+            view = new WorldOpenSpecV1
+            {
+                StructSize = (uint)sizeof(WorldOpenSpecV1),
+                Dimension = (uint)spec.Dimension,
+                SaveIntervalMilliseconds = saveMilliseconds,
+                ChunkUnloadIntervalMilliseconds = chunkUnloadMilliseconds,
+                FixedTime = spec.Time == World.ManagedTimePolicy.Fixed ? spec.FixedTime : 0,
+                OpenMode = (uint)spec.OpenMode,
+                SavePolicy = (uint)save,
+                RandomTickPolicy = (uint)spec.RandomTicks,
+                RandomTickRate = randomTickRate,
+                TimePolicy = (uint)spec.Time,
+                WeatherPolicy = (uint)spec.Weather,
+                ChunkUnloadPolicy = 0,
+                ReadOnly = spec.ReadOnly ? (byte)1 : (byte)0,
+            };
+            return true;
+        }
+
+        private static bool TryPositiveMilliseconds(TimeSpan duration, out ulong milliseconds)
+        {
+            milliseconds = 0;
+            if (duration.Ticks < TimeSpan.TicksPerMillisecond) return false;
+            milliseconds = checked((ulong)(duration.Ticks / TimeSpan.TicksPerMillisecond));
+            return true;
+        }
+
+        private static bool TryWorldText(string? value, int maxBytes, out byte[] bytes)
+        {
+            bytes = Array.Empty<byte>();
+            if (string.IsNullOrEmpty(value) || value.IndexOf('\0') >= 0) return false;
+            bytes = Encoding.UTF8.GetBytes(value);
+            return bytes.Length <= maxBytes;
         }
 
         internal static void AddPlayerEffect(ulong invocation, PlayerId player, Effect.Value effect)
@@ -529,7 +754,7 @@ internal static unsafe class PluginBridge
                     var customName = stack.CustomName();
                     var itemNbt = stack.ItemNbt;
                     var valuesNbt = stack.ValuesNbt;
-                    var enchantments = stack.Enchantments;
+                    var enchantments = stack.EncodedEnchantments;
                     ValidateItemView(stack, identifier, customName, lore, itemNbt, valuesNbt, enchantments);
                     var loreViews = AllocateViews(lore.Length);
                     for (var index = 0; index < lore.Length; index++) loreViews[index] = AllocateUtf8(lore[index]);
@@ -1771,6 +1996,15 @@ internal static unsafe class PluginBridge
                         if (!WriteExact(&result->Replacement, message)) return Abi.Error;
                         result->HasReplacement = 1;
                     }
+                    return Abi.Ok;
+                }
+                case Abi.PlayerJoinEvent:
+                {
+                    var value = (PlayerJoinInput*)input;
+                    var result = (PlayerJoinState*)state;
+                    var context = Event(value->Player, result->Cancelled, value->Invocation);
+                    plugin.OnJoin(context);
+                    ApplyCancellation(context, &result->Cancelled);
                     return Abi.Ok;
                 }
                 case Abi.PlayerHurtEvent:

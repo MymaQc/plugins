@@ -301,6 +301,7 @@ type recordingHost struct {
 	formClosed         bool
 	worldOpened        string
 	worldDimension     WorldDimension
+	worldOpenSpec      WorldOpenSpec
 	worldID            WorldID
 	worldLookup        string
 	worldLookupOK      bool
@@ -511,6 +512,10 @@ func (h *recordingHost) OpenWorld(_ InvocationID, name string, dimension WorldDi
 	h.worldOpened, h.worldDimension = name, dimension
 	return h.worldID, h.worldID != 0
 }
+func (h *recordingHost) OpenWorldSpec(_ InvocationID, name string, spec WorldOpenSpec) (WorldID, bool) {
+	h.worldOpened, h.worldOpenSpec = name, spec
+	return h.worldID, h.worldID != 0
+}
 func (h *recordingHost) WorldByName(_ InvocationID, name string) (WorldID, bool) {
 	h.worldLookup = name
 	return h.worldID, h.worldLookupOK && h.worldID != 0
@@ -594,6 +599,9 @@ func (h *recordingHost) SetWorldTime(_ InvocationID, _ WorldID, value int64) boo
 func (h *recordingHost) SetWorldSpawn(_ InvocationID, _ WorldID, position BlockPos) bool {
 	h.worldSpawn = position
 	return true
+}
+func (h *recordingHost) WorldSpawn(_ InvocationID, id WorldID) (BlockPos, bool) {
+	return h.worldSpawn, id == h.worldID
 }
 func (h *recordingHost) EntityState(_ InvocationID, id EntityID) (EntityState, bool) {
 	h.entityStateID = id
