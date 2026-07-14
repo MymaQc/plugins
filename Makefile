@@ -1,10 +1,7 @@
 .PHONY: generate check-generated build-native build-server build stage-examples run test clean
 
 RUNTIME_PROJECT := csharp/Dragonfly.Runtime/Dragonfly.Runtime.csproj
-EXAMPLE_PROJECT := examples/plugins/lifecycle-logger/LifecycleLogger.csproj
-MOVEMENT_PROJECT := examples/plugins/movement-guard/MovementGuard.csproj
-CHAT_PROJECT := examples/plugins/chat-filter/ChatFilter.csproj
-KITCHEN_SINK_PROJECT := examples/plugins/kitchen-sink/KitchenSink.csproj
+EXAMPLE_PROJECTS := $(sort $(wildcard examples/plugins/*/*.csproj))
 DOTNET_RID ?= linux-x64
 
 generate:
@@ -15,17 +12,17 @@ check-generated:
 
 build-native: generate
 	dotnet publish $(RUNTIME_PROJECT) -c Release -r $(DOTNET_RID) --self-contained true -o build/dotnet/runtime
-	dotnet publish $(EXAMPLE_PROJECT) -c Release -r $(DOTNET_RID) --self-contained true -o build/dotnet/lifecycle-logger
-	dotnet publish $(MOVEMENT_PROJECT) -c Release -r $(DOTNET_RID) --self-contained true -o build/dotnet/movement-guard
-	dotnet publish $(CHAT_PROJECT) -c Release -r $(DOTNET_RID) --self-contained true -o build/dotnet/chat-filter
-	dotnet publish $(KITCHEN_SINK_PROJECT) -c Release -r $(DOTNET_RID) --self-contained true -o build/dotnet/kitchen-sink
+	@set -eu; for project in $(EXAMPLE_PROJECTS); do \
+		name=$$(basename "$$(dirname "$$project")"); \
+		dotnet publish "$$project" -c Release -r $(DOTNET_RID) --self-contained true -o "build/dotnet/examples/$$name"; \
+	done
 	mkdir -p build/lib build/plugins
 	rm -f build/lib/*.so build/plugins/*.so
 	cp build/dotnet/runtime/Dragonfly.Runtime.so build/lib/libdragonfly_plugin_runtime.so
-	cp build/dotnet/lifecycle-logger/LifecycleLogger.so build/plugins/
-	cp build/dotnet/movement-guard/MovementGuard.so build/plugins/
-	cp build/dotnet/chat-filter/ChatFilter.so build/plugins/
-	cp build/dotnet/kitchen-sink/KitchenSink.so build/plugins/
+	@set -eu; for project in $(EXAMPLE_PROJECTS); do \
+		name=$$(basename "$$(dirname "$$project")"); \
+		find "build/dotnet/examples/$$name" -maxdepth 1 -type f -name '*.so' -exec cp {} build/plugins/ \;; \
+	done
 
 build-server:
 	mkdir -p build
@@ -48,9 +45,6 @@ test: build-native check-generated
 
 clean:
 	dotnet clean $(RUNTIME_PROJECT)
-	dotnet clean $(EXAMPLE_PROJECT)
-	dotnet clean $(MOVEMENT_PROJECT)
-	dotnet clean $(CHAT_PROJECT)
-	dotnet clean $(KITCHEN_SINK_PROJECT)
+	@set -eu; for project in $(EXAMPLE_PROJECTS); do dotnet clean "$$project"; done
 	rm -rf build examples/lib
 	rm -f examples/plugins/*.so
