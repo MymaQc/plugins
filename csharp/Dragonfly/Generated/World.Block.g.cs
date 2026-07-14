@@ -80,5 +80,8 @@ public sealed partial class World
 
         public bool Thundering() =>
             PluginBridge.Host.WorldThundering(Invocation);
+
+        public long CurrentTick() =>
+            PluginBridge.Host.WorldCurrentTick(Invocation);
     }
 }

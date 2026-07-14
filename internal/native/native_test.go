@@ -200,6 +200,7 @@ type recordingHost struct {
 	worldThunderingAt  bool
 	worldRaining       bool
 	worldThundering    bool
+	worldCurrentTick   int64
 	worldSaved         bool
 	worldUnloaded      bool
 	worldTime          int64
@@ -421,6 +422,9 @@ func (h *recordingHost) WorldRaining(_ InvocationID, id WorldID) (bool, bool) {
 }
 func (h *recordingHost) WorldThundering(_ InvocationID, id WorldID) (bool, bool) {
 	return h.worldThundering, id == 0 || id == h.worldID
+}
+func (h *recordingHost) WorldCurrentTick(_ InvocationID, id WorldID) (int64, bool) {
+	return h.worldCurrentTick, id == 0 || id == h.worldID
 }
 func (h *recordingHost) SaveWorld(_ InvocationID, id WorldID) bool {
 	h.worldSaved = id == h.worldID

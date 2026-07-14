@@ -226,6 +226,9 @@ func TestWorldManagerBlockAndStateOperationsUseActiveTx(t *testing.T) {
 		checkWeather("Raining", gotWeather, validWeather, tx.Raining())
 		gotWeather, validWeather = manager.WorldThundering(invocation, 0)
 		checkWeather("Thundering", gotWeather, validWeather, tx.Thundering())
+		if got, ok := manager.WorldCurrentTick(invocation, 0); !ok || got != tx.CurrentTick() {
+			t.Fatalf("WorldCurrentTick() = %d, %v, want %d", got, ok, tx.CurrentTick())
+		}
 		bars := block.IronBars{}
 		tx.SetBlock(cube.Pos{2, 3, 4}, bars, nil)
 		waterName, waterState := (block.Water{Still: true, Depth: 8}).EncodeBlock()
@@ -305,6 +308,9 @@ func TestWorldManagerBlockAndStateOperationsUseActiveTx(t *testing.T) {
 	if _, ok := manager.WorldThundering(9999, 0); ok {
 		t.Fatal("stale invocation resolved world thunder")
 	}
+	if _, ok := manager.WorldCurrentTick(9999, 0); ok {
+		t.Fatal("stale invocation resolved current tick")
+	}
 	if !manager.SetWorldTime(0, id, 6000) {
 		t.Fatal("SetWorldTime failed")
 	}
@@ -352,6 +358,9 @@ func TestWorldManagerInvocationCannotBorrowAnotherWorldTransaction(t *testing.T)
 		if _, ok := manager.WorldBlock(invocation, secondID, position); ok {
 			t.Fatal("cross-world synchronous read succeeded")
 		}
+		if _, ok := manager.WorldCurrentTick(invocation, secondID); ok {
+			t.Fatal("cross-world current tick read succeeded")
+		}
 		if _, _, valid := manager.WorldLiquid(invocation, secondID, position); valid {
 			t.Fatal("cross-world synchronous liquid read succeeded")
 		}
@@ -361,6 +370,9 @@ func TestWorldManagerInvocationCannotBorrowAnotherWorldTransaction(t *testing.T)
 		}
 		if _, ok := manager.WorldBlock(invocation, firstID, position); !ok {
 			t.Fatal("same-world read did not use invocation transaction")
+		}
+		if got, ok := manager.WorldCurrentTick(invocation, firstID); !ok || got != tx.CurrentTick() {
+			t.Fatal("same-world current tick did not use invocation transaction")
 		}
 		if !manager.ScheduleWorldBlockUpdate(invocation, firstID, position, scheduled, int64(time.Second)) {
 			t.Fatal("same-world scheduled update did not use invocation transaction")
@@ -380,6 +392,9 @@ func TestWorldManagerInvocationCannotBorrowAnotherWorldTransaction(t *testing.T)
 	}
 	if manager.ScheduleWorldBlockUpdate(stale, firstID, position, scheduled, int64(time.Second)) {
 		t.Fatal("stale invocation scheduled a block update")
+	}
+	if _, ok := manager.WorldCurrentTick(stale, firstID); ok {
+		t.Fatal("stale invocation resolved current tick")
 	}
 }
 

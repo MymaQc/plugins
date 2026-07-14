@@ -352,6 +352,17 @@ internal static unsafe class PluginBridge
             return WorldWeather(api, invocation, api->WorldThundering);
         }
 
+        internal static long WorldCurrentTick(ulong invocation)
+        {
+            var api = Api;
+            if (api is null || api->WorldCurrentTick == null)
+                throw new InvalidOperationException("world transaction is unavailable");
+            long tick;
+            if (api->WorldCurrentTick(api->Context, invocation, default, &tick) != Abi.Ok)
+                throw new InvalidOperationException("world transaction is no longer valid");
+            return tick;
+        }
+
         private static bool WorldWeatherAt(
             HostApi* api,
             ulong invocation,
@@ -638,7 +649,7 @@ internal static unsafe class PluginBridge
     {
         if (host is null) return Abi.Error;
         var header = (HostHeader*)host;
-        if (header->Version != Abi.HostVersion || header->Size < 648) return Abi.Error;
+        if (header->Version != Abi.HostVersion || header->Size < 656) return Abi.Error;
         Host.Api = (HostApi*)host;
         return Abi.Ok;
     }

@@ -173,7 +173,8 @@ func (tx *Tx) RainingAt(pos cube.Pos) bool { return false }
 func (tx *Tx) SnowingAt(pos cube.Pos) bool { return false }
 func (tx *Tx) ThunderingAt(pos cube.Pos) bool { return false }
 func (tx *Tx) Raining() bool { return false }
-func (tx *Tx) Thundering() bool { return false }`
+func (tx *Tx) Thundering() bool { return false }
+func (tx *Tx) CurrentTick() int64 { return 0 }`
 	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -209,6 +210,8 @@ func (tx *Tx) Thundering() bool { return false }`
 		"public bool ThunderingAt(Cube.Pos pos)",
 		"public bool Raining()",
 		"public bool Thundering()",
+		"public long CurrentTick()",
+		"PluginBridge.Host.WorldCurrentTick(Invocation)",
 		"public bool DisableRedstoneUpdates;",
 	} {
 		if !strings.Contains(worldOutput, expected) {

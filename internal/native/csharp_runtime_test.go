@@ -137,6 +137,10 @@ type csharpWorldHost struct {
 	worldRainingCall           csharpWorldQueryCall
 	worldThundering            bool
 	worldThunderingCall        csharpWorldQueryCall
+	worldCurrentTick           int64
+	worldCurrentTickInvocation InvocationID
+	worldCurrentTickWorld      WorldID
+	worldCurrentTickCalls      int
 }
 
 type csharpWorldQueryCall struct {
@@ -322,6 +326,12 @@ func (h *csharpWorldHost) WorldThundering(invocation InvocationID, world WorldID
 	return h.worldThundering, true
 }
 
+func (h *csharpWorldHost) WorldCurrentTick(invocation InvocationID, world WorldID) (int64, bool) {
+	h.worldCurrentTickInvocation, h.worldCurrentTickWorld = invocation, world
+	h.worldCurrentTickCalls++
+	return h.worldCurrentTick, true
+}
+
 func TestCSharpReflectedCommands(t *testing.T) {
 	host := &csharpWorldHost{
 		recordingHost:      &recordingHost{},
@@ -344,6 +354,7 @@ func TestCSharpReflectedCommands(t *testing.T) {
 		worldThunderingAt:   true,
 		worldRaining:        true,
 		worldThundering:     true,
+		worldCurrentTick:    123_456,
 	}
 	pluginRuntime := openCSharpRuntimeWithHost(t, host)
 	commands, err := pluginRuntime.Commands()
@@ -351,7 +362,7 @@ func TestCSharpReflectedCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 	kitchen := commandNamed(t, commands, "kitchen")
-	if !slices.Contains(kitchen.Aliases, "ks") || len(kitchen.Overloads) != 9 {
+	if !slices.Contains(kitchen.Aliases, "ks") || len(kitchen.Overloads) != 10 {
 		t.Fatalf("kitchen descriptor = %#v", kitchen)
 	}
 	if kitchen.Overloads[1].Parameters[0].Name != "echo" ||
@@ -557,6 +568,18 @@ func TestCSharpReflectedCommands(t *testing.T) {
 		t.Fatalf("biome weather calls: temperature=%+v raining_at=%+v snowing_at=%+v thundering_at=%+v raining=%+v thundering=%+v",
 			host.worldTemperatureCall, host.worldRainingAtCall, host.worldSnowingAtCall,
 			host.worldThunderingAtCall, host.worldRainingCall, host.worldThunderingCall)
+	}
+
+	input = base
+	input.Overload = 9
+	input.Arguments = []string{"tick"}
+	output, err = pluginRuntime.HandleCommand(kitchen.Index, input)
+	if err != nil || output.Failed || output.Message != "tick=123456" {
+		t.Fatalf("tick output=%#v error=%v", output, err)
+	}
+	if host.worldCurrentTickCalls != 1 || host.worldCurrentTickInvocation != 42 || host.worldCurrentTickWorld != 0 {
+		t.Fatalf("current tick host calls: calls=%d invocation=%d world=%d",
+			host.worldCurrentTickCalls, host.worldCurrentTickInvocation, host.worldCurrentTickWorld)
 	}
 
 	options, err := pluginRuntime.CommandEnumOptions(kitchen.Index, 5, 1, CommandEnumContext{

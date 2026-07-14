@@ -9,7 +9,7 @@ extern "C" {
 #endif
 
 #define DF_ABI_VERSION 5u
-#define DF_HOST_ABI_VERSION 26u
+#define DF_HOST_ABI_VERSION 27u
 #define DF_STATUS_OK 0
 #define DF_STATUS_ERROR 1
 
@@ -387,6 +387,7 @@ typedef DfStatus (*DfHostWorldBiomeSetFn)(uint64_t context, DfInvocationId invoc
 typedef DfStatus (*DfHostWorldTemperatureFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, DfBlockPos position, double *temperature);
 typedef DfStatus (*DfHostWorldWeatherAtFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, DfBlockPos position, uint8_t *value);
 typedef DfStatus (*DfHostWorldWeatherFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, uint8_t *value);
+typedef DfStatus (*DfHostWorldCurrentTickFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, int64_t *tick);
 typedef DfStatus (*DfHostWorldRangeFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, DfBlockRange *range);
 typedef DfStatus (*DfHostWorldBlocksWithinOpenFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, DfBlockPos position, int32_t radius, const DfBlockView *blocks, uint64_t block_count, DfBlockIteratorId *iterator);
 typedef DfStatus (*DfHostWorldBlocksWithinNextFn)(uint64_t context, DfInvocationId invocation, DfBlockIteratorId iterator, DfBlockPos *position, uint8_t *found);
@@ -491,8 +492,9 @@ typedef struct {
     DfHostWorldWeatherAtFn world_thundering_at;
     DfHostWorldWeatherFn world_raining;
     DfHostWorldWeatherFn world_thundering;
+    DfHostWorldCurrentTickFn world_current_tick;
 
-} DfHostApiV26;
+} DfHostApiV27;
 #define DF_COMMAND_PARAMETER_SUBCOMMAND 1u
 #define DF_COMMAND_PARAMETER_ENUM 2u
 #define DF_COMMAND_PARAMETER_STRING 3u
@@ -1006,7 +1008,7 @@ typedef DfStatus (*DfPluginEntityTypeAtFn)(void *instance, uint64_t index, DfEnt
 typedef DfStatus (*DfPluginHandleEntityFn)(void *instance, uint64_t local_type, uint32_t operation, uint64_t entity_instance, const void *input, void *state);
 typedef DfStatus (*DfHandleCommandFn)(void *instance, uint64_t command, const DfCommandInput *input, DfCommandState *state);
 typedef DfStatus (*DfCommandEnumOptionsFn)(void *instance, uint64_t command, uint64_t overload, uint64_t parameter, const DfCommandEnumContext *context, DfStringBuffer *output);
-typedef DfStatus (*DfPluginSetHostFn)(void *instance, const DfHostApiV26 *host);
+typedef DfStatus (*DfPluginSetHostFn)(void *instance, const DfHostApiV27 *host);
 typedef void (*DfPluginDestroyFn)(void *instance);
 
 typedef struct {
@@ -1029,7 +1031,7 @@ typedef struct {
 typedef const DfPluginApiV5 *(*DfPluginEntryV5Fn)(void);
 
 typedef struct DfRuntime DfRuntime;
-typedef struct { DfStringView plugin_directory; const DfHostApiV26 *host; } DfRuntimeConfig;
+typedef struct { DfStringView plugin_directory; const DfHostApiV27 *host; } DfRuntimeConfig;
 
 DfStatus df_runtime_create(const DfRuntimeConfig *config, DfRuntime **out, uint8_t *error, uint64_t error_capacity);
 DfStatus df_runtime_enable(DfRuntime *runtime, uint8_t *error, uint64_t error_capacity);

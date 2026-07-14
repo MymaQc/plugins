@@ -134,6 +134,7 @@ var selectedWorldTxMethods = []string{
 	"ThunderingAt",
 	"Raining",
 	"Thundering",
+	"CurrentTick",
 }
 
 func main() {
@@ -492,8 +493,9 @@ func validateWorldTxMethod(method commandMethod) error {
 		"ThunderingAt": {Name: "ThunderingAt", ReturnType: "bool", Parameters: []parameter{
 			{Name: "pos", Type: "Cube.Pos"},
 		}},
-		"Raining":    {Name: "Raining", ReturnType: "bool"},
-		"Thundering": {Name: "Thundering", ReturnType: "bool"},
+		"Raining":     {Name: "Raining", ReturnType: "bool"},
+		"Thundering":  {Name: "Thundering", ReturnType: "bool"},
+		"CurrentTick": {Name: "CurrentTick", ReturnType: "long"},
 	}[method.Name]
 	if !reflect.DeepEqual(method, expected) {
 		return fmt.Errorf("signature changed: got %s %s(%s)", method.ReturnType, method.Name, formatParameters(method.Parameters))
@@ -597,6 +599,7 @@ func worldTxCSharpType(expression ast.Expr, parameter bool) (string, bool) {
 			"bool":    "bool",
 			"float64": "double",
 			"int":     "int",
+			"int64":   "long",
 			"uint8":   "byte",
 		}[value.Name]
 		if !ok {
@@ -1457,6 +1460,8 @@ func generateWorldBlock(setOpts []string, methods []commandMethod) []byte {
 			output.WriteString("            PluginBridge.Host.WorldRaining(Invocation);\n")
 		case "Thundering":
 			output.WriteString("            PluginBridge.Host.WorldThundering(Invocation);\n")
+		case "CurrentTick":
+			output.WriteString("            PluginBridge.Host.WorldCurrentTick(Invocation);\n")
 		default:
 			panic("unsupported world.Tx method: " + method.Name)
 		}

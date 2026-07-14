@@ -424,6 +424,7 @@ type Host interface {
 	WorldThunderingAt(InvocationID, WorldID, BlockPos) (bool, bool)
 	WorldRaining(InvocationID, WorldID) (bool, bool)
 	WorldThundering(InvocationID, WorldID) (bool, bool)
+	WorldCurrentTick(InvocationID, WorldID) (int64, bool)
 	WorldRange(InvocationID, WorldID) (BlockRange, bool)
 	WorldHighestLightBlocker(InvocationID, WorldID, int32, int32) (int32, bool)
 	WorldHighestBlock(InvocationID, WorldID, int32, int32) (int32, bool)
@@ -544,7 +545,8 @@ func (noopHost) WorldRaining(InvocationID, WorldID) (bool, bool) {
 func (noopHost) WorldThundering(InvocationID, WorldID) (bool, bool) {
 	return false, false
 }
-func (noopHost) WorldRange(InvocationID, WorldID) (BlockRange, bool) { return BlockRange{}, false }
+func (noopHost) WorldCurrentTick(InvocationID, WorldID) (int64, bool) { return 0, false }
+func (noopHost) WorldRange(InvocationID, WorldID) (BlockRange, bool)  { return BlockRange{}, false }
 func (noopHost) WorldHighestLightBlocker(InvocationID, WorldID, int32, int32) (int32, bool) {
 	return 0, false
 }

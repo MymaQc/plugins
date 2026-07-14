@@ -405,6 +405,20 @@ func bg_go_world_thundering(context C.uint64_t, invocation C.DfInvocationId, wor
 	return writeWorldBool(output, value, valid)
 }
 
+//export bg_go_world_current_tick
+func bg_go_world_current_tick(context C.uint64_t, invocation C.DfInvocationId, world C.DfWorldId, output *C.int64_t) C.DfStatus {
+	host, ok := resolveHost(uint64(context))
+	if !ok || output == nil {
+		return C.DF_STATUS_ERROR
+	}
+	value, ok := host.WorldCurrentTick(InvocationID(invocation), WorldID(world.value))
+	if !ok {
+		return C.DF_STATUS_ERROR
+	}
+	*output = C.int64_t(value)
+	return C.DF_STATUS_OK
+}
+
 func writeWorldBool(output *C.uint8_t, value, valid bool) C.DfStatus {
 	if !valid {
 		return C.DF_STATUS_ERROR

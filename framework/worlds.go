@@ -1040,6 +1040,21 @@ func (m *WorldManager) WorldThundering(invocation native.InvocationID, id native
 	return m.worldWeather(invocation, id, (*world.Tx).Thundering)
 }
 
+func (m *WorldManager) WorldCurrentTick(invocation native.InvocationID, id native.WorldID) (int64, bool) {
+	entry, ok := m.entryForInvocation(invocation, id)
+	if !ok {
+		return 0, false
+	}
+	entry.lifecycle.RLock()
+	defer entry.lifecycle.RUnlock()
+	if entry.closed {
+		return 0, false
+	}
+	return readManagedWorld(m, invocation, entry, func(tx *world.Tx) (int64, bool) {
+		return tx.CurrentTick(), true
+	})
+}
+
 func (m *WorldManager) worldWeather(invocation native.InvocationID, id native.WorldID, read func(*world.Tx) bool) (bool, bool) {
 	entry, ok := m.entryForInvocation(invocation, id)
 	if !ok {

@@ -5,7 +5,7 @@ namespace Dragonfly.Native;
 public static class Abi
 {
     public const uint PluginVersion = 5;
-    public const uint HostVersion = 26;
+    public const uint HostVersion = 27;
     public const int Ok = 0;
     public const int Error = 1;
     public const uint PlayerMoveEvent = 1;
@@ -180,6 +180,7 @@ public unsafe struct HostApi
     public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, BlockPos, byte*, int> WorldThunderingAt;
     public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, byte*, int> WorldRaining;
     public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, byte*, int> WorldThundering;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, long*, int> WorldCurrentTick;
 }
 
 [StructLayout(LayoutKind.Sequential)]

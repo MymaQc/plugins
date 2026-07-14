@@ -32,7 +32,7 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    `World.Tx.SkyLight`, `World.Liquid`, `World.Tx.Liquid`, `World.Tx.SetLiquid`, 79 stateless
    block types, `Block.Sand`, `Block.Water`, and `Block.Lava`. The biome slice adds
    `World.Biome`, all 88 registered vanilla biome types, `SetBiome`, `Biome`, `Temperature`,
-   `RainingAt`, `SnowingAt`, `ThunderingAt`, `Raining`, and `Thundering`.
+   `RainingAt`, `SnowingAt`, `ThunderingAt`, `Raining`, `Thundering`, and `CurrentTick`.
    Transaction method signatures and parameter names come from Dragonfly's `world.Tx` Go AST;
    `BlockLoaded` preserves Dragonfly's non-loading query through a C# tuple. `BlocksWithin` maps
    `iter.Seq[cube.Pos]` to lazy `IEnumerable<Cube.Pos>` backed by a transaction-scoped native
@@ -40,10 +40,11 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    so event handlers use world operations directly just like embedded Dragonfly contexts.
    Registered block/liquid states and registered biomes supply canonical private codecs; public
    plugins never handle identifiers, NBT, numeric biome IDs, world handles, iterator handles, or
-   host errors. `Liquid` preserves
-   Dragonfly's `(Liquid, bool)` result, and passing `null` to `SetLiquid` removes the liquid. Host
-   ABI 26 transports that distinction, signed `time.Duration` nanoseconds, and private biome IDs
-   without exposing them publicly. `ScheduleBlockUpdate` maps Go `time.Duration` to C# `TimeSpan`
+   host errors. `Liquid` preserves Dragonfly's `(Liquid, bool)` result, and passing `null` to
+   `SetLiquid` removes the liquid. Host
+   ABI 27 transports that distinction, signed `time.Duration` nanoseconds, private biome IDs, and
+   the transaction owner's current tick without exposing them publicly. `ScheduleBlockUpdate`
+   maps Go `time.Duration` to C# `TimeSpan`
    and preserves the transaction-owned call. `BuildStructure` remains absent until its synchronous `At` and
    `blockAt` callbacks can be implemented without materialising or changing Dragonfly semantics.
    Remaining stateful blocks, structures, world methods, custom blocks, and block models land
@@ -65,6 +66,7 @@ nearby blocks, reads height/light data, inspects typed water, and writes/removes
 It also leaves typed water present and schedules its update with an exact 250 ms delay.
 Its separate `/kitchen biome` overload changes and restores a typed biome while exercising every
 temperature and weather query in this slice.
+`/kitchen tick` reads Dragonfly's transaction-owned current tick; it does not alias world day-time.
 NativeAOT and host-call tests verify the public shape, lazy iterator cleanup, and transaction-safe
 transport.
 

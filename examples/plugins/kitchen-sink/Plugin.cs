@@ -26,7 +26,8 @@ public sealed class KitchenSink : Plugin
             new KitchenDestination(),
             new KitchenText(),
             new KitchenBlock(),
-            new KitchenBiome()));
+            new KitchenBiome(),
+            new KitchenTick()));
         Console.WriteLine("kitchen-sink enabled");
     }
 
@@ -310,6 +311,21 @@ public sealed class KitchenSink : Plugin
                 raining ? "true" : "false",
                 thundering ? "true" : "false",
                 restored.Equals(previous) ? "true" : "false");
+        }
+    }
+
+    internal sealed class KitchenTick : Cmd.Runnable
+    {
+        public Cmd.SubCommand Tick;
+
+        public void Run(Cmd.Source source, Cmd.Output output, World.Tx? tx)
+        {
+            if (tx is null)
+            {
+                output.Error("A world transaction is required.");
+                return;
+            }
+            output.Printf("tick={0}", tx.CurrentTick());
         }
     }
 }
