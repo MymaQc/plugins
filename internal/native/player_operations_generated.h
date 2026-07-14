@@ -3,7 +3,7 @@
 #define BEDROCK_GOPHERS_PLAYER_OPERATIONS_GENERATED_H
 
 #if UINTPTR_MAX == UINT64_MAX
-_Static_assert(offsetof(DfHostApiV24, player_experience_set) == 488, "DfHostApiV24.player_experience_set ABI offset changed");
+_Static_assert(offsetof(DfHostApiV25, player_experience_set) == 488, "DfHostApiV25.player_experience_set ABI offset changed");
 #endif
 
 extern DfStatus bg_go_player_experience_set(uint64_t context, DfInvocationId invocation, DfPlayerId player, int32_t level, double progress);

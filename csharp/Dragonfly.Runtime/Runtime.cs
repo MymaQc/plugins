@@ -53,7 +53,7 @@ internal unsafe sealed class RuntimeState : IDisposable
     {
         if (host is null) throw new InvalidOperationException("null host API");
         var hostHeader = (HostHeader*)host;
-        if (hostHeader->Version != Abi.HostVersion || hostHeader->Size < 576)
+        if (hostHeader->Version != Abi.HostVersion || hostHeader->Size < 584)
             throw new InvalidOperationException("incompatible host API");
 
         var runtime = new RuntimeState();

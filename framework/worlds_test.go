@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bedrock-gophers/plugins/internal/host"
 	"github.com/bedrock-gophers/plugins/internal/native"
@@ -141,6 +142,11 @@ func TestWorldManagerBlockAndStateOperationsUseActiveTx(t *testing.T) {
 		if !ok || !manager.SetWorldBlock(invocation, 0, native.BlockPos{X: 2, Y: 3, Z: 4}, native.WorldBlock{Identifier: name, PropertiesNBT: stateNBT}, options) {
 			t.Fatal("SetWorldBlock() failed")
 		}
+		if !manager.ScheduleWorldBlockUpdate(invocation, 0, native.BlockPos{X: 2, Y: 3, Z: 4}, native.WorldBlock{
+			Identifier: name, PropertiesNBT: stateNBT,
+		}, int64(time.Hour)) {
+			t.Fatal("ScheduleWorldBlockUpdate() failed")
+		}
 		got, ok := manager.WorldBlock(invocation, 0, native.BlockPos{X: 2, Y: 3, Z: 4})
 		if !ok || got.Identifier != name {
 			t.Fatalf("WorldBlock() = %#v, %v", got, ok)
@@ -272,9 +278,20 @@ func TestWorldManagerInvocationCannotBorrowAnotherWorldTransaction(t *testing.T)
 	secondID, _ := manager.WorldByName(0, "example:second")
 	position := native.BlockPos{X: 1, Y: 2, Z: 3}
 	var stale native.InvocationID
+	var scheduled native.WorldBlock
 	if err := first.Do(func(tx *world.Tx) {
 		invocation, leave := players.BeginInvocation(tx)
 		stale = invocation
+		gold, ok := first.BlockRegistry().BlockByName("minecraft:gold_block", nil)
+		if !ok {
+			t.Fatal("gold block is not registered")
+		}
+		name, properties := gold.EncodeBlock()
+		propertiesNBT, ok := encodeBlockProperties(properties)
+		if !ok {
+			t.Fatal("encode gold block properties")
+		}
+		scheduled = native.WorldBlock{Identifier: name, PropertiesNBT: propertiesNBT}
 		if _, ok := manager.WorldBlock(invocation, secondID, position); ok {
 			t.Fatal("cross-world synchronous read succeeded")
 		}
@@ -288,6 +305,12 @@ func TestWorldManagerInvocationCannotBorrowAnotherWorldTransaction(t *testing.T)
 		if _, ok := manager.WorldBlock(invocation, firstID, position); !ok {
 			t.Fatal("same-world read did not use invocation transaction")
 		}
+		if !manager.ScheduleWorldBlockUpdate(invocation, firstID, position, scheduled, int64(time.Second)) {
+			t.Fatal("same-world scheduled update did not use invocation transaction")
+		}
+		if !manager.ScheduleWorldBlockUpdate(invocation, secondID, position, scheduled, int64(time.Second)) {
+			t.Fatal("cross-world scheduled update was not safely queued")
+		}
 		leave()
 	}).Wait(context.Background()); err != nil {
 		t.Fatal(err)
@@ -297,6 +320,9 @@ func TestWorldManagerInvocationCannotBorrowAnotherWorldTransaction(t *testing.T)
 	}
 	if _, _, valid := manager.WorldLiquid(stale, firstID, position); valid {
 		t.Fatal("stale invocation still resolves liquid")
+	}
+	if manager.ScheduleWorldBlockUpdate(stale, firstID, position, scheduled, int64(time.Second)) {
+		t.Fatal("stale invocation scheduled a block update")
 	}
 }
 

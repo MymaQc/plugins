@@ -929,6 +929,29 @@ func (m *WorldManager) SetWorldBlock(invocation native.InvocationID, id native.W
 	})
 }
 
+func (m *WorldManager) ScheduleWorldBlockUpdate(invocation native.InvocationID, id native.WorldID, position native.BlockPos, value native.WorldBlock, delayNanoseconds int64) bool {
+	entry, ok := m.entryForInvocation(invocation, id)
+	if !ok || value.Identifier == "" {
+		return false
+	}
+	entry.lifecycle.RLock()
+	defer entry.lifecycle.RUnlock()
+	if entry.closed {
+		return false
+	}
+	properties, ok := decodeBlockProperties(value.PropertiesNBT)
+	if !ok {
+		return false
+	}
+	block, ok := entry.world.BlockRegistry().BlockByName(value.Identifier, properties)
+	if !ok {
+		return false
+	}
+	return m.writeTx(invocation, entry, func(tx *world.Tx) {
+		tx.ScheduleBlockUpdate(blockPosition(position), block, time.Duration(delayNanoseconds))
+	})
+}
+
 func (m *WorldManager) entryForInvocation(invocation native.InvocationID, id native.WorldID) (*managedWorld, bool) {
 	if id != 0 {
 		return m.entryByHandle(id)

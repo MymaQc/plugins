@@ -301,6 +301,23 @@ func bg_go_world_liquid_set(context C.uint64_t, invocation C.DfInvocationId, wor
 	return C.DF_STATUS_OK
 }
 
+//export bg_go_world_block_update_schedule
+func bg_go_world_block_update_schedule(context C.uint64_t, invocation C.DfInvocationId, world C.DfWorldId, position C.DfBlockPos, view *C.DfBlockView, delayNanoseconds C.int64_t) C.DfStatus {
+	host, ok := resolveHost(uint64(context))
+	if !ok || view == nil {
+		return C.DF_STATUS_ERROR
+	}
+	identifier, validIdentifier := copyWorldBytes(view.identifier, maxBlockIdentifierBytes)
+	properties, validProperties := copyWorldBytes(view.properties_nbt, maxBlockPropertiesBytes)
+	if !validIdentifier || !validProperties || len(identifier) == 0 || !utf8.Valid(identifier) ||
+		!host.ScheduleWorldBlockUpdate(InvocationID(invocation), WorldID(world.value), nativeBlockPosition(position), WorldBlock{
+			Identifier: string(identifier), PropertiesNBT: properties,
+		}, int64(delayNanoseconds)) {
+		return C.DF_STATUS_ERROR
+	}
+	return C.DF_STATUS_OK
+}
+
 func writeWorldBlock(output *C.DfBlockData, block WorldBlock, ok bool) C.DfStatus {
 	identifier, properties, valid := worldBlockPayload(block, ok)
 	if !valid {

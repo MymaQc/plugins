@@ -121,6 +121,7 @@ type csharpWorldHost struct {
 	worldLiquidCalls           int
 	worldLiquidReadCalls       []csharpWorldQueryCall
 	worldLiquidSets            []csharpWorldLiquidSetCall
+	worldBlockUpdates          []csharpWorldBlockUpdateCall
 }
 
 type csharpWorldQueryCall struct {
@@ -136,6 +137,14 @@ type csharpWorldLiquidSetCall struct {
 	world      WorldID
 	position   BlockPos
 	liquid     *WorldBlock
+}
+
+type csharpWorldBlockUpdateCall struct {
+	invocation       InvocationID
+	world            WorldID
+	position         BlockPos
+	block            WorldBlock
+	delayNanoseconds int64
 }
 
 func (h *csharpWorldHost) WorldRange(invocation InvocationID, world WorldID) (BlockRange, bool) {
@@ -233,6 +242,18 @@ func (h *csharpWorldHost) SetWorldLiquid(invocation InvocationID, world WorldID,
 		world:      world,
 		position:   position,
 		liquid:     copied,
+	})
+	return true
+}
+
+func (h *csharpWorldHost) ScheduleWorldBlockUpdate(invocation InvocationID, world WorldID, position BlockPos, block WorldBlock, delayNanoseconds int64) bool {
+	block.PropertiesNBT = append([]byte(nil), block.PropertiesNBT...)
+	h.worldBlockUpdates = append(h.worldBlockUpdates, csharpWorldBlockUpdateCall{
+		invocation:       invocation,
+		world:            world,
+		position:         position,
+		block:            block,
+		delayNanoseconds: delayNanoseconds,
 	})
 	return true
 }
@@ -348,7 +369,7 @@ func TestCSharpReflectedCommands(t *testing.T) {
 	input.Overload = 7
 	input.Arguments = []string{"block"}
 	output, err = pluginRuntime.HandleCommand(kitchen.Index, input)
-	if err != nil || output.Failed || output.Message != "block=(1,63,2), range=-64..319, loaded=true, was_sand=true, nearby_sand=(0,63,0), highest_light_blocker=70, highest_block=72, light=9, sky_light=15, liquid_before=false, liquid=true:Water(still=true,depth=8,falling=false)" {
+	if err != nil || output.Failed || output.Message != "block=(1,63,2), range=-64..319, loaded=true, was_sand=true, nearby_sand=(0,63,0), highest_light_blocker=70, highest_block=72, light=9, sky_light=15, liquid_before=false, liquid=true:Water(still=true,depth=8,falling=false), scheduled_update=water:250ms" {
 		t.Fatalf("block output=%#v error=%v", output, err)
 	}
 	if host.worldRangeCalls != 1 || host.worldRangeInvocation != 42 || host.worldRangeWorld != 0 {
@@ -364,6 +385,14 @@ func TestCSharpReflectedCommands(t *testing.T) {
 		t.Fatalf("block host call: position=%+v block=%+v options=%+v", host.worldBlockPos, host.worldBlockSet, host.worldSetOpts)
 	}
 	queryPosition := BlockPos{X: 1, Y: 63, Z: 2}
+	if len(host.worldBlockUpdates) != 1 || host.worldBlockUpdates[0].invocation != 42 ||
+		host.worldBlockUpdates[0].world != 0 || host.worldBlockUpdates[0].position != queryPosition ||
+		host.worldBlockUpdates[0].block.Identifier != "minecraft:water" || len(host.worldLiquidSets) < 1 ||
+		host.worldLiquidSets[0].liquid == nil ||
+		!slices.Equal(host.worldBlockUpdates[0].block.PropertiesNBT, host.worldLiquidSets[0].liquid.PropertiesNBT) ||
+		host.worldBlockUpdates[0].delayNanoseconds != 250_000_000 {
+		t.Fatalf("scheduled block update=%+v", host.worldBlockUpdates)
+	}
 	columnCall := csharpWorldQueryCall{invocation: 42, x: 1, z: 2}
 	positionCall := csharpWorldQueryCall{invocation: 42, position: queryPosition}
 	if host.blocksWithinInvocation != 42 || host.blocksWithinWorld != 0 || host.blocksWithinPosition != queryPosition ||
@@ -394,19 +423,22 @@ func TestCSharpReflectedCommands(t *testing.T) {
 		t.Fatalf("liquid read calls: calls=%d invocation=%d world=%d position=%+v",
 			host.worldLiquidCalls, host.worldLiquidInvocation, host.worldLiquidWorld, host.worldLiquidPosition)
 	}
-	if len(host.worldLiquidSets) != 2 || host.worldLiquidSets[0].invocation != 42 ||
+	if len(host.worldLiquidSets) != 3 || host.worldLiquidSets[0].invocation != 42 ||
 		host.worldLiquidSets[0].world != 0 || host.worldLiquidSets[0].position != queryPosition ||
 		host.worldLiquidSets[0].liquid == nil || host.worldLiquidSets[0].liquid.Identifier != "minecraft:water" ||
 		len(host.worldLiquidSets[0].liquid.PropertiesNBT) == 0 ||
 		host.worldLiquidSets[1].invocation != 42 || host.worldLiquidSets[1].world != 0 ||
-		host.worldLiquidSets[1].position != queryPosition || host.worldLiquidSets[1].liquid != nil {
+		host.worldLiquidSets[1].position != queryPosition || host.worldLiquidSets[1].liquid != nil ||
+		host.worldLiquidSets[2].invocation != 42 || host.worldLiquidSets[2].world != 0 ||
+		host.worldLiquidSets[2].position != queryPosition || host.worldLiquidSets[2].liquid == nil ||
+		!slices.Equal(host.worldLiquidSets[2].liquid.PropertiesNBT, host.worldLiquidSets[0].liquid.PropertiesNBT) {
 		t.Fatalf("liquid set calls=%+v", host.worldLiquidSets)
 	}
 
 	host.worldBlockLoadedOK = false
 	host.worldBlock, host.worldBlockOK = host.worldBlockLoaded, true
 	output, err = pluginRuntime.HandleCommand(kitchen.Index, input)
-	if err != nil || output.Failed || output.Message != "block=(1,63,2), range=-64..319, loaded=false, was_sand=true, nearby_sand=(0,63,0), highest_light_blocker=70, highest_block=72, light=9, sky_light=15, liquid_before=false, liquid=true:Water(still=true,depth=8,falling=false)" {
+	if err != nil || output.Failed || output.Message != "block=(1,63,2), range=-64..319, loaded=false, was_sand=true, nearby_sand=(0,63,0), highest_light_blocker=70, highest_block=72, light=9, sky_light=15, liquid_before=true, liquid=true:Water(still=true,depth=8,falling=false), scheduled_update=water:250ms" {
 		t.Fatalf("unloaded block output=%#v error=%v", output, err)
 	}
 	if host.worldRangeCalls != 2 || host.worldBlockLoadedCalls != 3 || host.worldBlockCalls != 2 {
@@ -417,11 +449,19 @@ func TestCSharpReflectedCommands(t *testing.T) {
 		t.Fatalf("second block iterator: open=%d next=%d close=%d",
 			host.blockIteratorOpenCalls, host.blockIteratorNextCalls, host.blockIteratorCloseCalls)
 	}
-	if host.worldLiquidCalls != 6 || len(host.worldLiquidSets) != 4 || host.worldLiquidSets[2].liquid == nil ||
-		host.worldLiquidSets[2].liquid.Identifier != "minecraft:water" ||
-		!slices.Equal(host.worldLiquidSets[2].liquid.PropertiesNBT, host.worldLiquidSets[0].liquid.PropertiesNBT) ||
-		host.worldLiquidSets[3].liquid != nil {
+	if host.worldLiquidCalls != 7 || len(host.worldLiquidSets) != 6 || host.worldLiquidSets[3].liquid == nil ||
+		host.worldLiquidSets[3].liquid.Identifier != "minecraft:water" ||
+		!slices.Equal(host.worldLiquidSets[3].liquid.PropertiesNBT, host.worldLiquidSets[0].liquid.PropertiesNBT) ||
+		host.worldLiquidSets[4].liquid != nil || host.worldLiquidSets[5].liquid == nil ||
+		!slices.Equal(host.worldLiquidSets[5].liquid.PropertiesNBT, host.worldLiquidSets[0].liquid.PropertiesNBT) {
 		t.Fatalf("second liquid pass: reads=%d sets=%+v", host.worldLiquidCalls, host.worldLiquidSets)
+	}
+	if len(host.worldBlockUpdates) != 2 || host.worldBlockUpdates[1].invocation != 42 ||
+		host.worldBlockUpdates[1].world != 0 || host.worldBlockUpdates[1].position != queryPosition ||
+		host.worldBlockUpdates[1].block.Identifier != "minecraft:water" ||
+		!slices.Equal(host.worldBlockUpdates[1].block.PropertiesNBT, host.worldBlockUpdates[0].block.PropertiesNBT) ||
+		host.worldBlockUpdates[1].delayNanoseconds != 250_000_000 {
+		t.Fatalf("second scheduled block update=%+v", host.worldBlockUpdates)
 	}
 
 	options, err := pluginRuntime.CommandEnumOptions(kitchen.Index, 5, 1, CommandEnumContext{

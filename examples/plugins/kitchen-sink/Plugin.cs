@@ -224,13 +224,17 @@ public sealed class KitchenSink : Plugin
                 DisableLiquidDisplacement = true,
                 DisableRedstoneUpdates = true,
             });
-            tx.SetLiquid(position, new Block.Water(Still: true, Depth: 8, Falling: false));
+            var scheduledWater = new Block.Water(Still: true, Depth: 8, Falling: false);
+            tx.SetLiquid(position, scheduledWater);
             var (liquid, liquidFound) = tx.Liquid(position);
             var liquidState = liquid is Block.Water water
                 ? $"Water(still={(water.Still ? "true" : "false")},depth={water.Depth}," +
                   $"falling={(water.Falling ? "true" : "false")})"
                 : liquid?.GetType().Name ?? "none";
             tx.SetLiquid(position, null);
+            tx.SetLiquid(position, scheduledWater);
+            var blockUpdateDelay = TimeSpan.FromMilliseconds(250);
+            tx.ScheduleBlockUpdate(position, scheduledWater, blockUpdateDelay);
             var firstNearbySand = "none";
             foreach (var nearbyPosition in nearbySand)
             {
@@ -240,7 +244,7 @@ public sealed class KitchenSink : Plugin
             output.Printf(
                 "block={0}, range={1}..{2}, loaded={3}, was_sand={4}, nearby_sand={5}, " +
                 "highest_light_blocker={6}, highest_block={7}, light={8}, sky_light={9}, " +
-                "liquid_before={10}, liquid={11}:{12}",
+                "liquid_before={10}, liquid={11}:{12}, scheduled_update=water:{13}ms",
                 position,
                 range.Min(),
                 range.Max(),
@@ -253,7 +257,8 @@ public sealed class KitchenSink : Plugin
                 skyLight,
                 liquidBeforeFound ? "true" : "false",
                 liquidFound ? "true" : "false",
-                liquidState);
+                liquidState,
+                blockUpdateDelay.TotalMilliseconds);
         }
     }
 }

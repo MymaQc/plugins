@@ -27,6 +27,7 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
 4. World and block parity. The first landed slice generates `Cube.Pos`, `Cube.Range`,
    `Cube.Face`, `World.Block`, `World.SetOpts`, `World.Tx.Range`, `World.Tx.Block`,
    `World.Tx.BlockLoaded`, `World.Tx.BlocksWithin`, `World.Tx.SetBlock`,
+   `World.Tx.ScheduleBlockUpdate`,
    `World.Tx.HighestLightBlocker`, `World.Tx.HighestBlock`, `World.Tx.Light`,
    `World.Tx.SkyLight`, `World.Liquid`, `World.Tx.Liquid`, `World.Tx.SetLiquid`, 79 stateless
    block types, `Block.Sand`, `Block.Water`, and `Block.Lava`.
@@ -38,8 +39,12 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    Registered block and liquid states supply canonical private codecs; public plugins never handle
    identifiers, NBT, world handles, iterator handles, or host errors. `Liquid` preserves
    Dragonfly's `(Liquid, bool)` result, and passing `null` to `SetLiquid` removes the liquid. Host
-   ABI 24 transports that distinction without exposing it publicly. Remaining stateful blocks,
-   structures, world methods, custom blocks, and block models land incrementally.
+   ABI 25 transports that distinction and signed `time.Duration` nanoseconds without exposing it
+   publicly. `ScheduleBlockUpdate` maps Go `time.Duration` to C# `TimeSpan` and preserves the
+   transaction-owned call. `BuildStructure` remains absent until its synchronous `At` and
+   `blockAt` callbacks can be implemented without materialising or changing Dragonfly semantics.
+   Remaining stateful blocks, structures, world methods, custom blocks, and block models land
+   incrementally.
 5. Items, forms, entities, particles, sounds, and remaining world/block methods.
 6. Convert practice-core and expand parity tests against Dragonfly.
 
@@ -54,6 +59,7 @@ transports calls.
 block below the source through `World.Tx`, writes typed `Block.Sand`, and exercises all three
 `World.SetOpts` flags, reads the world range, performs a non-loading block lookup, lazily searches
 nearby blocks, reads height/light data, inspects typed water, and writes/removes typed liquid.
+It also leaves typed water present and schedules its update with an exact 250 ms delay.
 NativeAOT and host-call tests verify the public shape, lazy iterator cleanup, and transaction-safe
 transport.
 

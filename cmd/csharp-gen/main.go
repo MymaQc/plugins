@@ -115,6 +115,7 @@ var selectedWorldTxMethods = []string{
 	"BlocksWithin",
 	"Liquid",
 	"SetLiquid",
+	"ScheduleBlockUpdate",
 	"HighestLightBlocker",
 	"HighestBlock",
 	"Light",
@@ -389,7 +390,7 @@ func inspectWorldTx(path string) ([]commandMethod, error) {
 		if !ok || !selectedWorldTxMethod(function.Name.Name) || !pointerReceiver(function, "Tx") {
 			continue
 		}
-		parameters, err := translateWorldTxParameters(function.Type.Params)
+		parameters, err := translateWorldTxParameters(function.Name.Name, function.Type.Params)
 		if err != nil {
 			return nil, fmt.Errorf("world.Tx.%s: %w", function.Name.Name, err)
 		}
@@ -436,6 +437,9 @@ func validateWorldTxMethod(method commandMethod) error {
 		"SetLiquid": {Name: "SetLiquid", ReturnType: "void", Parameters: []parameter{
 			{Name: "pos", Type: "Cube.Pos"}, {Name: "b", Type: "Liquid?"},
 		}},
+		"ScheduleBlockUpdate": {Name: "ScheduleBlockUpdate", ReturnType: "void", Parameters: []parameter{
+			{Name: "pos", Type: "Cube.Pos"}, {Name: "b", Type: "Block"}, {Name: "delay", Type: "TimeSpan"},
+		}},
 		"HighestLightBlocker": {Name: "HighestLightBlocker", ReturnType: "int", Parameters: []parameter{
 			{Name: "x", Type: "int"}, {Name: "z", Type: "int"},
 		}},
@@ -476,20 +480,21 @@ func pointerReceiver(function *ast.FuncDecl, name string) bool {
 	return ok && receiver.Name == name
 }
 
-func translateWorldTxParameters(fields *ast.FieldList) ([]parameter, error) {
+func translateWorldTxParameters(method string, fields *ast.FieldList) ([]parameter, error) {
 	var parameters []parameter
 	if fields == nil {
 		return parameters, nil
 	}
 	for _, field := range fields.List {
-		typeName, ok := worldTxCSharpType(field.Type, true)
-		if !ok {
-			return nil, fmt.Errorf("unsupported parameter type %s", formatGoExpression(field.Type))
-		}
 		if len(field.Names) == 0 {
 			return nil, fmt.Errorf("unnamed parameter of type %s", formatGoExpression(field.Type))
 		}
 		for _, name := range field.Names {
+			nullableInterface := method != "ScheduleBlockUpdate" || name.Name != "b"
+			typeName, ok := worldTxCSharpType(field.Type, nullableInterface)
+			if !ok {
+				return nil, fmt.Errorf("unsupported parameter type %s", formatGoExpression(field.Type))
+			}
 			parameters = append(parameters, parameter{Name: name.Name, Type: typeName})
 		}
 	}
@@ -563,8 +568,9 @@ func worldTxCSharpType(expression ast.Expr, parameter bool) (string, bool) {
 			return "", false
 		}
 		typeName, ok := map[string]string{
-			"cube.Pos":   "Cube.Pos",
-			"cube.Range": "Cube.Range",
+			"cube.Pos":      "Cube.Pos",
+			"cube.Range":    "Cube.Range",
+			"time.Duration": "TimeSpan",
 		}[packageName.Name+"."+value.Sel.Name]
 		return typeName, ok
 	case *ast.IndexExpr:
@@ -1255,7 +1261,18 @@ func generateCube(spec cubeSpec) []byte {
 func generateWorldBlock(setOpts []string, methods []commandMethod) []byte {
 	var output bytes.Buffer
 	output.WriteString("// Code generated from Dragonfly server/world Go AST. DO NOT EDIT.\n")
-	output.WriteString("#nullable enable\n\n")
+	output.WriteString("#nullable enable\n")
+	for _, method := range methods {
+		usesSystem := strings.Contains(method.ReturnType, "TimeSpan")
+		for _, parameter := range method.Parameters {
+			usesSystem = usesSystem || strings.Contains(parameter.Type, "TimeSpan")
+		}
+		if usesSystem {
+			output.WriteString("using System;\n")
+			break
+		}
+	}
+	output.WriteByte('\n')
 	output.WriteString("namespace Dragonfly;\n\n")
 	output.WriteString("public sealed partial class World\n{\n")
 	output.WriteString("    public interface Block { }\n\n")
@@ -1294,6 +1311,9 @@ func generateWorldBlock(setOpts []string, methods []commandMethod) []byte {
 		case "SetLiquid":
 			fmt.Fprintf(&output, "            PluginBridge.Host.SetWorldLiquid(Invocation, %s, %s);\n",
 				method.Parameters[0].Name, method.Parameters[1].Name)
+		case "ScheduleBlockUpdate":
+			fmt.Fprintf(&output, "            PluginBridge.Host.ScheduleWorldBlockUpdate(Invocation, %s, %s, %s);\n",
+				method.Parameters[0].Name, method.Parameters[1].Name, method.Parameters[2].Name)
 		case "HighestLightBlocker":
 			fmt.Fprintf(&output, "            PluginBridge.Host.WorldHighestLightBlocker(Invocation, %s, %s);\n",
 				method.Parameters[0].Name, method.Parameters[1].Name)

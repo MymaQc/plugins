@@ -222,6 +222,48 @@ internal static unsafe class PluginBridge
             }
         }
 
+        internal static void ScheduleWorldBlockUpdate(
+            ulong invocation,
+            Cube.Pos position,
+            World.Block block,
+            TimeSpan delay)
+        {
+            var api = Api;
+            if (api is null || api->WorldBlockUpdateSchedule == null)
+                throw new InvalidOperationException("world transaction is unavailable");
+            if (!BlockCodec.TryEncode(block, out var identifier, out var properties))
+                throw new ArgumentException("block type is not registered", nameof(block));
+
+            long delayNanoseconds;
+            try
+            {
+                delayNanoseconds = checked(delay.Ticks * 100L);
+            }
+            catch (OverflowException)
+            {
+                throw new ArgumentOutOfRangeException(nameof(delay), "delay is outside the supported nanosecond range");
+            }
+
+            var identifierBytes = Encoding.UTF8.GetBytes(identifier);
+            fixed (byte* identifierData = identifierBytes)
+            fixed (byte* propertyData = properties)
+            {
+                var view = new BlockView
+                {
+                    Identifier = new StringView { Data = identifierData, Length = (ulong)identifierBytes.Length },
+                    PropertiesNbt = new StringView { Data = propertyData, Length = (ulong)properties.Length },
+                };
+                if (api->WorldBlockUpdateSchedule(
+                        api->Context,
+                        invocation,
+                        default,
+                        new BlockPos { X = position.X(), Y = position.Y(), Z = position.Z() },
+                        &view,
+                        delayNanoseconds) != Abi.Ok)
+                    throw new InvalidOperationException("world transaction is no longer valid");
+            }
+        }
+
         internal static IEnumerable<Cube.Pos> WorldBlocksWithin(
             ulong invocation,
             Cube.Pos position,
@@ -480,7 +522,7 @@ internal static unsafe class PluginBridge
     {
         if (host is null) return Abi.Error;
         var header = (HostHeader*)host;
-        if (header->Version != Abi.HostVersion || header->Size < 576) return Abi.Error;
+        if (header->Version != Abi.HostVersion || header->Size < 584) return Abi.Error;
         Host.Api = (HostApi*)host;
         return Abi.Ok;
     }

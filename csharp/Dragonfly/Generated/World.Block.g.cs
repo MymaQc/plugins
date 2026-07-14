@@ -1,5 +1,6 @@
 // Code generated from Dragonfly server/world Go AST. DO NOT EDIT.
 #nullable enable
+using System;
 
 namespace Dragonfly;
 
@@ -38,6 +39,9 @@ public sealed partial class World
 
         public void SetLiquid(Cube.Pos pos, Liquid? b) =>
             PluginBridge.Host.SetWorldLiquid(Invocation, pos, b);
+
+        public void ScheduleBlockUpdate(Cube.Pos pos, Block b, TimeSpan delay) =>
+            PluginBridge.Host.ScheduleWorldBlockUpdate(Invocation, pos, b, delay);
 
         public int HighestLightBlocker(int x, int z) =>
             PluginBridge.Host.WorldHighestLightBlocker(Invocation, x, z);

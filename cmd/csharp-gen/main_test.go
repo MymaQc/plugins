@@ -159,6 +159,7 @@ func (tx *Tx) BlockLoaded(pos cube.Pos) (Block, bool) { return nil, false }
 func (tx *Tx) BlocksWithin(pos cube.Pos, radius int, blocks ...Block) iter.Seq[cube.Pos] { return nil }
 func (tx *Tx) Liquid(pos cube.Pos) (Liquid, bool) { return nil, false }
 func (tx *Tx) SetLiquid(pos cube.Pos, b Liquid) {}
+func (tx *Tx) ScheduleBlockUpdate(pos cube.Pos, b Block, delay time.Duration) {}
 func (tx *Tx) HighestLightBlocker(x, z int) int { return 0 }
 func (tx *Tx) HighestBlock(x, z int) int { return 0 }
 func (tx *Tx) Light(pos cube.Pos) uint8 { return 0 }
@@ -183,6 +184,8 @@ func (tx *Tx) SkyLight(pos cube.Pos) uint8 { return 0 }`
 		"public interface Liquid : Block { }",
 		"public (Liquid? Liquid, bool Ok) Liquid(Cube.Pos pos)",
 		"public void SetLiquid(Cube.Pos pos, Liquid? b)",
+		"using System;",
+		"public void ScheduleBlockUpdate(Cube.Pos pos, Block b, TimeSpan delay)",
 		"public int HighestLightBlocker(int x, int z)",
 		"public int HighestBlock(int x, int z)",
 		"public byte Light(Cube.Pos pos)",
@@ -195,6 +198,10 @@ func (tx *Tx) SkyLight(pos cube.Pos) uint8 { return 0 }`
 	}
 	if strings.Contains(worldOutput, "Identifier") || strings.Contains(worldOutput, "PropertiesNBT") {
 		t.Fatalf("public world surface exposes transport:\n%s", worldOutput)
+	}
+	withoutDuration := string(generateWorldBlock(nil, []commandMethod{{Name: "Range", ReturnType: "Cube.Range"}}))
+	if strings.Contains(withoutDuration, "using System;") {
+		t.Fatalf("world surface imports System without a System type:\n%s", withoutDuration)
 	}
 
 	blockOutput := string(generateBlocks(blockSpec{
@@ -232,6 +239,25 @@ func (tx *Tx) SkyLight(pos cube.Pos) uint8 { return 0 }`
 	}
 	if strings.Contains(blockOutput, "public (string") || strings.Contains(blockOutput, "EncodeBlock()") {
 		t.Fatalf("typed blocks expose encoded state:\n%s", blockOutput)
+	}
+}
+
+func TestInspectWorldTxRejectsScheduleBlockUpdateDrift(t *testing.T) {
+	for name, declaration := range map[string]string{
+		"position name": "func (tx *Tx) ScheduleBlockUpdate(position cube.Pos, b Block, delay time.Duration) {}",
+		"block type":    "func (tx *Tx) ScheduleBlockUpdate(pos cube.Pos, b Liquid, delay time.Duration) {}",
+		"delay type":    "func (tx *Tx) ScheduleBlockUpdate(pos cube.Pos, b Block, delay int) {}",
+	} {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "tx.go")
+			if err := os.WriteFile(path, []byte("package world\n"+declaration), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			_, err := inspectWorldTx(path)
+			if err == nil || !strings.Contains(err.Error(), "world.Tx.ScheduleBlockUpdate: signature changed") {
+				t.Fatalf("expected ScheduleBlockUpdate signature drift error, got %v", err)
+			}
+		})
 	}
 }
 

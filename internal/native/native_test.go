@@ -192,6 +192,7 @@ type recordingHost struct {
 	worldBlockPos      BlockPos
 	worldBlockSet      WorldBlock
 	worldSetOpts       WorldSetOpts
+	worldUpdateDelay   int64
 	worldSaved         bool
 	worldUnloaded      bool
 	worldTime          int64
@@ -378,6 +379,10 @@ func (h *recordingHost) SetWorldLiquid(_ InvocationID, id WorldID, position Bloc
 }
 func (h *recordingHost) SetWorldBlock(_ InvocationID, id WorldID, position BlockPos, value WorldBlock, options WorldSetOpts) bool {
 	h.worldBlockPos, h.worldBlockSet, h.worldSetOpts = position, value, options
+	return id == 0 || id == h.worldID
+}
+func (h *recordingHost) ScheduleWorldBlockUpdate(_ InvocationID, id WorldID, position BlockPos, value WorldBlock, delayNanoseconds int64) bool {
+	h.worldBlockPos, h.worldBlockSet, h.worldUpdateDelay = position, value, delayNanoseconds
 	return id == 0 || id == h.worldID
 }
 func (h *recordingHost) SaveWorld(_ InvocationID, id WorldID) bool {

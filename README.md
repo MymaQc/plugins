@@ -48,8 +48,8 @@ World callbacks now carry Dragonfly-shaped transactions. `Player.Context` inheri
 `World.Context`, which inherits `World.Tx`; commands receive the same `World.Tx`. `Cube.Pos`,
 `World.Block`, `World.Liquid`, `World.SetOpts`, and the current `World.Tx` block-query surface are generated from
 Dragonfly source. This includes `Range`, `Block`, `BlockLoaded`, `BlocksWithin`, `SetBlock`,
-`Liquid`, `SetLiquid`, `HighestLightBlocker`, `HighestBlock`, `Light`, and `SkyLight`, plus 79
-stateless concrete block types, `Block.Sand`, `Block.Water`, and `Block.Lava`:
+`Liquid`, `SetLiquid`, `ScheduleBlockUpdate`, `HighestLightBlocker`, `HighestBlock`, `Light`, and
+`SkyLight`, plus 79 stateless concrete block types, `Block.Sand`, `Block.Water`, and `Block.Lava`:
 
 ```csharp
 var pos = Cube.PosFromVec3(source.Position()).Side(Cube.Face.Down);
@@ -61,6 +61,9 @@ tx.SetBlock(pos, new Block.Sand());
 var (liquid, found) = tx.Liquid(pos);
 tx.SetLiquid(pos, new Block.Water(Still: true, Depth: 8, Falling: false));
 tx.SetLiquid(pos, null); // Remove the liquid.
+var water = new Block.Water(Still: true, Depth: 8, Falling: false);
+tx.SetLiquid(pos, water);
+tx.ScheduleBlockUpdate(pos, water, TimeSpan.FromMilliseconds(250));
 ```
 
 `BlocksWithin` stays lazy across the private ABI: each C# enumerator owns a transaction-scoped
@@ -68,5 +71,5 @@ Dragonfly iterator and closes it on exhaustion, early exit, or callback completi
 
 Public block and liquid types come from Dragonfly's Go AST. Their canonical registry states feed
 an internal generated codec, so Minecraft identifiers and state NBT never enter plugin code. The
-private host ABI 24 preserves the separate “no liquid” result and nullable liquid removal. World
-handles and ABI errors also remain private transport details.
+private host ABI 25 preserves the separate “no liquid” result, nullable liquid removal, and signed
+nanosecond scheduling delays. World handles and ABI errors also remain private transport details.
