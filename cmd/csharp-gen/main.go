@@ -138,6 +138,18 @@ type itemStateSpec struct {
 	Bools      []bool
 	ToolTier   int
 	Values     []int
+	Capability itemCapabilitySpec
+}
+
+type itemCapabilitySpec struct {
+	MaxCount         int
+	MaxDurability    int
+	Persistent       bool
+	BrokenIdentifier string
+	BrokenMetadata   int
+	BrokenCount      int
+	AttackDamage     float64
+	AllowsAnvilCost  bool
 }
 
 type itemTypeSpec struct {
@@ -1934,7 +1946,29 @@ func inspectItemFields(spec *ast.TypeSpec, name string, valueTypes []itemValueTy
 
 func inspectItemState(typeOf reflect.Type, value world.Item, fields []itemFieldSpec, tiers []dfitem.ToolTier, valueTypes []itemValueTypeSpec) (itemStateSpec, error) {
 	identifier, metadata := value.EncodeItem()
-	state := itemStateSpec{Identifier: identifier, Metadata: int(metadata), ToolTier: -1}
+	capability := itemCapabilitySpec{MaxCount: 64, MaxDurability: -1, AttackDamage: 1}
+	if counter, ok := value.(dfitem.MaxCounter); ok {
+		capability.MaxCount = counter.MaxCount()
+	}
+	if durable, ok := value.(dfitem.Durable); ok {
+		info := durable.DurabilityInfo()
+		capability.MaxDurability = info.MaxDurability
+		capability.Persistent = info.Persistent
+		broken := info.BrokenItem()
+		capability.BrokenCount = broken.Count()
+		if brokenItem := broken.Item(); brokenItem != nil {
+			brokenIdentifier, brokenMetadata := brokenItem.EncodeItem()
+			capability.BrokenIdentifier = brokenIdentifier
+			capability.BrokenMetadata = int(brokenMetadata)
+		}
+	}
+	if weapon, ok := value.(dfitem.Weapon); ok {
+		capability.AttackDamage = weapon.AttackDamage() + 1
+	}
+	_, repairable := value.(dfitem.Repairable)
+	_, enchantedBook := value.(dfitem.EnchantedBook)
+	capability.AllowsAnvilCost = repairable || enchantedBook
+	state := itemStateSpec{Identifier: identifier, Metadata: int(metadata), ToolTier: -1, Capability: capability}
 	reflected := reflect.ValueOf(value)
 	if reflected.Kind() == reflect.Pointer {
 		reflected = reflected.Elem()
@@ -3601,8 +3635,79 @@ func generateItems(spec itemSpec) []byte {
 	output.WriteString("            return new EncodedItem(identifier, metadata);\n        }\n\n")
 	fmt.Fprintf(&output, "        internal static bool IsAir(World.Item item) =>\n            TryEncode(item, out var identifier, out _) && identifier == %s;\n\n", strconv.Quote(spec.AirIdentifier))
 	output.WriteString("        private sealed record EncodedItem(string Identifier, int Metadata) : World.Item;\n")
-	output.WriteString("    }\n}\n")
+	output.WriteString("    }\n\n")
+	generateItemCapabilities(&output, spec)
+	output.WriteString("}\n")
 	return output.Bytes()
+}
+
+func generateItemCapabilities(output *bytes.Buffer, spec itemSpec) {
+	output.WriteString("    internal readonly record struct ItemDurability(int MaxDurability, bool Persistent, Item.Stack BrokenStack);\n\n")
+	output.WriteString("    internal static class ItemCapabilities\n    {\n")
+	output.WriteString("        internal static int MaxCount(World.Item? item) => item switch\n        {\n")
+	for _, definition := range spec.Types {
+		for _, state := range definition.States {
+			if state.Capability.MaxCount != 64 {
+				fmt.Fprintf(output, "            %s => %d,\n", csharpItemPattern(definition, state, spec), state.Capability.MaxCount)
+			}
+		}
+	}
+	output.WriteString("            _ => 64,\n        };\n\n")
+	output.WriteString("        internal static bool TryDurability(World.Item? item, out ItemDurability durability)\n        {\n            switch (item)\n            {\n")
+	for _, definition := range spec.Types {
+		for _, state := range definition.States {
+			capability := state.Capability
+			if capability.MaxDurability < 0 {
+				continue
+			}
+			broken := "default"
+			if capability.BrokenIdentifier != "" && capability.BrokenCount > 0 {
+				broken = fmt.Sprintf("new Item.Stack(ItemCodec.Decode(%s, %d), %d)", strconv.Quote(capability.BrokenIdentifier), capability.BrokenMetadata, capability.BrokenCount)
+			}
+			fmt.Fprintf(output, "                case %s:\n                    durability = new(%d, %s, %s); return true;\n",
+				csharpItemPattern(definition, state, spec), capability.MaxDurability, strconv.FormatBool(capability.Persistent), broken)
+		}
+	}
+	output.WriteString("                default:\n                    durability = default; return false;\n            }\n        }\n\n")
+	output.WriteString("        internal static double AttackDamage(World.Item? item) => item switch\n        {\n")
+	for _, definition := range spec.Types {
+		for _, state := range definition.States {
+			if state.Capability.AttackDamage != 1 {
+				fmt.Fprintf(output, "            %s => %s,\n", csharpItemPattern(definition, state, spec), csharpDouble(state.Capability.AttackDamage))
+			}
+		}
+	}
+	output.WriteString("            _ => 1d,\n        };\n\n")
+	output.WriteString("        internal static bool AllowsAnvilCost(World.Item? item) => item switch\n        {\n")
+	for _, definition := range spec.Types {
+		for _, state := range definition.States {
+			if state.Capability.AllowsAnvilCost {
+				fmt.Fprintf(output, "            %s => true,\n", csharpItemPattern(definition, state, spec))
+			}
+		}
+	}
+	output.WriteString("            _ => false,\n        };\n")
+	output.WriteString("    }\n")
+}
+
+func csharpItemPattern(definition itemTypeSpec, state itemStateSpec, spec itemSpec) string {
+	if len(definition.Fields) == 0 {
+		return "Item." + definition.Name + " _"
+	}
+	field := definition.Fields[0]
+	switch field.Kind {
+	case itemFieldToolTier:
+		return fmt.Sprintf("Item.%s value when value.%s == Item.%s", definition.Name, field.Name, spec.ToolTiers[state.ToolTier].Variable)
+	case itemFieldValue:
+		valueType := findItemValueType(spec.ValueTypes, field.ValueType)
+		return fmt.Sprintf("Item.%s value when value.%s == %s", definition.Name, field.Name, itemValueFactory(*valueType, state.Values[0]))
+	default:
+		parts := make([]string, len(definition.Fields))
+		for index, field := range definition.Fields {
+			parts[index] = fmt.Sprintf("%s: %t", field.Name, state.Bools[index])
+		}
+		return fmt.Sprintf("Item.%s { %s }", definition.Name, strings.Join(parts, ", "))
+	}
 }
 
 func generateItemValueType(output *bytes.Buffer, spec itemValueTypeSpec, indent string) {

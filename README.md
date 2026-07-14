@@ -78,6 +78,9 @@ metadata, NBT, enchantment IDs, snapshots, and host statuses stay private.
 Generated value methods include colour conversions, numeric IDs, horn names, and music-disc
 identifiers, display names, and authors. Effect-returning potion and stew methods wait for the
 typed effect API.
+`Item.Stack` also exposes Dragonfly's generated max-count, durability, unbreakable, attack-damage,
+anvil-cost, comparison, equality, and stack-merging behavior. Capability tables are derived from
+the live item implementations; they are not duplicated in a public adapter model.
 `Inventory.Value` currently exposes `Size`, `Item`, `SetItem`, and `AddItem`; player armour
 and held-item access use the same typed `Item.Stack`. Invalid C# slot indices throw
 `ArgumentOutOfRangeException`; setters return `void`.

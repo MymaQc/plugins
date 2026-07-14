@@ -70,9 +70,10 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    derived from Dragonfly's Go AST and live registries rather than a handwritten schema. Their
    scalar, string, and colour methods are generated from live Dragonfly behavior too; methods
    returning effects wait for the typed effect slice.
-   Dragonfly's live item registry supplies the private identifier/metadata codec. `Item.Stack`
-   starts with `NewStack`, `Count`, `Empty`, `Item`, `Grow`, `CustomName`, `WithCustomName`, `Lore`,
-   and `WithLore`. Generated player methods expose `Inventory`, `Armour`, `HeldItems`,
+   Dragonfly's live item registry supplies the private identifier/metadata and capability codecs.
+   `Item.Stack` exposes `NewStack`, count/growth/max-count, durability/damage/unbreakable,
+   attack damage, custom names, lore, anvil cost, comparison/equality, and stack merging.
+   Generated player methods expose `Inventory`, `Armour`, `HeldItems`,
    `SetHeldItems`, and `SetHeldSlot`; `Inventory.Value` exposes `Size`, `Item`, `SetItem`, and
    `AddItem`. C# setters return `void` as the chosen language adaptation, and invalid slots
    throw `ArgumentOutOfRangeException`; host statuses never enter the public API. The existing
@@ -80,9 +81,8 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    with one host read. Bounded open/read/close item snapshots preserve damage, unbreakable state, anvil cost, custom
    names, lore, item NBT, plugin values, and enchantments internally. Unknown registered stateful
    NBT-backed items decode to a private opaque item and round-trip losslessly. Bucket content,
-   books, armour and trims, fireworks, charged crossbows, remaining stack behavior, enchantment
-   types, ender chests, custom items, and item events remain next; no public identifier fallback
-   is added.
+   books, armour and trims, fireworks, charged crossbows, enchantments and values, `WithItem`,
+   ender chests, custom items, and item events remain next; no public identifier fallback is added.
 7. Entities, remaining sounds, and remaining world/block methods.
 8. Convert practice-core and expand parity tests against Dragonfly.
 
@@ -105,8 +105,9 @@ temperature and weather query in this slice.
 instruments through the transaction-owned `AddParticle` call.
 `/kitchen game-mode` exercises registered lookup, player reads, and a custom capability-backed
 game mode.
-`/kitchen item` builds a typed diamond sword, then round-trips all eleven finite stateful item
-families through player inventory before restoring all changed player state.
+`/kitchen item` exercises stack count, durability, unbreakable, attack damage, anvil cost,
+comparison and merging, then round-trips all eleven finite stateful item families through player
+inventory before restoring all changed player state.
 `/kitchen form` exercises reflected menu, custom, and modal forms, every built-in element,
 submitted values, closers, and nested sends. `/kitchen raw-form` exercises the open `Form.Value`
 contract plus public element/menu-element JSON marshalling.

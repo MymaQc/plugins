@@ -266,7 +266,7 @@ internal static unsafe class PluginBridge
                         Identifier = AllocateUtf8(identifier),
                         Metadata = metadata,
                         Count = checked((uint)stack.Count()),
-                        Damage = stack.Damage,
+                        Damage = stack.DamageValue,
                         Unbreakable = stack.IsUnbreakable ? (byte)1 : (byte)0,
                         AnvilCost = stack.AnvilCostValue,
                         CustomName = AllocateUtf8(stack.CustomName()),

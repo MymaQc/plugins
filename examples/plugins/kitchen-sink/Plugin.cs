@@ -454,6 +454,29 @@ public sealed class KitchenSink : Plugin
                     return;
                 }
 
+                var damagedSword = sword.Damage(10);
+                var unbreakableSword = damagedSword.AsUnbreakable();
+                var snowballs = Dragonfly.Item.NewStack(new Dragonfly.Item.Snowball(), 8);
+                var moreSnowballs = Dragonfly.Item.NewStack(new Dragonfly.Item.Snowball(), 10);
+                var (fullSnowballs, remainingSnowballs) = snowballs.AddStack(moreSnowballs);
+                var zeroSword = Dragonfly.Item.NewStack(
+                    new Dragonfly.Item.Sword(Dragonfly.Item.ToolTierDiamond), 0);
+                var persistentElytra = Dragonfly.Item.NewStack(new Dragonfly.Item.Elytra(), 1);
+                if (sword.MaxCount() != 1 || sword.MaxDurability() != 1561 || sword.Durability() != 1561 ||
+                    sword.AttackDamage() != 8d || damagedSword.Durability() != 1551 ||
+                    unbreakableSword.Damage(100).Durability() != 1551 || !unbreakableSword.Unbreakable() ||
+                    unbreakableSword.AsBreakable().Unbreakable() || !sword.WithDurability(0).Empty() ||
+                    sword.WithAnvilCost(7).AnvilCost() != 7 ||
+                    Dragonfly.Item.NewStack(new Dragonfly.Item.Apple(), 1).WithAnvilCost(7).AnvilCost() != 0 ||
+                    snowballs.MaxCount() != 16 || fullSnowballs.Count() != 16 || remainingSnowballs.Count() != 2 ||
+                    !snowballs.Comparable(moreSnowballs) || snowballs.Equal(moreSnowballs) ||
+                    !zeroSword.Grow(1).Item()!.Equals(new Dragonfly.Item.Sword(Dragonfly.Item.ToolTierDiamond)) ||
+                    persistentElytra.Damage(433).Empty())
+                {
+                    output.Error("Stack behavior failed.");
+                    return;
+                }
+
                 var black = Dragonfly.Item.ColourBlack();
                 var lavaChicken = Dragonfly.Sound.DiscLavaChicken();
                 if (black.String() != "black" || black.SilverString() != "black" || black.Uint8() != 15 ||

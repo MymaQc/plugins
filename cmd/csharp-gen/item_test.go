@@ -50,6 +50,11 @@ func TestInspectItemsUsesASTAndRegistry(t *testing.T) {
 		`identifier = "minecraft:arrow"; metadata = 43`,
 		`identifier = "minecraft:black_dye"; metadata = 0`,
 		`identifier = "minecraft:music_disc_lava_chicken"; metadata = 0`,
+		"internal static class ItemCapabilities",
+		"Item.Snowball _ => 16",
+		"durability = new(1561, false, default); return true",
+		"Item.Sword value when value.Tier == Item.ToolTierDiamond => 8d",
+		"Item.EnchantedBook _ => true",
 		"private sealed record EncodedItem",
 	} {
 		if !strings.Contains(generated, value) {

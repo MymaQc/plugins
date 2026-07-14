@@ -51,10 +51,50 @@ public static partial class Item
         }
 
         public int Count() => _count;
+        public int MaxCount() => ItemCapabilities.MaxCount(_item);
         public bool Empty() => _count == 0 || _item is null || ItemCodec.IsAir(_item);
         public World.Item? Item() => Empty() ? null : _item;
 
         public Stack Grow(int count) => Copy(count: Math.Max(0, _count + count));
+
+        public int Durability() => ItemCapabilities.TryDurability(Item(), out var info)
+            ? unchecked((int)((long)info.MaxDurability - _damage))
+            : -1;
+
+        public int MaxDurability() => ItemCapabilities.TryDurability(Item(), out var info)
+            ? info.MaxDurability
+            : -1;
+
+        public Stack Damage(int damage)
+        {
+            if (!ItemCapabilities.TryDurability(Item(), out var info) || _unbreakable) return this;
+
+            var durability = (long)info.MaxDurability - _damage;
+            var resultingDurability = durability - damage;
+            if (resultingDurability <= 0) return info.Persistent ? this : info.BrokenStack;
+            if (resultingDurability > info.MaxDurability) return Copy(damage: 0);
+            return Copy(damage: checked((uint)((long)_damage + damage)));
+        }
+
+        public Stack WithDurability(int durability)
+        {
+            if (!ItemCapabilities.TryDurability(Item(), out var info)) return this;
+            if (durability > info.MaxDurability) return Copy(damage: 0);
+            if (durability == 0) return info.BrokenStack;
+            return Copy(damage: checked((uint)((long)info.MaxDurability - durability)));
+        }
+
+        public bool Unbreakable() => _unbreakable;
+
+        public Stack AsUnbreakable() => ItemCapabilities.TryDurability(Item(), out _)
+            ? Copy(unbreakable: true)
+            : this;
+
+        public Stack AsBreakable() => ItemCapabilities.TryDurability(Item(), out _)
+            ? Copy(unbreakable: false)
+            : this;
+
+        public double AttackDamage() => ItemCapabilities.AttackDamage(Item());
 
         public string CustomName() => _customName ?? string.Empty;
 
@@ -69,7 +109,37 @@ public static partial class Item
             return Copy(lore: (string[])lines.Clone());
         }
 
-        internal uint Damage => _damage;
+        public int AnvilCost() => _anvilCost;
+
+        public Stack WithAnvilCost(int anvilCost) => ItemCapabilities.AllowsAnvilCost(Item())
+            ? Copy(anvilCost: anvilCost)
+            : this;
+
+        public (Stack A, Stack B) AddStack(Stack other)
+        {
+            if (_count >= MaxCount() || !Comparable(other)) return (this, other);
+            var added = Math.Min(MaxCount() - _count, other._count);
+            return (Copy(count: _count + added), other.Copy(count: other._count - added));
+        }
+
+        public bool Equal(Stack other) => Comparable(other) &&
+            _count == other._count && _damage == other._damage;
+
+        public bool Comparable(Stack other)
+        {
+            if (Empty() || other.Empty()) return true;
+            if (!TryEncode(out var identifier, out var metadata) ||
+                !other.TryEncode(out var otherIdentifier, out var otherMetadata) ||
+                identifier != otherIdentifier || metadata != otherMetadata ||
+                _anvilCost != other._anvilCost || CustomName() != other.CustomName() ||
+                !SequenceEqual(_lore, other._lore) ||
+                !EnchantmentsEqual(_enchantments, other._enchantments) ||
+                !SequenceEqual(_valuesNbt, other._valuesNbt) ||
+                !SequenceEqual(_itemNbt, other._itemNbt)) return false;
+            return true;
+        }
+
+        internal uint DamageValue => _damage;
         internal bool IsUnbreakable => _unbreakable;
         internal int AnvilCostValue => _anvilCost;
         internal byte[] ItemNbt => _itemNbt ?? [];
@@ -86,18 +156,37 @@ public static partial class Item
 
         private Stack Copy(
             int? count = null,
+            uint? damage = null,
+            bool? unbreakable = null,
+            int? anvilCost = null,
             string? customName = null,
             string[]? lore = null) => new(
                 _item,
                 count ?? _count,
-                _damage,
-                _unbreakable,
-                _anvilCost,
+                damage ?? _damage,
+                unbreakable ?? _unbreakable,
+                anvilCost ?? _anvilCost,
                 customName ?? _customName,
                 lore ?? _lore,
                 _itemNbt,
                 _valuesNbt,
                 _enchantments);
+
+        private static bool SequenceEqual<T>(T[]? left, T[]? right) where T : IEquatable<T> =>
+            (left ?? []).AsSpan().SequenceEqual(right ?? []);
+
+        private static bool EnchantmentsEqual(ItemEnchantment[]? left, ItemEnchantment[]? right)
+        {
+            var leftSpan = (left ?? []).AsSpan();
+            var rightSpan = (right ?? []).AsSpan();
+            if (leftSpan.Length != rightSpan.Length) return false;
+            for (var index = 0; index < leftSpan.Length; index++)
+            {
+                if (leftSpan[index].Id != rightSpan[index].Id || leftSpan[index].Level != rightSpan[index].Level)
+                    return false;
+            }
+            return true;
+        }
 
         private static string FormatValue(object? value) => value switch
         {

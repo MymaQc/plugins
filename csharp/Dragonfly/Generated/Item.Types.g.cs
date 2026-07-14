@@ -2088,4 +2088,419 @@ namespace Dragonfly
 
         private sealed record EncodedItem(string Identifier, int Metadata) : World.Item;
     }
+
+    internal readonly record struct ItemDurability(int MaxDurability, bool Persistent, Item.Stack BrokenStack);
+
+    internal static class ItemCapabilities
+    {
+        internal static int MaxCount(World.Item? item) => item switch
+        {
+            Item.Axe value when value.Tier == Item.ToolTierWood => 1,
+            Item.Axe value when value.Tier == Item.ToolTierGold => 1,
+            Item.Axe value when value.Tier == Item.ToolTierStone => 1,
+            Item.Axe value when value.Tier == Item.ToolTierCopper => 1,
+            Item.Axe value when value.Tier == Item.ToolTierIron => 1,
+            Item.Axe value when value.Tier == Item.ToolTierDiamond => 1,
+            Item.Axe value when value.Tier == Item.ToolTierNetherite => 1,
+            Item.BannerPattern value when value.Type == Item.CreeperBannerPattern() => 1,
+            Item.BannerPattern value when value.Type == Item.SkullBannerPattern() => 1,
+            Item.BannerPattern value when value.Type == Item.FlowerBannerPattern() => 1,
+            Item.BannerPattern value when value.Type == Item.MojangBannerPattern() => 1,
+            Item.BannerPattern value when value.Type == Item.FieldMasonedBannerPattern() => 1,
+            Item.BannerPattern value when value.Type == Item.BordureIndentedBannerPattern() => 1,
+            Item.BannerPattern value when value.Type == Item.PiglinBannerPattern() => 1,
+            Item.BannerPattern value when value.Type == Item.GlobeBannerPattern() => 1,
+            Item.BannerPattern value when value.Type == Item.FlowBannerPattern() => 1,
+            Item.BannerPattern value when value.Type == Item.GusterBannerPattern() => 1,
+            Item.BeetrootSoup _ => 1,
+            Item.Bow _ => 1,
+            Item.CarrotOnAStick _ => 1,
+            Item.Egg _ => 16,
+            Item.Elytra _ => 1,
+            Item.EnchantedBook _ => 1,
+            Item.EnderPearl _ => 16,
+            Item.FlintAndSteel _ => 1,
+            Item.GoatHorn value when value.Type == Sound.Ponder() => 1,
+            Item.GoatHorn value when value.Type == Sound.Sing() => 1,
+            Item.GoatHorn value when value.Type == Sound.Seek() => 1,
+            Item.GoatHorn value when value.Type == Sound.Feel() => 1,
+            Item.GoatHorn value when value.Type == Sound.Admire() => 1,
+            Item.GoatHorn value when value.Type == Sound.Call() => 1,
+            Item.GoatHorn value when value.Type == Sound.Yearn() => 1,
+            Item.GoatHorn value when value.Type == Sound.Dream() => 1,
+            Item.Hoe value when value.Tier == Item.ToolTierWood => 1,
+            Item.Hoe value when value.Tier == Item.ToolTierGold => 1,
+            Item.Hoe value when value.Tier == Item.ToolTierStone => 1,
+            Item.Hoe value when value.Tier == Item.ToolTierCopper => 1,
+            Item.Hoe value when value.Tier == Item.ToolTierIron => 1,
+            Item.Hoe value when value.Tier == Item.ToolTierDiamond => 1,
+            Item.Hoe value when value.Tier == Item.ToolTierNetherite => 1,
+            Item.HoneyBottle _ => 16,
+            Item.LingeringPotion value when value.Type == Potion.Water() => 1,
+            Item.LingeringPotion value when value.Type == Potion.Mundane() => 1,
+            Item.LingeringPotion value when value.Type == Potion.LongMundane() => 1,
+            Item.LingeringPotion value when value.Type == Potion.Thick() => 1,
+            Item.LingeringPotion value when value.Type == Potion.Awkward() => 1,
+            Item.LingeringPotion value when value.Type == Potion.NightVision() => 1,
+            Item.LingeringPotion value when value.Type == Potion.LongNightVision() => 1,
+            Item.LingeringPotion value when value.Type == Potion.Invisibility() => 1,
+            Item.LingeringPotion value when value.Type == Potion.LongInvisibility() => 1,
+            Item.LingeringPotion value when value.Type == Potion.Leaping() => 1,
+            Item.LingeringPotion value when value.Type == Potion.LongLeaping() => 1,
+            Item.LingeringPotion value when value.Type == Potion.StrongLeaping() => 1,
+            Item.LingeringPotion value when value.Type == Potion.FireResistance() => 1,
+            Item.LingeringPotion value when value.Type == Potion.LongFireResistance() => 1,
+            Item.LingeringPotion value when value.Type == Potion.Swiftness() => 1,
+            Item.LingeringPotion value when value.Type == Potion.LongSwiftness() => 1,
+            Item.LingeringPotion value when value.Type == Potion.StrongSwiftness() => 1,
+            Item.LingeringPotion value when value.Type == Potion.Slowness() => 1,
+            Item.LingeringPotion value when value.Type == Potion.LongSlowness() => 1,
+            Item.LingeringPotion value when value.Type == Potion.WaterBreathing() => 1,
+            Item.LingeringPotion value when value.Type == Potion.LongWaterBreathing() => 1,
+            Item.LingeringPotion value when value.Type == Potion.Healing() => 1,
+            Item.LingeringPotion value when value.Type == Potion.StrongHealing() => 1,
+            Item.LingeringPotion value when value.Type == Potion.Harming() => 1,
+            Item.LingeringPotion value when value.Type == Potion.StrongHarming() => 1,
+            Item.LingeringPotion value when value.Type == Potion.Poison() => 1,
+            Item.LingeringPotion value when value.Type == Potion.LongPoison() => 1,
+            Item.LingeringPotion value when value.Type == Potion.StrongPoison() => 1,
+            Item.LingeringPotion value when value.Type == Potion.Regeneration() => 1,
+            Item.LingeringPotion value when value.Type == Potion.LongRegeneration() => 1,
+            Item.LingeringPotion value when value.Type == Potion.StrongRegeneration() => 1,
+            Item.LingeringPotion value when value.Type == Potion.Strength() => 1,
+            Item.LingeringPotion value when value.Type == Potion.LongStrength() => 1,
+            Item.LingeringPotion value when value.Type == Potion.StrongStrength() => 1,
+            Item.LingeringPotion value when value.Type == Potion.Weakness() => 1,
+            Item.LingeringPotion value when value.Type == Potion.LongWeakness() => 1,
+            Item.LingeringPotion value when value.Type == Potion.Wither() => 1,
+            Item.LingeringPotion value when value.Type == Potion.TurtleMaster() => 1,
+            Item.LingeringPotion value when value.Type == Potion.LongTurtleMaster() => 1,
+            Item.LingeringPotion value when value.Type == Potion.StrongTurtleMaster() => 1,
+            Item.LingeringPotion value when value.Type == Potion.SlowFalling() => 1,
+            Item.LingeringPotion value when value.Type == Potion.LongSlowFalling() => 1,
+            Item.LingeringPotion value when value.Type == Potion.StrongSlowness() => 1,
+            Item.MushroomStew _ => 1,
+            Item.MusicDisc value when value.DiscType == Sound.Disc13() => 1,
+            Item.MusicDisc value when value.DiscType == Sound.DiscCat() => 1,
+            Item.MusicDisc value when value.DiscType == Sound.DiscBlocks() => 1,
+            Item.MusicDisc value when value.DiscType == Sound.DiscChirp() => 1,
+            Item.MusicDisc value when value.DiscType == Sound.DiscFar() => 1,
+            Item.MusicDisc value when value.DiscType == Sound.DiscMall() => 1,
+            Item.MusicDisc value when value.DiscType == Sound.DiscMellohi() => 1,
+            Item.MusicDisc value when value.DiscType == Sound.DiscStal() => 1,
+            Item.MusicDisc value when value.DiscType == Sound.DiscStrad() => 1,
+            Item.MusicDisc value when value.DiscType == Sound.DiscWard() => 1,
+            Item.MusicDisc value when value.DiscType == Sound.Disc11() => 1,
+            Item.MusicDisc value when value.DiscType == Sound.DiscWait() => 1,
+            Item.MusicDisc value when value.DiscType == Sound.DiscOtherside() => 1,
+            Item.MusicDisc value when value.DiscType == Sound.DiscPigstep() => 1,
+            Item.MusicDisc value when value.DiscType == Sound.Disc5() => 1,
+            Item.MusicDisc value when value.DiscType == Sound.DiscRelic() => 1,
+            Item.MusicDisc value when value.DiscType == Sound.DiscCreator() => 1,
+            Item.MusicDisc value when value.DiscType == Sound.DiscCreatorMusicBox() => 1,
+            Item.MusicDisc value when value.DiscType == Sound.DiscPrecipice() => 1,
+            Item.MusicDisc value when value.DiscType == Sound.DiscTears() => 1,
+            Item.MusicDisc value when value.DiscType == Sound.DiscLavaChicken() => 1,
+            Item.Pickaxe value when value.Tier == Item.ToolTierWood => 1,
+            Item.Pickaxe value when value.Tier == Item.ToolTierGold => 1,
+            Item.Pickaxe value when value.Tier == Item.ToolTierStone => 1,
+            Item.Pickaxe value when value.Tier == Item.ToolTierCopper => 1,
+            Item.Pickaxe value when value.Tier == Item.ToolTierIron => 1,
+            Item.Pickaxe value when value.Tier == Item.ToolTierDiamond => 1,
+            Item.Pickaxe value when value.Tier == Item.ToolTierNetherite => 1,
+            Item.Potion value when value.Type == Potion.Water() => 1,
+            Item.Potion value when value.Type == Potion.Mundane() => 1,
+            Item.Potion value when value.Type == Potion.LongMundane() => 1,
+            Item.Potion value when value.Type == Potion.Thick() => 1,
+            Item.Potion value when value.Type == Potion.Awkward() => 1,
+            Item.Potion value when value.Type == Potion.NightVision() => 1,
+            Item.Potion value when value.Type == Potion.LongNightVision() => 1,
+            Item.Potion value when value.Type == Potion.Invisibility() => 1,
+            Item.Potion value when value.Type == Potion.LongInvisibility() => 1,
+            Item.Potion value when value.Type == Potion.Leaping() => 1,
+            Item.Potion value when value.Type == Potion.LongLeaping() => 1,
+            Item.Potion value when value.Type == Potion.StrongLeaping() => 1,
+            Item.Potion value when value.Type == Potion.FireResistance() => 1,
+            Item.Potion value when value.Type == Potion.LongFireResistance() => 1,
+            Item.Potion value when value.Type == Potion.Swiftness() => 1,
+            Item.Potion value when value.Type == Potion.LongSwiftness() => 1,
+            Item.Potion value when value.Type == Potion.StrongSwiftness() => 1,
+            Item.Potion value when value.Type == Potion.Slowness() => 1,
+            Item.Potion value when value.Type == Potion.LongSlowness() => 1,
+            Item.Potion value when value.Type == Potion.WaterBreathing() => 1,
+            Item.Potion value when value.Type == Potion.LongWaterBreathing() => 1,
+            Item.Potion value when value.Type == Potion.Healing() => 1,
+            Item.Potion value when value.Type == Potion.StrongHealing() => 1,
+            Item.Potion value when value.Type == Potion.Harming() => 1,
+            Item.Potion value when value.Type == Potion.StrongHarming() => 1,
+            Item.Potion value when value.Type == Potion.Poison() => 1,
+            Item.Potion value when value.Type == Potion.LongPoison() => 1,
+            Item.Potion value when value.Type == Potion.StrongPoison() => 1,
+            Item.Potion value when value.Type == Potion.Regeneration() => 1,
+            Item.Potion value when value.Type == Potion.LongRegeneration() => 1,
+            Item.Potion value when value.Type == Potion.StrongRegeneration() => 1,
+            Item.Potion value when value.Type == Potion.Strength() => 1,
+            Item.Potion value when value.Type == Potion.LongStrength() => 1,
+            Item.Potion value when value.Type == Potion.StrongStrength() => 1,
+            Item.Potion value when value.Type == Potion.Weakness() => 1,
+            Item.Potion value when value.Type == Potion.LongWeakness() => 1,
+            Item.Potion value when value.Type == Potion.Wither() => 1,
+            Item.Potion value when value.Type == Potion.TurtleMaster() => 1,
+            Item.Potion value when value.Type == Potion.LongTurtleMaster() => 1,
+            Item.Potion value when value.Type == Potion.StrongTurtleMaster() => 1,
+            Item.Potion value when value.Type == Potion.SlowFalling() => 1,
+            Item.Potion value when value.Type == Potion.LongSlowFalling() => 1,
+            Item.Potion value when value.Type == Potion.StrongSlowness() => 1,
+            Item.RabbitStew _ => 1,
+            Item.Shears _ => 1,
+            Item.Shovel value when value.Tier == Item.ToolTierWood => 1,
+            Item.Shovel value when value.Tier == Item.ToolTierGold => 1,
+            Item.Shovel value when value.Tier == Item.ToolTierStone => 1,
+            Item.Shovel value when value.Tier == Item.ToolTierCopper => 1,
+            Item.Shovel value when value.Tier == Item.ToolTierIron => 1,
+            Item.Shovel value when value.Tier == Item.ToolTierDiamond => 1,
+            Item.Shovel value when value.Tier == Item.ToolTierNetherite => 1,
+            Item.Snowball _ => 16,
+            Item.SplashPotion value when value.Type == Potion.Water() => 1,
+            Item.SplashPotion value when value.Type == Potion.Mundane() => 1,
+            Item.SplashPotion value when value.Type == Potion.LongMundane() => 1,
+            Item.SplashPotion value when value.Type == Potion.Thick() => 1,
+            Item.SplashPotion value when value.Type == Potion.Awkward() => 1,
+            Item.SplashPotion value when value.Type == Potion.NightVision() => 1,
+            Item.SplashPotion value when value.Type == Potion.LongNightVision() => 1,
+            Item.SplashPotion value when value.Type == Potion.Invisibility() => 1,
+            Item.SplashPotion value when value.Type == Potion.LongInvisibility() => 1,
+            Item.SplashPotion value when value.Type == Potion.Leaping() => 1,
+            Item.SplashPotion value when value.Type == Potion.LongLeaping() => 1,
+            Item.SplashPotion value when value.Type == Potion.StrongLeaping() => 1,
+            Item.SplashPotion value when value.Type == Potion.FireResistance() => 1,
+            Item.SplashPotion value when value.Type == Potion.LongFireResistance() => 1,
+            Item.SplashPotion value when value.Type == Potion.Swiftness() => 1,
+            Item.SplashPotion value when value.Type == Potion.LongSwiftness() => 1,
+            Item.SplashPotion value when value.Type == Potion.StrongSwiftness() => 1,
+            Item.SplashPotion value when value.Type == Potion.Slowness() => 1,
+            Item.SplashPotion value when value.Type == Potion.LongSlowness() => 1,
+            Item.SplashPotion value when value.Type == Potion.WaterBreathing() => 1,
+            Item.SplashPotion value when value.Type == Potion.LongWaterBreathing() => 1,
+            Item.SplashPotion value when value.Type == Potion.Healing() => 1,
+            Item.SplashPotion value when value.Type == Potion.StrongHealing() => 1,
+            Item.SplashPotion value when value.Type == Potion.Harming() => 1,
+            Item.SplashPotion value when value.Type == Potion.StrongHarming() => 1,
+            Item.SplashPotion value when value.Type == Potion.Poison() => 1,
+            Item.SplashPotion value when value.Type == Potion.LongPoison() => 1,
+            Item.SplashPotion value when value.Type == Potion.StrongPoison() => 1,
+            Item.SplashPotion value when value.Type == Potion.Regeneration() => 1,
+            Item.SplashPotion value when value.Type == Potion.LongRegeneration() => 1,
+            Item.SplashPotion value when value.Type == Potion.StrongRegeneration() => 1,
+            Item.SplashPotion value when value.Type == Potion.Strength() => 1,
+            Item.SplashPotion value when value.Type == Potion.LongStrength() => 1,
+            Item.SplashPotion value when value.Type == Potion.StrongStrength() => 1,
+            Item.SplashPotion value when value.Type == Potion.Weakness() => 1,
+            Item.SplashPotion value when value.Type == Potion.LongWeakness() => 1,
+            Item.SplashPotion value when value.Type == Potion.Wither() => 1,
+            Item.SplashPotion value when value.Type == Potion.TurtleMaster() => 1,
+            Item.SplashPotion value when value.Type == Potion.LongTurtleMaster() => 1,
+            Item.SplashPotion value when value.Type == Potion.StrongTurtleMaster() => 1,
+            Item.SplashPotion value when value.Type == Potion.SlowFalling() => 1,
+            Item.SplashPotion value when value.Type == Potion.LongSlowFalling() => 1,
+            Item.SplashPotion value when value.Type == Potion.StrongSlowness() => 1,
+            Item.Spyglass _ => 1,
+            Item.SuspiciousStew value when value.Type == Item.NightVisionPoppyStew() => 1,
+            Item.SuspiciousStew value when value.Type == Item.JumpBoostStew() => 1,
+            Item.SuspiciousStew value when value.Type == Item.WeaknessStew() => 1,
+            Item.SuspiciousStew value when value.Type == Item.BlindnessBluetStew() => 1,
+            Item.SuspiciousStew value when value.Type == Item.PoisonStew() => 1,
+            Item.SuspiciousStew value when value.Type == Item.SaturationDandelionStew() => 1,
+            Item.SuspiciousStew value when value.Type == Item.SaturationOrchidStew() => 1,
+            Item.SuspiciousStew value when value.Type == Item.FireResistanceStew() => 1,
+            Item.SuspiciousStew value when value.Type == Item.RegenerationStew() => 1,
+            Item.SuspiciousStew value when value.Type == Item.WitherStew() => 1,
+            Item.SuspiciousStew value when value.Type == Item.NightVisionTorchflowerStew() => 1,
+            Item.SuspiciousStew value when value.Type == Item.BlindnessEyeblossomStew() => 1,
+            Item.SuspiciousStew value when value.Type == Item.NauseaStew() => 1,
+            Item.Sword value when value.Tier == Item.ToolTierWood => 1,
+            Item.Sword value when value.Tier == Item.ToolTierGold => 1,
+            Item.Sword value when value.Tier == Item.ToolTierStone => 1,
+            Item.Sword value when value.Tier == Item.ToolTierCopper => 1,
+            Item.Sword value when value.Tier == Item.ToolTierIron => 1,
+            Item.Sword value when value.Tier == Item.ToolTierDiamond => 1,
+            Item.Sword value when value.Tier == Item.ToolTierNetherite => 1,
+            Item.Totem _ => 1,
+            Item.TurtleShell _ => 1,
+            Item.WarpedFungusOnAStick _ => 1,
+            _ => 64,
+        };
+
+        internal static bool TryDurability(World.Item? item, out ItemDurability durability)
+        {
+            switch (item)
+            {
+                case Item.Axe value when value.Tier == Item.ToolTierWood:
+                    durability = new(59, false, default); return true;
+                case Item.Axe value when value.Tier == Item.ToolTierGold:
+                    durability = new(32, false, default); return true;
+                case Item.Axe value when value.Tier == Item.ToolTierStone:
+                    durability = new(131, false, default); return true;
+                case Item.Axe value when value.Tier == Item.ToolTierCopper:
+                    durability = new(190, false, default); return true;
+                case Item.Axe value when value.Tier == Item.ToolTierIron:
+                    durability = new(250, false, default); return true;
+                case Item.Axe value when value.Tier == Item.ToolTierDiamond:
+                    durability = new(1561, false, default); return true;
+                case Item.Axe value when value.Tier == Item.ToolTierNetherite:
+                    durability = new(2031, false, default); return true;
+                case Item.Bow _:
+                    durability = new(385, false, default); return true;
+                case Item.Elytra _:
+                    durability = new(433, true, default); return true;
+                case Item.FlintAndSteel _:
+                    durability = new(65, false, default); return true;
+                case Item.Hoe value when value.Tier == Item.ToolTierWood:
+                    durability = new(59, false, default); return true;
+                case Item.Hoe value when value.Tier == Item.ToolTierGold:
+                    durability = new(32, false, default); return true;
+                case Item.Hoe value when value.Tier == Item.ToolTierStone:
+                    durability = new(131, false, default); return true;
+                case Item.Hoe value when value.Tier == Item.ToolTierCopper:
+                    durability = new(190, false, default); return true;
+                case Item.Hoe value when value.Tier == Item.ToolTierIron:
+                    durability = new(250, false, default); return true;
+                case Item.Hoe value when value.Tier == Item.ToolTierDiamond:
+                    durability = new(1561, false, default); return true;
+                case Item.Hoe value when value.Tier == Item.ToolTierNetherite:
+                    durability = new(2031, false, default); return true;
+                case Item.Pickaxe value when value.Tier == Item.ToolTierWood:
+                    durability = new(59, false, default); return true;
+                case Item.Pickaxe value when value.Tier == Item.ToolTierGold:
+                    durability = new(32, false, default); return true;
+                case Item.Pickaxe value when value.Tier == Item.ToolTierStone:
+                    durability = new(131, false, default); return true;
+                case Item.Pickaxe value when value.Tier == Item.ToolTierCopper:
+                    durability = new(190, false, default); return true;
+                case Item.Pickaxe value when value.Tier == Item.ToolTierIron:
+                    durability = new(250, false, default); return true;
+                case Item.Pickaxe value when value.Tier == Item.ToolTierDiamond:
+                    durability = new(1561, false, default); return true;
+                case Item.Pickaxe value when value.Tier == Item.ToolTierNetherite:
+                    durability = new(2031, false, default); return true;
+                case Item.Shears _:
+                    durability = new(238, false, default); return true;
+                case Item.Shovel value when value.Tier == Item.ToolTierWood:
+                    durability = new(59, false, default); return true;
+                case Item.Shovel value when value.Tier == Item.ToolTierGold:
+                    durability = new(32, false, default); return true;
+                case Item.Shovel value when value.Tier == Item.ToolTierStone:
+                    durability = new(131, false, default); return true;
+                case Item.Shovel value when value.Tier == Item.ToolTierCopper:
+                    durability = new(190, false, default); return true;
+                case Item.Shovel value when value.Tier == Item.ToolTierIron:
+                    durability = new(250, false, default); return true;
+                case Item.Shovel value when value.Tier == Item.ToolTierDiamond:
+                    durability = new(1561, false, default); return true;
+                case Item.Shovel value when value.Tier == Item.ToolTierNetherite:
+                    durability = new(2031, false, default); return true;
+                case Item.Sword value when value.Tier == Item.ToolTierWood:
+                    durability = new(59, false, default); return true;
+                case Item.Sword value when value.Tier == Item.ToolTierGold:
+                    durability = new(32, false, default); return true;
+                case Item.Sword value when value.Tier == Item.ToolTierStone:
+                    durability = new(131, false, default); return true;
+                case Item.Sword value when value.Tier == Item.ToolTierCopper:
+                    durability = new(190, false, default); return true;
+                case Item.Sword value when value.Tier == Item.ToolTierIron:
+                    durability = new(250, false, default); return true;
+                case Item.Sword value when value.Tier == Item.ToolTierDiamond:
+                    durability = new(1561, false, default); return true;
+                case Item.Sword value when value.Tier == Item.ToolTierNetherite:
+                    durability = new(2031, false, default); return true;
+                case Item.TurtleShell _:
+                    durability = new(276, false, default); return true;
+                default:
+                    durability = default; return false;
+            }
+        }
+
+        internal static double AttackDamage(World.Item? item) => item switch
+        {
+            Item.Axe value when value.Tier == Item.ToolTierWood => 4d,
+            Item.Axe value when value.Tier == Item.ToolTierGold => 4d,
+            Item.Axe value when value.Tier == Item.ToolTierStone => 5d,
+            Item.Axe value when value.Tier == Item.ToolTierCopper => 5d,
+            Item.Axe value when value.Tier == Item.ToolTierIron => 6d,
+            Item.Axe value when value.Tier == Item.ToolTierDiamond => 7d,
+            Item.Axe value when value.Tier == Item.ToolTierNetherite => 8d,
+            Item.Hoe value when value.Tier == Item.ToolTierWood => 3d,
+            Item.Hoe value when value.Tier == Item.ToolTierGold => 3d,
+            Item.Hoe value when value.Tier == Item.ToolTierStone => 4d,
+            Item.Hoe value when value.Tier == Item.ToolTierCopper => 4d,
+            Item.Hoe value when value.Tier == Item.ToolTierIron => 5d,
+            Item.Hoe value when value.Tier == Item.ToolTierDiamond => 6d,
+            Item.Hoe value when value.Tier == Item.ToolTierNetherite => 7d,
+            Item.Pickaxe value when value.Tier == Item.ToolTierWood => 3d,
+            Item.Pickaxe value when value.Tier == Item.ToolTierGold => 3d,
+            Item.Pickaxe value when value.Tier == Item.ToolTierStone => 4d,
+            Item.Pickaxe value when value.Tier == Item.ToolTierCopper => 4d,
+            Item.Pickaxe value when value.Tier == Item.ToolTierIron => 5d,
+            Item.Pickaxe value when value.Tier == Item.ToolTierDiamond => 6d,
+            Item.Pickaxe value when value.Tier == Item.ToolTierNetherite => 7d,
+            Item.Shovel value when value.Tier == Item.ToolTierWood => 2d,
+            Item.Shovel value when value.Tier == Item.ToolTierGold => 2d,
+            Item.Shovel value when value.Tier == Item.ToolTierStone => 3d,
+            Item.Shovel value when value.Tier == Item.ToolTierCopper => 3d,
+            Item.Shovel value when value.Tier == Item.ToolTierIron => 4d,
+            Item.Shovel value when value.Tier == Item.ToolTierDiamond => 5d,
+            Item.Shovel value when value.Tier == Item.ToolTierNetherite => 6d,
+            Item.Sword value when value.Tier == Item.ToolTierWood => 5d,
+            Item.Sword value when value.Tier == Item.ToolTierGold => 5d,
+            Item.Sword value when value.Tier == Item.ToolTierStone => 6d,
+            Item.Sword value when value.Tier == Item.ToolTierCopper => 6d,
+            Item.Sword value when value.Tier == Item.ToolTierIron => 7d,
+            Item.Sword value when value.Tier == Item.ToolTierDiamond => 8d,
+            Item.Sword value when value.Tier == Item.ToolTierNetherite => 9d,
+            _ => 1d,
+        };
+
+        internal static bool AllowsAnvilCost(World.Item? item) => item switch
+        {
+            Item.Axe value when value.Tier == Item.ToolTierWood => true,
+            Item.Axe value when value.Tier == Item.ToolTierGold => true,
+            Item.Axe value when value.Tier == Item.ToolTierStone => true,
+            Item.Axe value when value.Tier == Item.ToolTierCopper => true,
+            Item.Axe value when value.Tier == Item.ToolTierIron => true,
+            Item.Axe value when value.Tier == Item.ToolTierDiamond => true,
+            Item.Axe value when value.Tier == Item.ToolTierNetherite => true,
+            Item.Elytra _ => true,
+            Item.EnchantedBook _ => true,
+            Item.Hoe value when value.Tier == Item.ToolTierWood => true,
+            Item.Hoe value when value.Tier == Item.ToolTierGold => true,
+            Item.Hoe value when value.Tier == Item.ToolTierStone => true,
+            Item.Hoe value when value.Tier == Item.ToolTierCopper => true,
+            Item.Hoe value when value.Tier == Item.ToolTierIron => true,
+            Item.Hoe value when value.Tier == Item.ToolTierDiamond => true,
+            Item.Hoe value when value.Tier == Item.ToolTierNetherite => true,
+            Item.Pickaxe value when value.Tier == Item.ToolTierWood => true,
+            Item.Pickaxe value when value.Tier == Item.ToolTierGold => true,
+            Item.Pickaxe value when value.Tier == Item.ToolTierStone => true,
+            Item.Pickaxe value when value.Tier == Item.ToolTierCopper => true,
+            Item.Pickaxe value when value.Tier == Item.ToolTierIron => true,
+            Item.Pickaxe value when value.Tier == Item.ToolTierDiamond => true,
+            Item.Pickaxe value when value.Tier == Item.ToolTierNetherite => true,
+            Item.Shovel value when value.Tier == Item.ToolTierWood => true,
+            Item.Shovel value when value.Tier == Item.ToolTierGold => true,
+            Item.Shovel value when value.Tier == Item.ToolTierStone => true,
+            Item.Shovel value when value.Tier == Item.ToolTierCopper => true,
+            Item.Shovel value when value.Tier == Item.ToolTierIron => true,
+            Item.Shovel value when value.Tier == Item.ToolTierDiamond => true,
+            Item.Shovel value when value.Tier == Item.ToolTierNetherite => true,
+            Item.Sword value when value.Tier == Item.ToolTierWood => true,
+            Item.Sword value when value.Tier == Item.ToolTierGold => true,
+            Item.Sword value when value.Tier == Item.ToolTierStone => true,
+            Item.Sword value when value.Tier == Item.ToolTierCopper => true,
+            Item.Sword value when value.Tier == Item.ToolTierIron => true,
+            Item.Sword value when value.Tier == Item.ToolTierDiamond => true,
+            Item.Sword value when value.Tier == Item.ToolTierNetherite => true,
+            Item.TurtleShell _ => true,
+            _ => false,
+        };
+    }
 }
