@@ -264,6 +264,122 @@ internal static unsafe class PluginBridge
             }
         }
 
+        internal static void SetWorldBiome(ulong invocation, Cube.Pos position, World.Biome biome)
+        {
+            var api = Api;
+            if (api is null || api->WorldBiomeSet == null)
+                throw new InvalidOperationException("world transaction is unavailable");
+            if (!BiomeCodec.TryEncode(biome, out var id))
+                throw new ArgumentException("biome type is not registered", nameof(biome));
+            if (api->WorldBiomeSet(
+                    api->Context,
+                    invocation,
+                    default,
+                    new BlockPos { X = position.X(), Y = position.Y(), Z = position.Z() },
+                    id) != Abi.Ok)
+                throw new InvalidOperationException("world transaction is no longer valid");
+        }
+
+        internal static World.Biome WorldBiome(ulong invocation, Cube.Pos position)
+        {
+            var api = Api;
+            if (api is null || api->WorldBiomeGet == null)
+                throw new InvalidOperationException("world transaction is unavailable");
+            int id;
+            if (api->WorldBiomeGet(
+                    api->Context,
+                    invocation,
+                    default,
+                    new BlockPos { X = position.X(), Y = position.Y(), Z = position.Z() },
+                    &id) != Abi.Ok)
+                throw new InvalidOperationException("world transaction is no longer valid");
+            return BiomeCodec.Decode(id);
+        }
+
+        internal static double WorldTemperature(ulong invocation, Cube.Pos position)
+        {
+            var api = Api;
+            if (api is null || api->WorldTemperature == null)
+                throw new InvalidOperationException("world transaction is unavailable");
+            double temperature;
+            if (api->WorldTemperature(
+                    api->Context,
+                    invocation,
+                    default,
+                    new BlockPos { X = position.X(), Y = position.Y(), Z = position.Z() },
+                    &temperature) != Abi.Ok)
+                throw new InvalidOperationException("world transaction is no longer valid");
+            return temperature;
+        }
+
+        internal static bool WorldRainingAt(ulong invocation, Cube.Pos position)
+        {
+            var api = Api;
+            if (api is null || api->WorldRainingAt == null)
+                throw new InvalidOperationException("world transaction is unavailable");
+            return WorldWeatherAt(api, invocation, position, api->WorldRainingAt);
+        }
+
+        internal static bool WorldSnowingAt(ulong invocation, Cube.Pos position)
+        {
+            var api = Api;
+            if (api is null || api->WorldSnowingAt == null)
+                throw new InvalidOperationException("world transaction is unavailable");
+            return WorldWeatherAt(api, invocation, position, api->WorldSnowingAt);
+        }
+
+        internal static bool WorldThunderingAt(ulong invocation, Cube.Pos position)
+        {
+            var api = Api;
+            if (api is null || api->WorldThunderingAt == null)
+                throw new InvalidOperationException("world transaction is unavailable");
+            return WorldWeatherAt(api, invocation, position, api->WorldThunderingAt);
+        }
+
+        internal static bool WorldRaining(ulong invocation)
+        {
+            var api = Api;
+            if (api is null || api->WorldRaining == null)
+                throw new InvalidOperationException("world transaction is unavailable");
+            return WorldWeather(api, invocation, api->WorldRaining);
+        }
+
+        internal static bool WorldThundering(ulong invocation)
+        {
+            var api = Api;
+            if (api is null || api->WorldThundering == null)
+                throw new InvalidOperationException("world transaction is unavailable");
+            return WorldWeather(api, invocation, api->WorldThundering);
+        }
+
+        private static bool WorldWeatherAt(
+            HostApi* api,
+            ulong invocation,
+            Cube.Pos position,
+            delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, BlockPos, byte*, int> callback)
+        {
+            byte value;
+            if (callback(
+                    api->Context,
+                    invocation,
+                    default,
+                    new BlockPos { X = position.X(), Y = position.Y(), Z = position.Z() },
+                    &value) != Abi.Ok || value > 1)
+                throw new InvalidOperationException("world transaction is no longer valid");
+            return value == 1;
+        }
+
+        private static bool WorldWeather(
+            HostApi* api,
+            ulong invocation,
+            delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, byte*, int> callback)
+        {
+            byte value;
+            if (callback(api->Context, invocation, default, &value) != Abi.Ok || value > 1)
+                throw new InvalidOperationException("world transaction is no longer valid");
+            return value == 1;
+        }
+
         internal static IEnumerable<Cube.Pos> WorldBlocksWithin(
             ulong invocation,
             Cube.Pos position,
@@ -522,7 +638,7 @@ internal static unsafe class PluginBridge
     {
         if (host is null) return Abi.Error;
         var header = (HostHeader*)host;
-        if (header->Version != Abi.HostVersion || header->Size < 584) return Abi.Error;
+        if (header->Version != Abi.HostVersion || header->Size < 648) return Abi.Error;
         Host.Api = (HostApi*)host;
         return Abi.Ok;
     }

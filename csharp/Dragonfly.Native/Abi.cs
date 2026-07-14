@@ -5,7 +5,7 @@ namespace Dragonfly.Native;
 public static class Abi
 {
     public const uint PluginVersion = 5;
-    public const uint HostVersion = 25;
+    public const uint HostVersion = 26;
     public const int Ok = 0;
     public const int Error = 1;
     public const uint PlayerMoveEvent = 1;
@@ -172,6 +172,14 @@ public unsafe struct HostApi
     public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, BlockPos, byte*, int> WorldSkyLight;
     public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, BlockPos, BlockView*, int> WorldLiquidSet;
     public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, BlockPos, BlockView*, long, int> WorldBlockUpdateSchedule;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, BlockPos, int*, int> WorldBiomeGet;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, BlockPos, int, int> WorldBiomeSet;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, BlockPos, double*, int> WorldTemperature;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, BlockPos, byte*, int> WorldRainingAt;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, BlockPos, byte*, int> WorldSnowingAt;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, BlockPos, byte*, int> WorldThunderingAt;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, byte*, int> WorldRaining;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, byte*, int> WorldThundering;
 }
 
 [StructLayout(LayoutKind.Sequential)]

@@ -30,18 +30,21 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    `World.Tx.ScheduleBlockUpdate`,
    `World.Tx.HighestLightBlocker`, `World.Tx.HighestBlock`, `World.Tx.Light`,
    `World.Tx.SkyLight`, `World.Liquid`, `World.Tx.Liquid`, `World.Tx.SetLiquid`, 79 stateless
-   block types, `Block.Sand`, `Block.Water`, and `Block.Lava`.
+   block types, `Block.Sand`, `Block.Water`, and `Block.Lava`. The biome slice adds
+   `World.Biome`, all 88 registered vanilla biome types, `SetBiome`, `Biome`, `Temperature`,
+   `RainingAt`, `SnowingAt`, `ThunderingAt`, `Raining`, and `Thundering`.
    Transaction method signatures and parameter names come from Dragonfly's `world.Tx` Go AST;
    `BlockLoaded` preserves Dragonfly's non-loading query through a C# tuple. `BlocksWithin` maps
    `iter.Seq[cube.Pos]` to lazy `IEnumerable<Cube.Pos>` backed by a transaction-scoped native
    iterator; it is not materialised into a snapshot. `Player.Context : World.Context : World.Tx`,
    so event handlers use world operations directly just like embedded Dragonfly contexts.
-   Registered block and liquid states supply canonical private codecs; public plugins never handle
-   identifiers, NBT, world handles, iterator handles, or host errors. `Liquid` preserves
+   Registered block/liquid states and registered biomes supply canonical private codecs; public
+   plugins never handle identifiers, NBT, numeric biome IDs, world handles, iterator handles, or
+   host errors. `Liquid` preserves
    Dragonfly's `(Liquid, bool)` result, and passing `null` to `SetLiquid` removes the liquid. Host
-   ABI 25 transports that distinction and signed `time.Duration` nanoseconds without exposing it
-   publicly. `ScheduleBlockUpdate` maps Go `time.Duration` to C# `TimeSpan` and preserves the
-   transaction-owned call. `BuildStructure` remains absent until its synchronous `At` and
+   ABI 26 transports that distinction, signed `time.Duration` nanoseconds, and private biome IDs
+   without exposing them publicly. `ScheduleBlockUpdate` maps Go `time.Duration` to C# `TimeSpan`
+   and preserves the transaction-owned call. `BuildStructure` remains absent until its synchronous `At` and
    `blockAt` callbacks can be implemented without materialising or changing Dragonfly semantics.
    Remaining stateful blocks, structures, world methods, custom blocks, and block models land
    incrementally.
@@ -60,6 +63,8 @@ block below the source through `World.Tx`, writes typed `Block.Sand`, and exerci
 `World.SetOpts` flags, reads the world range, performs a non-loading block lookup, lazily searches
 nearby blocks, reads height/light data, inspects typed water, and writes/removes typed liquid.
 It also leaves typed water present and schedules its update with an exact 250 ms delay.
+Its separate `/kitchen biome` overload changes and restores a typed biome while exercising every
+temperature and weather query in this slice.
 NativeAOT and host-call tests verify the public shape, lazy iterator cleanup, and transaction-safe
 transport.
 

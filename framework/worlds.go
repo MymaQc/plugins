@@ -952,6 +952,109 @@ func (m *WorldManager) ScheduleWorldBlockUpdate(invocation native.InvocationID, 
 	})
 }
 
+func (m *WorldManager) WorldBiome(invocation native.InvocationID, id native.WorldID, position native.BlockPos) (int32, bool) {
+	entry, ok := m.entryForInvocation(invocation, id)
+	if !ok {
+		return 0, false
+	}
+	entry.lifecycle.RLock()
+	defer entry.lifecycle.RUnlock()
+	if entry.closed {
+		return 0, false
+	}
+	return readManagedWorld(m, invocation, entry, func(tx *world.Tx) (int32, bool) {
+		biome := tx.Biome(blockPosition(position))
+		if biome == nil {
+			return 0, false
+		}
+		value := biome.EncodeBiome()
+		if value < math.MinInt32 || value > math.MaxInt32 {
+			return 0, false
+		}
+		return int32(value), true
+	})
+}
+
+func (m *WorldManager) SetWorldBiome(invocation native.InvocationID, id native.WorldID, position native.BlockPos, biomeID int32) bool {
+	entry, ok := m.entryForInvocation(invocation, id)
+	if !ok {
+		return false
+	}
+	entry.lifecycle.RLock()
+	defer entry.lifecycle.RUnlock()
+	if entry.closed {
+		return false
+	}
+	biome, ok := world.BiomeByID(int(biomeID))
+	if !ok || biome == nil {
+		return false
+	}
+	return m.writeTx(invocation, entry, func(tx *world.Tx) {
+		tx.SetBiome(blockPosition(position), biome)
+	})
+}
+
+func (m *WorldManager) WorldTemperature(invocation native.InvocationID, id native.WorldID, position native.BlockPos) (float64, bool) {
+	return worldPositionValue(m, invocation, id, position, (*world.Tx).Temperature)
+}
+
+func (m *WorldManager) WorldRainingAt(invocation native.InvocationID, id native.WorldID, position native.BlockPos) (bool, bool) {
+	return worldPositionValue(m, invocation, id, position, (*world.Tx).RainingAt)
+}
+
+func (m *WorldManager) WorldSnowingAt(invocation native.InvocationID, id native.WorldID, position native.BlockPos) (bool, bool) {
+	return worldPositionValue(m, invocation, id, position, (*world.Tx).SnowingAt)
+}
+
+func (m *WorldManager) WorldThunderingAt(invocation native.InvocationID, id native.WorldID, position native.BlockPos) (bool, bool) {
+	return worldPositionValue(m, invocation, id, position, (*world.Tx).ThunderingAt)
+}
+
+func worldPositionValue[T any](m *WorldManager, invocation native.InvocationID, id native.WorldID, position native.BlockPos, read func(*world.Tx, cube.Pos) T) (T, bool) {
+	entry, ok := m.entryForInvocation(invocation, id)
+	if !ok {
+		var zero T
+		return zero, false
+	}
+	entry.lifecycle.RLock()
+	defer entry.lifecycle.RUnlock()
+	if entry.closed {
+		var zero T
+		return zero, false
+	}
+	return readManagedWorld(m, invocation, entry, func(tx *world.Tx) (T, bool) {
+		pos := blockPosition(position)
+		if tx.Biome(pos) == nil {
+			var zero T
+			return zero, false
+		}
+		return read(tx, pos), true
+	})
+}
+
+func (m *WorldManager) WorldRaining(invocation native.InvocationID, id native.WorldID) (bool, bool) {
+	return m.worldWeather(invocation, id, (*world.Tx).Raining)
+}
+
+func (m *WorldManager) WorldThundering(invocation native.InvocationID, id native.WorldID) (bool, bool) {
+	return m.worldWeather(invocation, id, (*world.Tx).Thundering)
+}
+
+func (m *WorldManager) worldWeather(invocation native.InvocationID, id native.WorldID, read func(*world.Tx) bool) (bool, bool) {
+	entry, ok := m.entryForInvocation(invocation, id)
+	if !ok {
+		return false, false
+	}
+	entry.lifecycle.RLock()
+	defer entry.lifecycle.RUnlock()
+	if entry.closed {
+		return false, false
+	}
+	return readManagedWorld(m, invocation, entry, func(tx *world.Tx) (bool, bool) {
+		return read(tx), true
+	})
+}
+
 func (m *WorldManager) entryForInvocation(invocation native.InvocationID, id native.WorldID) (*managedWorld, bool) {
 	if id != 0 {
 		return m.entryByHandle(id)

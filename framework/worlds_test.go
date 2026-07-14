@@ -2,6 +2,7 @@ package framework
 
 import (
 	"context"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -193,6 +194,38 @@ func TestWorldManagerBlockAndStateOperationsUseActiveTx(t *testing.T) {
 		if got, ok := manager.WorldSkyLight(invocation, 0, blockPosition); !ok || got != tx.SkyLight(cube.Pos{2, 3, 4}) {
 			t.Fatalf("WorldSkyLight() = %d, %v", got, ok)
 		}
+		plains, ok := world.BiomeByName("plains")
+		if !ok {
+			t.Fatal("plains biome is not registered")
+		}
+		biomeID := plains.EncodeBiome()
+		if biomeID < math.MinInt32 || biomeID > math.MaxInt32 || !manager.SetWorldBiome(invocation, 0, blockPosition, int32(biomeID)) {
+			t.Fatal("SetWorldBiome() failed")
+		}
+		if got, ok := manager.WorldBiome(invocation, 0, blockPosition); !ok || got != int32(biomeID) {
+			t.Fatalf("WorldBiome() = %d, %v", got, ok)
+		}
+		if manager.SetWorldBiome(invocation, 0, blockPosition, math.MaxInt32) {
+			t.Fatal("SetWorldBiome() accepted an unknown biome")
+		}
+		if got, ok := manager.WorldTemperature(invocation, 0, blockPosition); !ok || got != tx.Temperature(cube.Pos{2, 3, 4}) {
+			t.Fatalf("WorldTemperature() = %f, %v", got, ok)
+		}
+		checkWeather := func(name string, got, valid, want bool) {
+			if !valid || got != want {
+				t.Fatalf("World%s() = %v, %v, want %v", name, got, valid, want)
+			}
+		}
+		gotWeather, validWeather := manager.WorldRainingAt(invocation, 0, blockPosition)
+		checkWeather("RainingAt", gotWeather, validWeather, tx.RainingAt(cube.Pos{2, 3, 4}))
+		gotWeather, validWeather = manager.WorldSnowingAt(invocation, 0, blockPosition)
+		checkWeather("SnowingAt", gotWeather, validWeather, tx.SnowingAt(cube.Pos{2, 3, 4}))
+		gotWeather, validWeather = manager.WorldThunderingAt(invocation, 0, blockPosition)
+		checkWeather("ThunderingAt", gotWeather, validWeather, tx.ThunderingAt(cube.Pos{2, 3, 4}))
+		gotWeather, validWeather = manager.WorldRaining(invocation, 0)
+		checkWeather("Raining", gotWeather, validWeather, tx.Raining())
+		gotWeather, validWeather = manager.WorldThundering(invocation, 0)
+		checkWeather("Thundering", gotWeather, validWeather, tx.Thundering())
 		bars := block.IronBars{}
 		tx.SetBlock(cube.Pos{2, 3, 4}, bars, nil)
 		waterName, waterState := (block.Water{Still: true, Depth: 8}).EncodeBlock()
@@ -247,6 +280,30 @@ func TestWorldManagerBlockAndStateOperationsUseActiveTx(t *testing.T) {
 	}
 	if _, ok := manager.WorldRange(9999, 0); ok {
 		t.Fatal("stale invocation resolved a world range")
+	}
+	if _, ok := manager.WorldBiome(9999, 0, native.BlockPos{}); ok {
+		t.Fatal("stale invocation resolved a biome")
+	}
+	if manager.SetWorldBiome(9999, 0, native.BlockPos{}, 1) {
+		t.Fatal("stale invocation set a biome")
+	}
+	if _, ok := manager.WorldTemperature(9999, 0, native.BlockPos{}); ok {
+		t.Fatal("stale invocation resolved temperature")
+	}
+	if _, ok := manager.WorldRainingAt(9999, 0, native.BlockPos{}); ok {
+		t.Fatal("stale invocation resolved position weather")
+	}
+	if _, ok := manager.WorldSnowingAt(9999, 0, native.BlockPos{}); ok {
+		t.Fatal("stale invocation resolved snow")
+	}
+	if _, ok := manager.WorldThunderingAt(9999, 0, native.BlockPos{}); ok {
+		t.Fatal("stale invocation resolved position thunder")
+	}
+	if _, ok := manager.WorldRaining(9999, 0); ok {
+		t.Fatal("stale invocation resolved world weather")
+	}
+	if _, ok := manager.WorldThundering(9999, 0); ok {
+		t.Fatal("stale invocation resolved world thunder")
 	}
 	if !manager.SetWorldTime(0, id, 6000) {
 		t.Fatal("SetWorldTime failed")

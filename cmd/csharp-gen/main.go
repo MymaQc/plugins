@@ -19,6 +19,7 @@ import (
 	"github.com/bedrock-gophers/plugins/internal/host"
 	_ "github.com/df-mc/dragonfly/server/block"
 	"github.com/df-mc/dragonfly/server/world"
+	_ "github.com/df-mc/dragonfly/server/world/biome"
 )
 
 type method struct {
@@ -77,6 +78,11 @@ type blockSpec struct {
 	Liquids   []liquidSpec
 }
 
+type encodedBiome struct {
+	Name string
+	ID   int
+}
+
 var supportedPlayerHandlers = map[string]uint64{
 	"HandleChat":         1 << 1,
 	"HandleFoodLoss":     1 << 8,
@@ -120,6 +126,14 @@ var selectedWorldTxMethods = []string{
 	"HighestBlock",
 	"Light",
 	"SkyLight",
+	"SetBiome",
+	"Biome",
+	"Temperature",
+	"RainingAt",
+	"SnowingAt",
+	"ThunderingAt",
+	"Raining",
+	"Thundering",
 }
 
 func main() {
@@ -166,6 +180,10 @@ func main() {
 	if err != nil {
 		fatal(err)
 	}
+	biomes, err := inspectBiomes(filepath.Join(directory, "server", "world", "biome"))
+	if err != nil {
+		fatal(err)
+	}
 	files := []generatedFile{
 		{
 			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "Player.Handler.g.cs"),
@@ -190,6 +208,10 @@ func main() {
 		{
 			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "Block.Types.g.cs"),
 			Content: generateBlocks(blocks),
+		},
+		{
+			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "Biome.Types.g.cs"),
+			Content: generateBiomes(biomes),
 		},
 	}
 	if err := syncGeneratedFiles(files, *check); err != nil {
@@ -452,6 +474,26 @@ func validateWorldTxMethod(method commandMethod) error {
 		"SkyLight": {Name: "SkyLight", ReturnType: "byte", Parameters: []parameter{
 			{Name: "pos", Type: "Cube.Pos"},
 		}},
+		"SetBiome": {Name: "SetBiome", ReturnType: "void", Parameters: []parameter{
+			{Name: "pos", Type: "Cube.Pos"}, {Name: "b", Type: "Biome"},
+		}},
+		"Biome": {Name: "Biome", ReturnType: "Biome", Parameters: []parameter{
+			{Name: "pos", Type: "Cube.Pos"},
+		}},
+		"Temperature": {Name: "Temperature", ReturnType: "double", Parameters: []parameter{
+			{Name: "pos", Type: "Cube.Pos"},
+		}},
+		"RainingAt": {Name: "RainingAt", ReturnType: "bool", Parameters: []parameter{
+			{Name: "pos", Type: "Cube.Pos"},
+		}},
+		"SnowingAt": {Name: "SnowingAt", ReturnType: "bool", Parameters: []parameter{
+			{Name: "pos", Type: "Cube.Pos"},
+		}},
+		"ThunderingAt": {Name: "ThunderingAt", ReturnType: "bool", Parameters: []parameter{
+			{Name: "pos", Type: "Cube.Pos"},
+		}},
+		"Raining":    {Name: "Raining", ReturnType: "bool"},
+		"Thundering": {Name: "Thundering", ReturnType: "bool"},
 	}[method.Name]
 	if !reflect.DeepEqual(method, expected) {
 		return fmt.Errorf("signature changed: got %s %s(%s)", method.ReturnType, method.Name, formatParameters(method.Parameters))
@@ -549,9 +591,11 @@ func worldTxCSharpType(expression ast.Expr, parameter bool) (string, bool) {
 	case *ast.Ident:
 		typeName, ok := map[string]string{
 			"Block":   "Block",
+			"Biome":   "Biome",
 			"Liquid":  "Liquid",
 			"SetOpts": "SetOpts",
 			"bool":    "bool",
+			"float64": "double",
 			"int":     "int",
 			"uint8":   "byte",
 		}[value.Name]
@@ -725,6 +769,77 @@ func inspectBlocks(directory string) (blockSpec, error) {
 		result.Liquids = append(result.Liquids, liquid)
 	}
 	return result, nil
+}
+
+func inspectBiomes(directory string) ([]encodedBiome, error) {
+	packages, err := parser.ParseDir(token.NewFileSet(), directory, func(info os.FileInfo) bool {
+		return !strings.HasSuffix(info.Name(), "_test.go")
+	}, 0)
+	if err != nil {
+		return nil, err
+	}
+	pkg, ok := packages["biome"]
+	if !ok {
+		return nil, fmt.Errorf("Dragonfly biome package not found")
+	}
+	declarations := map[string]*ast.TypeSpec{}
+	for _, file := range pkg.Files {
+		for _, declaration := range file.Decls {
+			gen, ok := declaration.(*ast.GenDecl)
+			if !ok {
+				continue
+			}
+			for _, raw := range gen.Specs {
+				typeSpec, ok := raw.(*ast.TypeSpec)
+				if ok && typeSpec.Name.IsExported() {
+					declarations[typeSpec.Name.Name] = typeSpec
+				}
+			}
+		}
+	}
+
+	registered := world.Biomes()
+	if len(registered) == 0 {
+		return nil, fmt.Errorf("Dragonfly has no registered biomes")
+	}
+	result := make([]encodedBiome, 0, len(registered))
+	ids := map[int]string{}
+	for _, value := range registered {
+		typeOf := reflect.TypeOf(value)
+		if typeOf == nil {
+			return nil, fmt.Errorf("Dragonfly registered a nil biome")
+		}
+		if typeOf.Kind() == reflect.Pointer {
+			typeOf = typeOf.Elem()
+		}
+		if typeOf.PkgPath() != "github.com/df-mc/dragonfly/server/world/biome" || !ast.IsExported(typeOf.Name()) {
+			return nil, fmt.Errorf("registered biome %s is not a vanilla biome type", typeOf)
+		}
+		spec := declarations[typeOf.Name()]
+		structure, ok := biomeEmptyStruct(spec)
+		if !ok || len(structure.Fields.List) != 0 {
+			return nil, fmt.Errorf("Dragonfly biome.%s is not an empty struct", typeOf.Name())
+		}
+		id := value.EncodeBiome()
+		if id < -1<<31 || id > 1<<31-1 {
+			return nil, fmt.Errorf("Dragonfly biome.%s ID %d does not fit C# int", typeOf.Name(), id)
+		}
+		if previous, exists := ids[id]; exists {
+			return nil, fmt.Errorf("Dragonfly biomes %s and %s share ID %d", previous, typeOf.Name(), id)
+		}
+		ids[id] = typeOf.Name()
+		result = append(result, encodedBiome{Name: typeOf.Name(), ID: id})
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })
+	return result, nil
+}
+
+func biomeEmptyStruct(spec *ast.TypeSpec) (*ast.StructType, bool) {
+	if spec == nil {
+		return nil, false
+	}
+	structure, ok := spec.Type.(*ast.StructType)
+	return structure, ok
 }
 
 func validateLiquidFields(spec *ast.TypeSpec, name string) error {
@@ -1276,6 +1391,7 @@ func generateWorldBlock(setOpts []string, methods []commandMethod) []byte {
 	output.WriteString("namespace Dragonfly;\n\n")
 	output.WriteString("public sealed partial class World\n{\n")
 	output.WriteString("    public interface Block { }\n\n")
+	output.WriteString("    public interface Biome { }\n\n")
 	output.WriteString("    public interface Liquid : Block { }\n\n")
 	output.WriteString("    public sealed class SetOpts\n    {\n")
 	for _, field := range setOpts {
@@ -1324,6 +1440,23 @@ func generateWorldBlock(setOpts []string, methods []commandMethod) []byte {
 			fmt.Fprintf(&output, "            PluginBridge.Host.WorldLight(Invocation, %s);\n", method.Parameters[0].Name)
 		case "SkyLight":
 			fmt.Fprintf(&output, "            PluginBridge.Host.WorldSkyLight(Invocation, %s);\n", method.Parameters[0].Name)
+		case "SetBiome":
+			fmt.Fprintf(&output, "            PluginBridge.Host.SetWorldBiome(Invocation, %s, %s);\n",
+				method.Parameters[0].Name, method.Parameters[1].Name)
+		case "Biome":
+			fmt.Fprintf(&output, "            PluginBridge.Host.WorldBiome(Invocation, %s);\n", method.Parameters[0].Name)
+		case "Temperature":
+			fmt.Fprintf(&output, "            PluginBridge.Host.WorldTemperature(Invocation, %s);\n", method.Parameters[0].Name)
+		case "RainingAt":
+			fmt.Fprintf(&output, "            PluginBridge.Host.WorldRainingAt(Invocation, %s);\n", method.Parameters[0].Name)
+		case "SnowingAt":
+			fmt.Fprintf(&output, "            PluginBridge.Host.WorldSnowingAt(Invocation, %s);\n", method.Parameters[0].Name)
+		case "ThunderingAt":
+			fmt.Fprintf(&output, "            PluginBridge.Host.WorldThunderingAt(Invocation, %s);\n", method.Parameters[0].Name)
+		case "Raining":
+			output.WriteString("            PluginBridge.Host.WorldRaining(Invocation);\n")
+		case "Thundering":
+			output.WriteString("            PluginBridge.Host.WorldThundering(Invocation);\n")
 		default:
 			panic("unsupported world.Tx method: " + method.Name)
 		}
@@ -1405,6 +1538,33 @@ func generateBlocks(spec blockSpec) []byte {
 	output.WriteString("            return new EncodedLiquid(identifier, properties.ToArray());\n        }\n\n")
 	output.WriteString("        private sealed record EncodedBlock(string Identifier, byte[] Properties) : World.Block;\n")
 	output.WriteString("        private sealed record EncodedLiquid(string Identifier, byte[] Properties) : World.Liquid;\n")
+	output.WriteString("    }\n}\n")
+	return output.Bytes()
+}
+
+func generateBiomes(biomes []encodedBiome) []byte {
+	var output bytes.Buffer
+	output.WriteString("// Code generated from Dragonfly server/world/biome Go AST and registry. DO NOT EDIT.\n")
+	output.WriteString("#nullable enable\n\n")
+	output.WriteString("namespace Dragonfly\n{\n    public static partial class Biome\n    {\n")
+	for _, biome := range biomes {
+		fmt.Fprintf(&output, "        public readonly record struct %s : World.Biome;\n", biome.Name)
+	}
+	output.WriteString("    }\n\n")
+	output.WriteString("    internal static class BiomeCodec\n    {\n")
+	output.WriteString("        internal static bool TryEncode(World.Biome biome, out int id)\n        {\n")
+	output.WriteString("            switch (biome)\n            {\n")
+	for _, biome := range biomes {
+		fmt.Fprintf(&output, "                case Biome.%s _:\n                    id = %d; return true;\n", biome.Name, biome.ID)
+	}
+	output.WriteString("                case EncodedBiome encoded:\n                    id = encoded.Id; return true;\n")
+	output.WriteString("                default:\n                    id = 0; return false;\n            }\n        }\n\n")
+	output.WriteString("        internal static World.Biome Decode(int id)\n        {\n")
+	for _, biome := range biomes {
+		fmt.Fprintf(&output, "            if (id == %d) return new Biome.%s();\n", biome.ID, biome.Name)
+	}
+	output.WriteString("            return new EncodedBiome(id);\n        }\n\n")
+	output.WriteString("        private sealed record EncodedBiome(int Id) : World.Biome;\n")
 	output.WriteString("    }\n}\n")
 	return output.Bytes()
 }

@@ -11,6 +11,8 @@ Runnable parity showcase. Its single plugin class demonstrates:
 - generated `Cube.Pos`, `Block.Sand`, and all `World.SetOpts` flags in `/kitchen block`;
 - typed `World.Liquid`, `Block.Water`, liquid inspection, placement, and nullable removal;
 - typed `ScheduleBlockUpdate` with a matching water ticker and C# `TimeSpan` delay;
+- all 88 generated vanilla biome types plus biome, temperature, and weather queries in
+  `/kitchen biome`;
 - plugin lifecycle.
 
 New APIs belong here only when the example can do something real with them. This plugin is not a

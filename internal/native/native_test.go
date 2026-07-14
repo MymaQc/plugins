@@ -193,6 +193,13 @@ type recordingHost struct {
 	worldBlockSet      WorldBlock
 	worldSetOpts       WorldSetOpts
 	worldUpdateDelay   int64
+	worldBiome         int32
+	worldTemperature   float64
+	worldRainingAt     bool
+	worldSnowingAt     bool
+	worldThunderingAt  bool
+	worldRaining       bool
+	worldThundering    bool
 	worldSaved         bool
 	worldUnloaded      bool
 	worldTime          int64
@@ -384,6 +391,36 @@ func (h *recordingHost) SetWorldBlock(_ InvocationID, id WorldID, position Block
 func (h *recordingHost) ScheduleWorldBlockUpdate(_ InvocationID, id WorldID, position BlockPos, value WorldBlock, delayNanoseconds int64) bool {
 	h.worldBlockPos, h.worldBlockSet, h.worldUpdateDelay = position, value, delayNanoseconds
 	return id == 0 || id == h.worldID
+}
+func (h *recordingHost) WorldBiome(_ InvocationID, id WorldID, position BlockPos) (int32, bool) {
+	h.worldBlockPos = position
+	return h.worldBiome, id == 0 || id == h.worldID
+}
+func (h *recordingHost) SetWorldBiome(_ InvocationID, id WorldID, position BlockPos, biome int32) bool {
+	h.worldBlockPos, h.worldBiome = position, biome
+	return id == 0 || id == h.worldID
+}
+func (h *recordingHost) WorldTemperature(_ InvocationID, id WorldID, position BlockPos) (float64, bool) {
+	h.worldBlockPos = position
+	return h.worldTemperature, id == 0 || id == h.worldID
+}
+func (h *recordingHost) WorldRainingAt(_ InvocationID, id WorldID, position BlockPos) (bool, bool) {
+	h.worldBlockPos = position
+	return h.worldRainingAt, id == 0 || id == h.worldID
+}
+func (h *recordingHost) WorldSnowingAt(_ InvocationID, id WorldID, position BlockPos) (bool, bool) {
+	h.worldBlockPos = position
+	return h.worldSnowingAt, id == 0 || id == h.worldID
+}
+func (h *recordingHost) WorldThunderingAt(_ InvocationID, id WorldID, position BlockPos) (bool, bool) {
+	h.worldBlockPos = position
+	return h.worldThunderingAt, id == 0 || id == h.worldID
+}
+func (h *recordingHost) WorldRaining(_ InvocationID, id WorldID) (bool, bool) {
+	return h.worldRaining, id == 0 || id == h.worldID
+}
+func (h *recordingHost) WorldThundering(_ InvocationID, id WorldID) (bool, bool) {
+	return h.worldThundering, id == 0 || id == h.worldID
 }
 func (h *recordingHost) SaveWorld(_ InvocationID, id WorldID) bool {
 	h.worldSaved = id == h.worldID

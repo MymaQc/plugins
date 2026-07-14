@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/df-mc/dragonfly/server/world"
 )
 
 func TestPlayerHandlerMethodsUsesGoAST(t *testing.T) {
@@ -163,7 +165,15 @@ func (tx *Tx) ScheduleBlockUpdate(pos cube.Pos, b Block, delay time.Duration) {}
 func (tx *Tx) HighestLightBlocker(x, z int) int { return 0 }
 func (tx *Tx) HighestBlock(x, z int) int { return 0 }
 func (tx *Tx) Light(pos cube.Pos) uint8 { return 0 }
-func (tx *Tx) SkyLight(pos cube.Pos) uint8 { return 0 }`
+func (tx *Tx) SkyLight(pos cube.Pos) uint8 { return 0 }
+func (tx *Tx) SetBiome(pos cube.Pos, b Biome) {}
+func (tx *Tx) Biome(pos cube.Pos) Biome { return nil }
+func (tx *Tx) Temperature(pos cube.Pos) float64 { return 0 }
+func (tx *Tx) RainingAt(pos cube.Pos) bool { return false }
+func (tx *Tx) SnowingAt(pos cube.Pos) bool { return false }
+func (tx *Tx) ThunderingAt(pos cube.Pos) bool { return false }
+func (tx *Tx) Raining() bool { return false }
+func (tx *Tx) Thundering() bool { return false }`
 	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -190,6 +200,15 @@ func (tx *Tx) SkyLight(pos cube.Pos) uint8 { return 0 }`
 		"public int HighestBlock(int x, int z)",
 		"public byte Light(Cube.Pos pos)",
 		"public byte SkyLight(Cube.Pos pos)",
+		"public interface Biome { }",
+		"public void SetBiome(Cube.Pos pos, Biome b)",
+		"public Biome Biome(Cube.Pos pos)",
+		"public double Temperature(Cube.Pos pos)",
+		"public bool RainingAt(Cube.Pos pos)",
+		"public bool SnowingAt(Cube.Pos pos)",
+		"public bool ThunderingAt(Cube.Pos pos)",
+		"public bool Raining()",
+		"public bool Thundering()",
 		"public bool DisableRedstoneUpdates;",
 	} {
 		if !strings.Contains(worldOutput, expected) {
@@ -239,6 +258,22 @@ func (tx *Tx) SkyLight(pos cube.Pos) uint8 { return 0 }`
 	}
 	if strings.Contains(blockOutput, "public (string") || strings.Contains(blockOutput, "EncodeBlock()") {
 		t.Fatalf("typed blocks expose encoded state:\n%s", blockOutput)
+	}
+
+	biomeOutput := string(generateBiomes([]encodedBiome{{Name: "Desert", ID: 2}, {Name: "Plains", ID: 1}}))
+	for _, expected := range []string{
+		"public readonly record struct Desert : World.Biome;",
+		"public readonly record struct Plains : World.Biome;",
+		"internal static class BiomeCodec",
+		"case Biome.Desert _:",
+		"id = 2; return true;",
+		"if (id == 1) return new Biome.Plains();",
+		"return new EncodedBiome(id);",
+		"private sealed record EncodedBiome(int Id) : World.Biome;",
+	} {
+		if !strings.Contains(biomeOutput, expected) {
+			t.Fatalf("generated biome output missing %q:\n%s", expected, biomeOutput)
+		}
 	}
 }
 
@@ -339,6 +374,36 @@ func TestInspectBlocksUsesCanonicalLiquidStates(t *testing.T) {
 				t.Fatalf("state = %q, %v", test.state.Identifier, test.state.PropertiesNBT)
 			}
 		})
+	}
+}
+
+func TestInspectBiomesUsesASTAndRegistry(t *testing.T) {
+	command := exec.Command("go", "list", "-m", "-f", "{{.Dir}}", "github.com/df-mc/dragonfly")
+	output, err := command.Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	biomes, err := inspectBiomes(filepath.Join(string(bytes.TrimSpace(output)), "server", "world", "biome"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(biomes) != len(world.Biomes()) || len(biomes) == 0 {
+		t.Fatalf("generated %d biomes for %d registry entries", len(biomes), len(world.Biomes()))
+	}
+	foundPlains := false
+	for index, biome := range biomes {
+		if index != 0 && biomes[index-1].Name >= biome.Name {
+			t.Fatalf("biomes are not strictly sorted at %q, %q", biomes[index-1].Name, biome.Name)
+		}
+		if biome.Name == "Plains" {
+			foundPlains = true
+			if biome.ID != 1 {
+				t.Fatalf("Plains ID = %d, want 1", biome.ID)
+			}
+		}
+	}
+	if !foundPlains {
+		t.Fatal("Plains biome was not generated")
 	}
 }
 

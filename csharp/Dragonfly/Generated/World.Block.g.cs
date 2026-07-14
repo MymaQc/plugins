@@ -8,6 +8,8 @@ public sealed partial class World
 {
     public interface Block { }
 
+    public interface Biome { }
+
     public interface Liquid : Block { }
 
     public sealed class SetOpts
@@ -54,5 +56,29 @@ public sealed partial class World
 
         public byte SkyLight(Cube.Pos pos) =>
             PluginBridge.Host.WorldSkyLight(Invocation, pos);
+
+        public void SetBiome(Cube.Pos pos, Biome b) =>
+            PluginBridge.Host.SetWorldBiome(Invocation, pos, b);
+
+        public Biome Biome(Cube.Pos pos) =>
+            PluginBridge.Host.WorldBiome(Invocation, pos);
+
+        public double Temperature(Cube.Pos pos) =>
+            PluginBridge.Host.WorldTemperature(Invocation, pos);
+
+        public bool RainingAt(Cube.Pos pos) =>
+            PluginBridge.Host.WorldRainingAt(Invocation, pos);
+
+        public bool SnowingAt(Cube.Pos pos) =>
+            PluginBridge.Host.WorldSnowingAt(Invocation, pos);
+
+        public bool ThunderingAt(Cube.Pos pos) =>
+            PluginBridge.Host.WorldThunderingAt(Invocation, pos);
+
+        public bool Raining() =>
+            PluginBridge.Host.WorldRaining(Invocation);
+
+        public bool Thundering() =>
+            PluginBridge.Host.WorldThundering(Invocation);
     }
 }

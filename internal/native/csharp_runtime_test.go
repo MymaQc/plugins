@@ -122,6 +122,21 @@ type csharpWorldHost struct {
 	worldLiquidReadCalls       []csharpWorldQueryCall
 	worldLiquidSets            []csharpWorldLiquidSetCall
 	worldBlockUpdates          []csharpWorldBlockUpdateCall
+	worldBiome                 int32
+	worldBiomeCalls            []csharpWorldQueryCall
+	worldBiomeSets             []csharpWorldBiomeSetCall
+	worldTemperature           float64
+	worldTemperatureCall       csharpWorldQueryCall
+	worldRainingAt             bool
+	worldRainingAtCall         csharpWorldQueryCall
+	worldSnowingAt             bool
+	worldSnowingAtCall         csharpWorldQueryCall
+	worldThunderingAt          bool
+	worldThunderingAtCall      csharpWorldQueryCall
+	worldRaining               bool
+	worldRainingCall           csharpWorldQueryCall
+	worldThundering            bool
+	worldThunderingCall        csharpWorldQueryCall
 }
 
 type csharpWorldQueryCall struct {
@@ -145,6 +160,11 @@ type csharpWorldBlockUpdateCall struct {
 	position         BlockPos
 	block            WorldBlock
 	delayNanoseconds int64
+}
+
+type csharpWorldBiomeSetCall struct {
+	csharpWorldQueryCall
+	biome int32
 }
 
 func (h *csharpWorldHost) WorldRange(invocation InvocationID, world WorldID) (BlockRange, bool) {
@@ -258,6 +278,50 @@ func (h *csharpWorldHost) ScheduleWorldBlockUpdate(invocation InvocationID, worl
 	return true
 }
 
+func (h *csharpWorldHost) WorldBiome(invocation InvocationID, world WorldID, position BlockPos) (int32, bool) {
+	h.worldBiomeCalls = append(h.worldBiomeCalls, csharpWorldQueryCall{invocation: invocation, world: world, position: position})
+	return h.worldBiome, true
+}
+
+func (h *csharpWorldHost) SetWorldBiome(invocation InvocationID, world WorldID, position BlockPos, biome int32) bool {
+	h.worldBiomeSets = append(h.worldBiomeSets, csharpWorldBiomeSetCall{
+		csharpWorldQueryCall: csharpWorldQueryCall{invocation: invocation, world: world, position: position},
+		biome:                biome,
+	})
+	h.worldBiome = biome
+	return true
+}
+
+func (h *csharpWorldHost) WorldTemperature(invocation InvocationID, world WorldID, position BlockPos) (float64, bool) {
+	h.worldTemperatureCall = csharpWorldQueryCall{invocation: invocation, world: world, position: position}
+	return h.worldTemperature, true
+}
+
+func (h *csharpWorldHost) WorldRainingAt(invocation InvocationID, world WorldID, position BlockPos) (bool, bool) {
+	h.worldRainingAtCall = csharpWorldQueryCall{invocation: invocation, world: world, position: position}
+	return h.worldRainingAt, true
+}
+
+func (h *csharpWorldHost) WorldSnowingAt(invocation InvocationID, world WorldID, position BlockPos) (bool, bool) {
+	h.worldSnowingAtCall = csharpWorldQueryCall{invocation: invocation, world: world, position: position}
+	return h.worldSnowingAt, true
+}
+
+func (h *csharpWorldHost) WorldThunderingAt(invocation InvocationID, world WorldID, position BlockPos) (bool, bool) {
+	h.worldThunderingAtCall = csharpWorldQueryCall{invocation: invocation, world: world, position: position}
+	return h.worldThunderingAt, true
+}
+
+func (h *csharpWorldHost) WorldRaining(invocation InvocationID, world WorldID) (bool, bool) {
+	h.worldRainingCall = csharpWorldQueryCall{invocation: invocation, world: world}
+	return h.worldRaining, true
+}
+
+func (h *csharpWorldHost) WorldThundering(invocation InvocationID, world WorldID) (bool, bool) {
+	h.worldThunderingCall = csharpWorldQueryCall{invocation: invocation, world: world}
+	return h.worldThundering, true
+}
+
 func TestCSharpReflectedCommands(t *testing.T) {
 	host := &csharpWorldHost{
 		recordingHost:      &recordingHost{},
@@ -273,6 +337,13 @@ func TestCSharpReflectedCommands(t *testing.T) {
 		highestBlock:        72,
 		light:               9,
 		skyLight:            15,
+		worldBiome:          1,
+		worldTemperature:    0.75,
+		worldRainingAt:      true,
+		worldSnowingAt:      false,
+		worldThunderingAt:   true,
+		worldRaining:        true,
+		worldThundering:     true,
 	}
 	pluginRuntime := openCSharpRuntimeWithHost(t, host)
 	commands, err := pluginRuntime.Commands()
@@ -280,7 +351,7 @@ func TestCSharpReflectedCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 	kitchen := commandNamed(t, commands, "kitchen")
-	if !slices.Contains(kitchen.Aliases, "ks") || len(kitchen.Overloads) != 8 {
+	if !slices.Contains(kitchen.Aliases, "ks") || len(kitchen.Overloads) != 9 {
 		t.Fatalf("kitchen descriptor = %#v", kitchen)
 	}
 	if kitchen.Overloads[1].Parameters[0].Name != "echo" ||
@@ -462,6 +533,30 @@ func TestCSharpReflectedCommands(t *testing.T) {
 		!slices.Equal(host.worldBlockUpdates[1].block.PropertiesNBT, host.worldBlockUpdates[0].block.PropertiesNBT) ||
 		host.worldBlockUpdates[1].delayNanoseconds != 250_000_000 {
 		t.Fatalf("second scheduled block update=%+v", host.worldBlockUpdates)
+	}
+
+	input = base
+	input.Overload = 8
+	input.Arguments = []string{"biome"}
+	output, err = pluginRuntime.HandleCommand(kitchen.Index, input)
+	if err != nil || output.Failed || output.Message != "biome=Desert, applied=true, temperature=0.75, raining_at=true, snowing_at=false, thundering_at=true, raining=true, thundering=true, restored=true" {
+		t.Fatalf("biome output=%#v error=%v", output, err)
+	}
+	biomePosition := BlockPos{X: 1, Y: 64, Z: 2}
+	biomeCall := csharpWorldQueryCall{invocation: 42, position: biomePosition}
+	if !slices.Equal(host.worldBiomeCalls, []csharpWorldQueryCall{biomeCall, biomeCall, biomeCall}) ||
+		len(host.worldBiomeSets) != 2 || host.worldBiomeSets[0].csharpWorldQueryCall != biomeCall ||
+		host.worldBiomeSets[0].biome != 2 || host.worldBiomeSets[1].csharpWorldQueryCall != biomeCall ||
+		host.worldBiomeSets[1].biome != 1 || host.worldBiome != 1 {
+		t.Fatalf("biome host calls: reads=%+v sets=%+v current=%d", host.worldBiomeCalls, host.worldBiomeSets, host.worldBiome)
+	}
+	if host.worldTemperatureCall != biomeCall || host.worldRainingAtCall != biomeCall ||
+		host.worldSnowingAtCall != biomeCall || host.worldThunderingAtCall != biomeCall ||
+		host.worldRainingCall != (csharpWorldQueryCall{invocation: 42}) ||
+		host.worldThunderingCall != (csharpWorldQueryCall{invocation: 42}) {
+		t.Fatalf("biome weather calls: temperature=%+v raining_at=%+v snowing_at=%+v thundering_at=%+v raining=%+v thundering=%+v",
+			host.worldTemperatureCall, host.worldRainingAtCall, host.worldSnowingAtCall,
+			host.worldThunderingAtCall, host.worldRainingCall, host.worldThunderingCall)
 	}
 
 	options, err := pluginRuntime.CommandEnumOptions(kitchen.Index, 5, 1, CommandEnumContext{

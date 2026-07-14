@@ -318,6 +318,105 @@ func bg_go_world_block_update_schedule(context C.uint64_t, invocation C.DfInvoca
 	return C.DF_STATUS_OK
 }
 
+//export bg_go_world_biome_get
+func bg_go_world_biome_get(context C.uint64_t, invocation C.DfInvocationId, world C.DfWorldId, position C.DfBlockPos, output *C.int32_t) C.DfStatus {
+	host, ok := resolveHost(uint64(context))
+	if !ok || output == nil {
+		return C.DF_STATUS_ERROR
+	}
+	value, ok := host.WorldBiome(InvocationID(invocation), WorldID(world.value), nativeBlockPosition(position))
+	if !ok {
+		return C.DF_STATUS_ERROR
+	}
+	*output = C.int32_t(value)
+	return C.DF_STATUS_OK
+}
+
+//export bg_go_world_biome_set
+func bg_go_world_biome_set(context C.uint64_t, invocation C.DfInvocationId, world C.DfWorldId, position C.DfBlockPos, biome C.int32_t) C.DfStatus {
+	host, ok := resolveHost(uint64(context))
+	if !ok || !host.SetWorldBiome(InvocationID(invocation), WorldID(world.value), nativeBlockPosition(position), int32(biome)) {
+		return C.DF_STATUS_ERROR
+	}
+	return C.DF_STATUS_OK
+}
+
+//export bg_go_world_temperature
+func bg_go_world_temperature(context C.uint64_t, invocation C.DfInvocationId, world C.DfWorldId, position C.DfBlockPos, output *C.double) C.DfStatus {
+	host, ok := resolveHost(uint64(context))
+	if !ok || output == nil {
+		return C.DF_STATUS_ERROR
+	}
+	value, ok := host.WorldTemperature(InvocationID(invocation), WorldID(world.value), nativeBlockPosition(position))
+	if !ok {
+		return C.DF_STATUS_ERROR
+	}
+	*output = C.double(value)
+	return C.DF_STATUS_OK
+}
+
+//export bg_go_world_raining_at
+func bg_go_world_raining_at(context C.uint64_t, invocation C.DfInvocationId, world C.DfWorldId, position C.DfBlockPos, output *C.uint8_t) C.DfStatus {
+	host, ok := resolveHost(uint64(context))
+	if !ok || output == nil {
+		return C.DF_STATUS_ERROR
+	}
+	value, valid := host.WorldRainingAt(InvocationID(invocation), WorldID(world.value), nativeBlockPosition(position))
+	return writeWorldBool(output, value, valid)
+}
+
+//export bg_go_world_snowing_at
+func bg_go_world_snowing_at(context C.uint64_t, invocation C.DfInvocationId, world C.DfWorldId, position C.DfBlockPos, output *C.uint8_t) C.DfStatus {
+	host, ok := resolveHost(uint64(context))
+	if !ok || output == nil {
+		return C.DF_STATUS_ERROR
+	}
+	value, valid := host.WorldSnowingAt(InvocationID(invocation), WorldID(world.value), nativeBlockPosition(position))
+	return writeWorldBool(output, value, valid)
+}
+
+//export bg_go_world_thundering_at
+func bg_go_world_thundering_at(context C.uint64_t, invocation C.DfInvocationId, world C.DfWorldId, position C.DfBlockPos, output *C.uint8_t) C.DfStatus {
+	host, ok := resolveHost(uint64(context))
+	if !ok || output == nil {
+		return C.DF_STATUS_ERROR
+	}
+	value, valid := host.WorldThunderingAt(InvocationID(invocation), WorldID(world.value), nativeBlockPosition(position))
+	return writeWorldBool(output, value, valid)
+}
+
+//export bg_go_world_raining
+func bg_go_world_raining(context C.uint64_t, invocation C.DfInvocationId, world C.DfWorldId, output *C.uint8_t) C.DfStatus {
+	host, ok := resolveHost(uint64(context))
+	if !ok || output == nil {
+		return C.DF_STATUS_ERROR
+	}
+	value, valid := host.WorldRaining(InvocationID(invocation), WorldID(world.value))
+	return writeWorldBool(output, value, valid)
+}
+
+//export bg_go_world_thundering
+func bg_go_world_thundering(context C.uint64_t, invocation C.DfInvocationId, world C.DfWorldId, output *C.uint8_t) C.DfStatus {
+	host, ok := resolveHost(uint64(context))
+	if !ok || output == nil {
+		return C.DF_STATUS_ERROR
+	}
+	value, valid := host.WorldThundering(InvocationID(invocation), WorldID(world.value))
+	return writeWorldBool(output, value, valid)
+}
+
+func writeWorldBool(output *C.uint8_t, value, valid bool) C.DfStatus {
+	if !valid {
+		return C.DF_STATUS_ERROR
+	}
+	if value {
+		*output = 1
+	} else {
+		*output = 0
+	}
+	return C.DF_STATUS_OK
+}
+
 func writeWorldBlock(output *C.DfBlockData, block WorldBlock, ok bool) C.DfStatus {
 	identifier, properties, valid := worldBlockPayload(block, ok)
 	if !valid {

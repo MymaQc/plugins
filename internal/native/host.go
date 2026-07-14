@@ -416,6 +416,14 @@ type Host interface {
 	SetWorldLiquid(InvocationID, WorldID, BlockPos, *WorldBlock) bool
 	SetWorldBlock(InvocationID, WorldID, BlockPos, WorldBlock, WorldSetOpts) bool
 	ScheduleWorldBlockUpdate(InvocationID, WorldID, BlockPos, WorldBlock, int64) bool
+	WorldBiome(InvocationID, WorldID, BlockPos) (int32, bool)
+	SetWorldBiome(InvocationID, WorldID, BlockPos, int32) bool
+	WorldTemperature(InvocationID, WorldID, BlockPos) (float64, bool)
+	WorldRainingAt(InvocationID, WorldID, BlockPos) (bool, bool)
+	WorldSnowingAt(InvocationID, WorldID, BlockPos) (bool, bool)
+	WorldThunderingAt(InvocationID, WorldID, BlockPos) (bool, bool)
+	WorldRaining(InvocationID, WorldID) (bool, bool)
+	WorldThundering(InvocationID, WorldID) (bool, bool)
 	WorldRange(InvocationID, WorldID) (BlockRange, bool)
 	WorldHighestLightBlocker(InvocationID, WorldID, int32, int32) (int32, bool)
 	WorldHighestBlock(InvocationID, WorldID, int32, int32) (int32, bool)
@@ -513,6 +521,28 @@ func (noopHost) SetWorldBlock(InvocationID, WorldID, BlockPos, WorldBlock, World
 }
 func (noopHost) ScheduleWorldBlockUpdate(InvocationID, WorldID, BlockPos, WorldBlock, int64) bool {
 	return false
+}
+func (noopHost) WorldBiome(InvocationID, WorldID, BlockPos) (int32, bool) {
+	return 0, false
+}
+func (noopHost) SetWorldBiome(InvocationID, WorldID, BlockPos, int32) bool { return false }
+func (noopHost) WorldTemperature(InvocationID, WorldID, BlockPos) (float64, bool) {
+	return 0, false
+}
+func (noopHost) WorldRainingAt(InvocationID, WorldID, BlockPos) (bool, bool) {
+	return false, false
+}
+func (noopHost) WorldSnowingAt(InvocationID, WorldID, BlockPos) (bool, bool) {
+	return false, false
+}
+func (noopHost) WorldThunderingAt(InvocationID, WorldID, BlockPos) (bool, bool) {
+	return false, false
+}
+func (noopHost) WorldRaining(InvocationID, WorldID) (bool, bool) {
+	return false, false
+}
+func (noopHost) WorldThundering(InvocationID, WorldID) (bool, bool) {
+	return false, false
 }
 func (noopHost) WorldRange(InvocationID, WorldID) (BlockRange, bool) { return BlockRange{}, false }
 func (noopHost) WorldHighestLightBlocker(InvocationID, WorldID, int32, int32) (int32, bool) {

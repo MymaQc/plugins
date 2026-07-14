@@ -25,7 +25,8 @@ public sealed class KitchenSink : Plugin
             new KitchenPosition(),
             new KitchenDestination(),
             new KitchenText(),
-            new KitchenBlock()));
+            new KitchenBlock(),
+            new KitchenBiome()));
         Console.WriteLine("kitchen-sink enabled");
     }
 
@@ -259,6 +260,56 @@ public sealed class KitchenSink : Plugin
                 liquidFound ? "true" : "false",
                 liquidState,
                 blockUpdateDelay.TotalMilliseconds);
+        }
+    }
+
+    internal sealed class KitchenBiome : Cmd.Runnable
+    {
+        public Cmd.SubCommand Biome;
+
+        public void Run(Cmd.Source source, Cmd.Output output, World.Tx? tx)
+        {
+            if (tx is null)
+            {
+                output.Error("A world transaction is required.");
+                return;
+            }
+            var position = Cube.PosFromVec3(source.Position());
+            var previous = tx.Biome(position);
+            World.Biome current = previous;
+            var temperature = 0.0;
+            var rainingAt = false;
+            var snowingAt = false;
+            var thunderingAt = false;
+            var raining = false;
+            var thundering = false;
+            tx.SetBiome(position, new Biome.Desert());
+            try
+            {
+                current = tx.Biome(position);
+                temperature = tx.Temperature(position);
+                rainingAt = tx.RainingAt(position);
+                snowingAt = tx.SnowingAt(position);
+                thunderingAt = tx.ThunderingAt(position);
+                raining = tx.Raining();
+                thundering = tx.Thundering();
+            }
+            finally
+            {
+                tx.SetBiome(position, previous);
+            }
+            var restored = tx.Biome(position);
+            output.Printf(
+                "biome=Desert, applied={0}, temperature={1}, raining_at={2}, snowing_at={3}, " +
+                "thundering_at={4}, raining={5}, thundering={6}, restored={7}",
+                current is Biome.Desert ? "true" : "false",
+                temperature,
+                rainingAt ? "true" : "false",
+                snowingAt ? "true" : "false",
+                thunderingAt ? "true" : "false",
+                raining ? "true" : "false",
+                thundering ? "true" : "false",
+                restored.Equals(previous) ? "true" : "false");
         }
     }
 }
