@@ -11,8 +11,23 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
+	"strings"
 )
+
+type method struct {
+	Name       string
+	Parameters []parameter
+}
+
+type parameter struct {
+	Name string
+	Type string
+}
+
+var supportedPlayerHandlers = map[string]bool{
+	"HandleMove": true,
+	"HandleQuit": true,
+}
 
 func main() {
 	root := flag.String("root", ".", "repository root")
@@ -51,7 +66,7 @@ func main() {
 	}
 }
 
-func playerHandlerMethods(path string) ([]string, error) {
+func playerHandlerMethods(path string) ([]method, error) {
 	file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
 	if err != nil {
 		return nil, err
@@ -70,17 +85,29 @@ func playerHandlerMethods(path string) ([]string, error) {
 			if !ok {
 				return nil, fmt.Errorf("player.Handler is not an interface")
 			}
-			var methods []string
+			var methods []method
 			for _, field := range interfaceType.Methods.List {
-				for _, name := range field.Names {
-					if name.Name == "HandleQuit" {
-						methods = append(methods, name.Name)
-					}
+				if len(field.Names) != 1 || !supportedPlayerHandlers[field.Names[0].Name] {
+					continue
 				}
+				function, ok := field.Type.(*ast.FuncType)
+				if !ok {
+					return nil, fmt.Errorf("player.Handler.%s is not a method", field.Names[0].Name)
+				}
+				translated, err := translateParameters(function.Params)
+				if err != nil {
+					return nil, fmt.Errorf("player.Handler.%s: %w", field.Names[0].Name, err)
+				}
+				methods = append(methods, method{Name: field.Names[0].Name, Parameters: translated})
 			}
-			slices.Sort(methods)
-			if !slices.Contains(methods, "HandleQuit") {
-				return nil, fmt.Errorf("Dragonfly player.Handler has no HandleQuit method")
+			for name := range supportedPlayerHandlers {
+				found := false
+				for _, method := range methods {
+					found = found || method.Name == name
+				}
+				if !found {
+					return nil, fmt.Errorf("Dragonfly player.Handler has no supported %s method", name)
+				}
 			}
 			return methods, nil
 		}
@@ -88,16 +115,65 @@ func playerHandlerMethods(path string) ([]string, error) {
 	return nil, fmt.Errorf("Dragonfly player.Handler interface not found")
 }
 
-func generatePlayerHandler(methods []string) []byte {
+func translateParameters(fields *ast.FieldList) ([]parameter, error) {
+	var parameters []parameter
+	for _, field := range fields.List {
+		typeName, ok := csharpType(field.Type)
+		if !ok {
+			return nil, fmt.Errorf("unsupported parameter type %T", field.Type)
+		}
+		for _, name := range field.Names {
+			parameters = append(parameters, parameter{Name: name.Name, Type: typeName})
+		}
+	}
+	return parameters, nil
+}
+
+func csharpType(expression ast.Expr) (string, bool) {
+	switch value := expression.(type) {
+	case *ast.StarExpr:
+		return csharpType(value.X)
+	case *ast.Ident:
+		typeName, ok := map[string]string{"Context": "Player.Context", "Player": "Player"}[value.Name]
+		return typeName, ok
+	case *ast.SelectorExpr:
+		packageName, ok := value.X.(*ast.Ident)
+		if !ok {
+			return "", false
+		}
+		typeName, ok := map[string]string{
+			"mgl64.Vec3":    "Vector3",
+			"cube.Rotation": "Rotation",
+		}[packageName.Name+"."+value.Sel.Name]
+		return typeName, ok
+	default:
+		return "", false
+	}
+}
+
+func generatePlayerHandler(methods []method) []byte {
 	var output bytes.Buffer
 	output.WriteString("// Code generated from Dragonfly server/player/handler.go. DO NOT EDIT.\n")
 	output.WriteString("namespace Dragonfly;\n\n")
 	output.WriteString("public sealed partial class Player\n{\n    public interface Handler\n    {\n")
 	for _, method := range methods {
-		fmt.Fprintf(&output, "        void %s(Player player);\n", method)
+		fmt.Fprintf(&output, "        void %s(%s);\n", method.Name, formatParameters(method.Parameters))
 	}
-	output.WriteString("    }\n}\n")
+	output.WriteString("    }\n}\n\n")
+	output.WriteString("public abstract partial class Plugin\n{\n")
+	for _, method := range methods {
+		fmt.Fprintf(&output, "    public virtual void %s(%s) { }\n", method.Name, formatParameters(method.Parameters))
+	}
+	output.WriteString("}\n")
 	return output.Bytes()
+}
+
+func formatParameters(parameters []parameter) string {
+	values := make([]string, len(parameters))
+	for index, parameter := range parameters {
+		values[index] = parameter.Type + " " + parameter.Name
+	}
+	return strings.Join(values, ", ")
 }
 
 func fatal(err error) {

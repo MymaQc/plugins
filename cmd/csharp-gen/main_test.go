@@ -3,7 +3,6 @@ package main
 import (
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 )
@@ -12,7 +11,8 @@ func TestPlayerHandlerMethodsUsesGoAST(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "handler.go")
 	source := `package player
 type Handler interface {
-	HandleMove(ctx *Context, position int)
+	HandleMove(ctx *Context, newPos mgl64.Vec3, newRot cube.Rotation)
+	HandleJump(p *Player)
 	HandleQuit(p *Player)
 }`
 	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
@@ -22,10 +22,17 @@ type Handler interface {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(methods, []string{"HandleQuit"}) {
-		t.Fatalf("methods = %v", methods)
+	output := string(generatePlayerHandler(methods))
+	for _, expected := range []string{
+		"void HandleMove(Player.Context ctx, Vector3 newPos, Rotation newRot);",
+		"void HandleQuit(Player p);",
+		"public virtual void HandleMove(Player.Context ctx, Vector3 newPos, Rotation newRot) { }",
+	} {
+		if !strings.Contains(output, expected) {
+			t.Fatalf("generated output missing %q:\n%s", expected, output)
+		}
 	}
-	if output := string(generatePlayerHandler(methods)); !strings.Contains(output, "void HandleQuit(Player player);") {
-		t.Fatalf("generated output missing HandleQuit: %s", output)
+	if strings.Contains(output, "HandleJump") {
+		t.Fatalf("generated unsupported method:\n%s", output)
 	}
 }

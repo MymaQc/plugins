@@ -10,7 +10,7 @@ internal unsafe sealed class PluginLibrary : IDisposable
     internal nint Library;
     internal PluginApi* Api;
     internal void* Instance;
-    internal bool Enabled;
+    internal volatile bool Enabled;
 
     internal void Disable()
     {
@@ -35,7 +35,8 @@ internal unsafe sealed class RuntimeState : IDisposable
     internal readonly object Gate = new();
     internal readonly List<PluginLibrary> Plugins = [];
     internal ulong Subscriptions;
-    internal bool Running;
+    private volatile bool _running;
+    private int _activeCalls;
 
     internal static RuntimeState Load(string directory, void* host)
     {
@@ -96,7 +97,7 @@ internal unsafe sealed class RuntimeState : IDisposable
     {
         lock (Gate)
         {
-            if (Running) return;
+            if (_running) return;
             for (var index = 0; index < Plugins.Count; index++)
             {
                 var plugin = Plugins[index];
@@ -109,7 +110,7 @@ internal unsafe sealed class RuntimeState : IDisposable
                 for (var previous = index - 1; previous >= 0; previous--) Plugins[previous].Disable();
                 throw new InvalidOperationException($"plugin {Utf8(plugin.Api->Id)} failed to enable");
             }
-            Running = true;
+            _running = true;
         }
     }
 
@@ -117,16 +118,20 @@ internal unsafe sealed class RuntimeState : IDisposable
     {
         lock (Gate)
         {
-            Running = false;
+            _running = false;
+            var spin = new SpinWait();
+            while (Volatile.Read(ref _activeCalls) != 0) spin.SpinOnce();
             for (var index = Plugins.Count - 1; index >= 0; index--) Plugins[index].Disable();
         }
     }
 
     internal int HandleEvent(uint eventId, void* input, void* state)
     {
-        lock (Gate)
+        if (!_running) return Abi.Error;
+        Interlocked.Increment(ref _activeCalls);
+        try
         {
-            if (!Running) return Abi.Error;
+            if (!_running) return Abi.Error;
             var subscription = eventId is >= 1 and <= 64 ? 1UL << ((int)eventId - 1) : 0;
             foreach (var plugin in Plugins)
             {
@@ -134,6 +139,10 @@ internal unsafe sealed class RuntimeState : IDisposable
                 if (plugin.Api->HandleEvent(plugin.Instance, eventId, input, state) != Abi.Ok) return Abi.Error;
             }
             return Abi.Ok;
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _activeCalls);
         }
     }
 

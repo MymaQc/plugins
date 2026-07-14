@@ -22,7 +22,7 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
 ## Order
 
 1. NativeAOT loading and `OnEnable`/`OnDisable`.
-2. `player.Handler` events, beginning with `HandleQuit`.
+2. `player.Handler` events, beginning with `HandleMove` and `HandleQuit`.
 3. Player methods and commands.
 4. Worlds, items, blocks, forms, entities, particles, and sounds.
 5. Convert practice-core and expand parity tests against Dragonfly.

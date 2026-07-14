@@ -35,4 +35,4 @@ public sealed class Example : Plugin
 
 The project name is the plugin ID. A compile-time generator emits the hidden native entry point.
 
-Current C# slice: loading, lifecycle, and Dragonfly's `player.Handler.HandleQuit`. Remaining Dragonfly surface is being ported directly rather than preserved through the removed Rust abstraction.
+Current C# slice: loading, lifecycle, and Dragonfly's `player.Handler.HandleMove` and `HandleQuit`. Remaining Dragonfly surface is being ported directly rather than preserved through the removed Rust abstraction.

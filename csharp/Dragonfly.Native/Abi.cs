@@ -8,6 +8,8 @@ public static class Abi
     public const uint HostVersion = 20;
     public const int Ok = 0;
     public const int Error = 1;
+    public const uint PlayerMoveEvent = 1;
+    public const ulong PlayerMoveSubscription = 1UL;
     public const uint PlayerQuitEvent = 4;
     public const ulong PlayerQuitSubscription = 1UL << 3;
 }
@@ -74,6 +76,37 @@ public unsafe struct PlayerId
 {
     public fixed byte Bytes[16];
     public ulong Generation;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct Vec3
+{
+    public double X;
+    public double Y;
+    public double Z;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct NativeRotation
+{
+    public double Yaw;
+    public double Pitch;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct PlayerMoveInput
+{
+    public ulong Invocation;
+    public PlayerId Player;
+    public Vec3 OldPosition;
+    public Vec3 NewPosition;
+    public NativeRotation Rotation;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct PlayerMoveState
+{
+    public byte Cancelled;
 }
 
 [StructLayout(LayoutKind.Sequential)]
