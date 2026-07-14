@@ -3,7 +3,9 @@ package framework
 import (
 	"context"
 	"errors"
+	"iter"
 	"math"
+	"sync"
 	"time"
 
 	"github.com/bedrock-gophers/plugins/internal/host"
@@ -11,10 +13,43 @@ import (
 	"github.com/df-mc/dragonfly/server/block/cube"
 	"github.com/df-mc/dragonfly/server/entity"
 	"github.com/df-mc/dragonfly/server/item/potion"
-	"github.com/df-mc/dragonfly/server/player"
 	"github.com/df-mc/dragonfly/server/world"
 	"github.com/go-gl/mathgl/mgl64"
 )
+
+type worldEntityIterator struct {
+	mu         sync.Mutex
+	invocation native.InvocationID
+	next       func() (world.Entity, bool)
+	stop       func()
+	stopped    bool
+}
+
+func (i *worldEntityIterator) advance() (entity world.Entity, found bool, valid bool) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	if i.stopped {
+		return nil, false, false
+	}
+	defer func() {
+		if recover() != nil {
+			entity, found, valid = nil, false, false
+		}
+	}()
+	entity, found = i.next()
+	return entity, found, true
+}
+
+func (i *worldEntityIterator) close() {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	if i.stopped {
+		return
+	}
+	i.stopped = true
+	defer func() { _ = recover() }()
+	i.stop()
+}
 
 type velocityEntity interface {
 	world.Entity
@@ -54,52 +89,100 @@ func (m *WorldManager) SpawnWorldEntity(invocation native.InvocationID, id nativ
 	})
 }
 
-func (m *WorldManager) WorldEntities(invocation native.InvocationID, id native.WorldID) ([]native.EntityID, bool) {
-	entry, ok := m.entryByHandle(id)
+// CurrentWorld resolves the exact managed world owned by invocation's active
+// Dragonfly transaction. It deliberately rejects the context-free invocation.
+func (m *WorldManager) CurrentWorld(invocation native.InvocationID) (native.WorldID, bool) {
+	if invocation == 0 {
+		return 0, false
+	}
+	tx, ok := m.invocationTx(invocation)
 	if !ok {
-		return nil, false
+		return 0, false
 	}
-	entry.lifecycle.RLock()
-	defer entry.lifecycle.RUnlock()
-	if entry.closed {
-		return nil, false
+	w, ok := transactionWorld(tx)
+	if !ok {
+		return 0, false
 	}
-	return readManagedWorld(m, invocation, entry, func(tx *world.Tx) ([]native.EntityID, bool) {
-		ids := make([]native.EntityID, 0)
-		for current := range tx.Entities() {
-			id := m.entityHandles.Register(current)
-			if id.Generation != 0 {
-				ids = append(ids, id)
-			}
-		}
-		return ids, true
-	})
+	return m.handleByWorld(w)
 }
 
-func (m *WorldManager) WorldPlayers(invocation native.InvocationID, id native.WorldID) ([]native.PlayerID, bool) {
-	entry, ok := m.entryByHandle(id)
-	if !ok || m.players == nil {
-		return nil, false
+// OpenWorldEntityIterator opens a lazy pull iterator over the exact current
+// transaction. Passing any world other than CurrentWorld is rejected.
+func (m *WorldManager) OpenWorldEntityIterator(invocation native.InvocationID, id native.WorldID, playersOnly bool) (native.EntityIteratorID, bool) {
+	currentID, ok := m.CurrentWorld(invocation)
+	if !ok || id == 0 || id != currentID || m.players == nil {
+		return 0, false
 	}
-	entry.lifecycle.RLock()
-	defer entry.lifecycle.RUnlock()
-	if entry.closed {
-		return nil, false
+	tx, ok := m.invocationTx(invocation)
+	if !ok {
+		return 0, false
 	}
-	return readManagedWorld(m, invocation, entry, func(tx *world.Tx) ([]native.PlayerID, bool) {
-		ids := make([]native.PlayerID, 0)
-		for current := range tx.Players() {
-			connected, ok := current.(*player.Player)
-			if !ok {
-				continue
-			}
-			id, ok := m.players.ID(connected)
-			if ok {
-				ids = append(ids, id)
-			}
-		}
-		return ids, true
-	})
+	sequence := tx.Entities()
+	if playersOnly {
+		sequence = tx.Players()
+	}
+	next, stop := iter.Pull(sequence)
+	iterator := &worldEntityIterator{invocation: invocation, next: next, stop: stop}
+	m.entityIteratorMu.Lock()
+	if m.nextEntityIter == native.EntityIteratorID(^uint64(0)) {
+		m.entityIteratorMu.Unlock()
+		iterator.close()
+		return 0, false
+	}
+	m.nextEntityIter++
+	iteratorID := m.nextEntityIter
+	m.entityIterators[iteratorID] = iterator
+	m.entityIteratorMu.Unlock()
+	if !m.players.OnInvocationEnd(invocation, func() { m.closeWorldEntities(invocation, iteratorID) }) {
+		m.closeWorldEntities(invocation, iteratorID)
+		return 0, false
+	}
+	return iteratorID, true
+}
+
+// NextWorldEntity advances one invocation-scoped iterator. The second result
+// reports whether a value was yielded and the third whether the call was valid.
+func (m *WorldManager) NextWorldEntity(invocation native.InvocationID, id native.EntityIteratorID) (native.EntityID, bool, bool) {
+	m.entityIteratorMu.Lock()
+	iterator, ok := m.entityIterators[id]
+	m.entityIteratorMu.Unlock()
+	if !ok || iterator.invocation != invocation {
+		return native.EntityID{}, false, false
+	}
+	current, found, valid := iterator.advance()
+	if !valid || !found {
+		m.closeWorldEntities(invocation, id)
+	}
+	if !valid {
+		return native.EntityID{}, false, false
+	}
+	if !found {
+		return native.EntityID{}, false, true
+	}
+	entityID := m.entityHandles.Register(current)
+	if entityID.Generation == 0 {
+		m.closeWorldEntities(invocation, id)
+		return native.EntityID{}, false, false
+	}
+	return entityID, true, true
+}
+
+func (m *WorldManager) CloseWorldEntities(invocation native.InvocationID, id native.EntityIteratorID) {
+	m.closeWorldEntities(invocation, id)
+}
+
+func (m *WorldManager) closeWorldEntities(invocation native.InvocationID, id native.EntityIteratorID) {
+	m.entityIteratorMu.Lock()
+	iterator, ok := m.entityIterators[id]
+	if ok && iterator.invocation == invocation {
+		delete(m.entityIterators, id)
+	} else {
+		iterator = nil
+	}
+	m.entityIteratorMu.Unlock()
+	if iterator != nil {
+		iterator.close()
+	}
 }
 
 func (m *WorldManager) EntityState(invocation native.InvocationID, id native.EntityID) (native.EntityState, bool) {

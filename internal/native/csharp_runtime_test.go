@@ -280,6 +280,20 @@ type csharpWorldHost struct {
 	worldCurrentTickWorld      WorldID
 	worldCurrentTickCalls      int
 	worldParticles             []csharpWorldParticleCall
+	currentWorldCalls          int
+	currentWorldInvocation     InvocationID
+	entityIterator             EntityIteratorID
+	entityIteratorEntities     []EntityID
+	playerIteratorEntities     []EntityID
+	entityIteratorValues       []EntityID
+	entityIteratorIndex        int
+	entityIteratorOpenCalls    int
+	entityIteratorNextCalls    int
+	entityIteratorCloseCalls   int
+	entityIteratorInvocation   InvocationID
+	entityIteratorWorld        WorldID
+	entityIteratorPlayersOnly  []bool
+	entityIteratorClosed       EntityIteratorID
 }
 
 type csharpWorldQueryCall struct {
@@ -349,6 +363,44 @@ func (h *csharpWorldHost) WorldRange(invocation InvocationID, world WorldID) (Bl
 	h.worldRangeInvocation, h.worldRangeWorld = invocation, world
 	h.worldRangeCalls++
 	return h.worldRange, true
+}
+
+func (h *csharpWorldHost) CurrentWorld(invocation InvocationID) (WorldID, bool) {
+	h.currentWorldCalls++
+	h.currentWorldInvocation = invocation
+	return h.worldID, h.worldID != 0
+}
+
+func (h *csharpWorldHost) OpenWorldEntityIterator(invocation InvocationID, world WorldID, playersOnly bool) (EntityIteratorID, bool) {
+	h.entityIteratorInvocation, h.entityIteratorWorld = invocation, world
+	h.entityIteratorPlayersOnly = append(h.entityIteratorPlayersOnly, playersOnly)
+	h.entityIteratorOpenCalls++
+	h.entityIteratorIndex = 0
+	if playersOnly {
+		h.entityIteratorValues = append(h.entityIteratorValues[:0], h.playerIteratorEntities...)
+	} else {
+		h.entityIteratorValues = append(h.entityIteratorValues[:0], h.entityIteratorEntities...)
+	}
+	return h.entityIterator, h.entityIterator != 0 && world == h.worldID
+}
+
+func (h *csharpWorldHost) NextWorldEntity(invocation InvocationID, iterator EntityIteratorID) (EntityID, bool, bool) {
+	h.entityIteratorInvocation = invocation
+	h.entityIteratorNextCalls++
+	if iterator != h.entityIterator {
+		return EntityID{}, false, false
+	}
+	if h.entityIteratorIndex >= len(h.entityIteratorValues) {
+		return EntityID{}, false, true
+	}
+	entity := h.entityIteratorValues[h.entityIteratorIndex]
+	h.entityIteratorIndex++
+	return entity, true, true
+}
+
+func (h *csharpWorldHost) CloseWorldEntities(invocation InvocationID, iterator EntityIteratorID) {
+	h.entityIteratorInvocation, h.entityIteratorClosed = invocation, iterator
+	h.entityIteratorCloseCalls++
 }
 
 func (h *csharpWorldHost) WorldBlockLoaded(invocation InvocationID, world WorldID, position BlockPos) (WorldBlock, bool, bool) {
@@ -560,7 +612,7 @@ func TestCSharpReflectedCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 	kitchen := commandNamed(t, commands, "kitchen")
-	if !slices.Contains(kitchen.Aliases, "ks") || len(kitchen.Overloads) != 21 {
+	if !slices.Contains(kitchen.Aliases, "ks") || len(kitchen.Overloads) != 22 {
 		t.Fatalf("kitchen descriptor = %#v", kitchen)
 	}
 	if kitchen.Overloads[1].Parameters[0].Name != "echo" ||
@@ -655,6 +707,31 @@ func TestCSharpReflectedCommands(t *testing.T) {
 		host.transferPlayer != player || host.transferWorld != 91 ||
 		host.transferPosition != (Vec3{X: 8.5, Y: 70, Z: -3.5}) {
 		t.Fatalf("managed world host state: %+v", host.recordingHost)
+	}
+	playerEntity := EntityID{UUID: player.UUID, Generation: player.Generation}
+	nonPlayerEntity := EntityID{UUID: [16]byte{9}, Generation: 4}
+	host.entityIterator = 12
+	host.entityIteratorEntities = []EntityID{playerEntity, nonPlayerEntity}
+	host.playerIteratorEntities = []EntityID{playerEntity}
+	host.entityPlayer = PlayerSnapshot{
+		Player: player, Name: "Danick", LatencyMilliseconds: 37,
+		Position: Vec3{X: 1, Y: 64, Z: 2},
+	}
+	entities := base
+	entities.Overload = 21
+	entities.Arguments = []string{"entities"}
+	output, err = pluginRuntime.HandleCommand(kitchen.Index, entities)
+	if err != nil || output.Failed || output.Message != "world=kitchen:arena, entities=2, players=1" {
+		t.Fatalf("entity iteration output=%#v error=%v", output, err)
+	}
+	if host.currentWorldCalls != 3 || host.currentWorldInvocation != 42 ||
+		host.entityIteratorOpenCalls != 2 || host.entityIteratorNextCalls != 5 ||
+		host.entityIteratorCloseCalls != 2 || host.entityIteratorInvocation != 42 ||
+		host.entityIteratorWorld != 91 || host.entityIteratorClosed != 12 ||
+		!slices.Equal(host.entityIteratorPlayersOnly, []bool{false, true}) ||
+		host.entityPlayerCalls != 3 || len(host.texts) == 0 ||
+		host.texts[len(host.texts)-1] != "Kitchen entity iteration is live." {
+		t.Fatalf("entity iterator host state: %+v", host)
 	}
 	host.reads = nil
 	for _, text := range []struct {

@@ -43,7 +43,8 @@ public sealed class KitchenSink : Plugin
             new KitchenCrop(),
             new KitchenKinematics(),
             new KitchenHeal(),
-            new KitchenWorld()));
+            new KitchenWorld(),
+            new KitchenEntities()));
         Console.WriteLine("kitchen-sink enabled");
     }
 
@@ -574,6 +575,25 @@ public sealed class KitchenSink : Plugin
                 return;
             }
             output.Printf("tick={0}", tx.CurrentTick());
+        }
+    }
+
+    internal sealed class KitchenEntities : Cmd.Runnable
+    {
+        public Cmd.SubCommand Entities;
+
+        public void Run(Cmd.Source source, Cmd.Output output, World.Tx? tx)
+        {
+            if (tx is null)
+            {
+                output.Error("A world transaction is required.");
+                return;
+            }
+            var world = tx.World();
+            var entityCount = tx.Entities().Count();
+            var players = tx.Players().OfType<Player>().ToArray();
+            foreach (var player in players) player.Message("Kitchen entity iteration is live.");
+            output.Printf("world={0}, entities={1}, players={2}", world.Name(), entityCount, players.Length);
         }
     }
 

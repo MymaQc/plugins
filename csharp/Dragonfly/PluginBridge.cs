@@ -1669,6 +1669,118 @@ internal static unsafe class PluginBridge
             return value == 1;
         }
 
+        internal static World TransactionWorld(ulong invocation)
+        {
+            var api = Api;
+            if (api is null || api->WorldCurrent == null)
+                throw new InvalidOperationException("world transaction is unavailable");
+            WorldId world;
+            if (api->WorldCurrent(api->Context, invocation, &world) != Abi.Ok || world.Value == 0)
+                throw new InvalidOperationException("world transaction is no longer valid");
+            return new World(invocation, world);
+        }
+
+        internal static IEnumerable<World.Entity> TransactionEntities(
+            ulong invocation,
+            bool playersOnly)
+        {
+            var world = TransactionWorld(invocation);
+            return new TransactionEntityEnumerable(invocation, world.Id, playersOnly);
+        }
+
+        private sealed class TransactionEntityEnumerable(
+            ulong invocation,
+            WorldId world,
+            bool playersOnly) : IEnumerable<World.Entity>
+        {
+            public IEnumerator<World.Entity> GetEnumerator() =>
+                new TransactionEntityEnumerator(invocation, world, playersOnly);
+
+            System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+        }
+
+        private sealed class TransactionEntityEnumerator : IEnumerator<World.Entity>
+        {
+            private readonly HostApi* _api;
+            private readonly ulong _invocation;
+            private readonly bool _playersOnly;
+            private ulong _iterator;
+            private bool _disposed;
+
+            internal TransactionEntityEnumerator(ulong invocation, WorldId world, bool playersOnly)
+            {
+                _api = Api;
+                if (_api is null || _api->WorldEntityIteratorOpen == null ||
+                    _api->WorldEntityIteratorNext == null || _api->WorldEntityIteratorClose == null)
+                    throw new InvalidOperationException("world transaction is unavailable");
+
+                _invocation = invocation;
+                _playersOnly = playersOnly;
+                ulong iterator = 0;
+                var status = _api->WorldEntityIteratorOpen(
+                    _api->Context,
+                    invocation,
+                    world,
+                    playersOnly ? (byte)1 : (byte)0,
+                    &iterator);
+                if (status != Abi.Ok || iterator == 0)
+                {
+                    if (iterator != 0)
+                        _api->WorldEntityIteratorClose(_api->Context, invocation, iterator);
+                    throw new InvalidOperationException("world transaction is no longer valid");
+                }
+                _iterator = iterator;
+            }
+
+            public World.Entity Current { get; private set; } = null!;
+            object System.Collections.IEnumerator.Current => Current;
+
+            public bool MoveNext()
+            {
+                if (_disposed) return false;
+                EntityId entity;
+                byte found;
+                if (_api->WorldEntityIteratorNext(
+                        _api->Context,
+                        _invocation,
+                        _iterator,
+                        &entity,
+                        &found) != Abi.Ok || found > 1)
+                {
+                    Dispose();
+                    throw new InvalidOperationException("world transaction is no longer valid");
+                }
+                if (found == 0)
+                {
+                    Dispose();
+                    return false;
+                }
+                if (entity.Generation == 0)
+                {
+                    Dispose();
+                    throw new InvalidOperationException("world transaction returned an invalid entity");
+                }
+                var player = ResolveEntityPlayer(_invocation, entity);
+                if (_playersOnly && player is null)
+                {
+                    Dispose();
+                    throw new InvalidOperationException("world transaction returned a non-player entity");
+                }
+                Current = player ?? World.HostEntityFrom(_invocation, entity);
+                return true;
+            }
+
+            public void Reset() => throw new NotSupportedException();
+
+            public void Dispose()
+            {
+                if (_disposed) return;
+                _disposed = true;
+                _api->WorldEntityIteratorClose(_api->Context, _invocation, _iterator);
+                _iterator = 0;
+            }
+        }
+
         internal static IEnumerable<Cube.Pos> WorldBlocksWithin(
             ulong invocation,
             Cube.Pos position,
@@ -1927,7 +2039,7 @@ internal static unsafe class PluginBridge
     {
         if (host is null) return Abi.Error;
         var header = (HostHeader*)host;
-        if (header->Version != Abi.HostVersion || header->Size < 672) return Abi.Error;
+        if (header->Version != Abi.HostVersion || header->Size < 688) return Abi.Error;
         Host.Api = (HostApi*)host;
         return Abi.Ok;
     }

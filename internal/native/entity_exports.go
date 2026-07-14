@@ -7,7 +7,6 @@ import "C"
 
 import (
 	"unicode/utf8"
-	"unsafe"
 )
 
 const (
@@ -15,8 +14,62 @@ const (
 	maxEntityTagBytes  = 4 << 10
 	maxEntityTypeBytes = 256
 	maxPlayerNameBytes = 256
-	maxWorldEntities   = 1 << 20
 )
+
+//export bg_go_world_current
+func bg_go_world_current(context C.uint64_t, invocation C.DfInvocationId, output *C.DfWorldId) C.DfStatus {
+	host, ok := resolveHost(uint64(context))
+	if !ok || output == nil {
+		return C.DF_STATUS_ERROR
+	}
+	id, ok := host.CurrentWorld(InvocationID(invocation))
+	if !ok || id == 0 {
+		return C.DF_STATUS_ERROR
+	}
+	*output = C.DfWorldId{value: C.uint64_t(id)}
+	return C.DF_STATUS_OK
+}
+
+//export bg_go_world_entity_iterator_open
+func bg_go_world_entity_iterator_open(context C.uint64_t, invocation C.DfInvocationId, worldID C.DfWorldId, playersOnly C.uint8_t, output *C.DfEntityIteratorId) C.DfStatus {
+	host, ok := resolveHost(uint64(context))
+	if !ok || output == nil || playersOnly > 1 {
+		return C.DF_STATUS_ERROR
+	}
+	id, ok := host.OpenWorldEntityIterator(InvocationID(invocation), WorldID(worldID.value), playersOnly != 0)
+	if !ok || id == 0 {
+		return C.DF_STATUS_ERROR
+	}
+	*output = C.DfEntityIteratorId(id)
+	return C.DF_STATUS_OK
+}
+
+//export bg_go_world_entity_iterator_next
+func bg_go_world_entity_iterator_next(context C.uint64_t, invocation C.DfInvocationId, iterator C.DfEntityIteratorId, output *C.DfEntityId, found *C.uint8_t) C.DfStatus {
+	host, ok := resolveHost(uint64(context))
+	if !ok || output == nil || found == nil || iterator == 0 {
+		return C.DF_STATUS_ERROR
+	}
+	id, hasValue, valid := host.NextWorldEntity(InvocationID(invocation), EntityIteratorID(iterator))
+	if !valid || hasValue && id.Generation == 0 {
+		return C.DF_STATUS_ERROR
+	}
+	*output = C.DfEntityId{}
+	*found = 0
+	if hasValue {
+		*output = cEntityID(id)
+		*found = 1
+	}
+	return C.DF_STATUS_OK
+}
+
+//export bg_go_world_entity_iterator_close
+func bg_go_world_entity_iterator_close(context C.uint64_t, invocation C.DfInvocationId, iterator C.DfEntityIteratorId) {
+	host, ok := resolveHost(uint64(context))
+	if ok && iterator != 0 {
+		host.CloseWorldEntities(InvocationID(invocation), EntityIteratorID(iterator))
+	}
+}
 
 //export bg_go_world_entity_spawn
 func bg_go_world_entity_spawn(context C.uint64_t, invocation C.DfInvocationId, worldID C.DfWorldId, view *C.DfEntitySpawnViewV3, output *C.DfEntityId) C.DfStatus {
@@ -60,46 +113,6 @@ func bg_go_world_entity_spawn(context C.uint64_t, invocation C.DfInvocationId, w
 		return C.DF_STATUS_ERROR
 	}
 	*output = cEntityID(id)
-	return C.DF_STATUS_OK
-}
-
-//export bg_go_world_entities
-func bg_go_world_entities(context C.uint64_t, invocation C.DfInvocationId, worldID C.DfWorldId, output *C.DfEntityIdBuffer) C.DfStatus {
-	host, ok := resolveHost(uint64(context))
-	if !ok || output == nil {
-		return C.DF_STATUS_ERROR
-	}
-	ids, ok := host.WorldEntities(InvocationID(invocation), WorldID(worldID.value))
-	if !ok || len(ids) > maxWorldEntities {
-		return C.DF_STATUS_ERROR
-	}
-	output.len = C.uint64_t(len(ids))
-	if uint64(output.capacity) < uint64(len(ids)) || len(ids) != 0 && output.data == nil {
-		return C.DF_STATUS_ERROR
-	}
-	for index, id := range ids {
-		unsafe.Slice(output.data, len(ids))[index] = cEntityID(id)
-	}
-	return C.DF_STATUS_OK
-}
-
-//export bg_go_world_players
-func bg_go_world_players(context C.uint64_t, invocation C.DfInvocationId, worldID C.DfWorldId, output *C.DfPlayerIdBuffer) C.DfStatus {
-	host, ok := resolveHost(uint64(context))
-	if !ok || output == nil {
-		return C.DF_STATUS_ERROR
-	}
-	ids, ok := host.WorldPlayers(InvocationID(invocation), WorldID(worldID.value))
-	if !ok || len(ids) > maxWorldEntities {
-		return C.DF_STATUS_ERROR
-	}
-	output.len = C.uint64_t(len(ids))
-	if uint64(output.capacity) < uint64(len(ids)) || len(ids) != 0 && output.data == nil {
-		return C.DF_STATUS_ERROR
-	}
-	for index, id := range ids {
-		unsafe.Slice(output.data, len(ids))[index] = cPlayerID(id)
-	}
 	return C.DF_STATUS_OK
 }
 

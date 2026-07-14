@@ -9,8 +9,8 @@ extern "C" {
 #endif
 
 #define DF_ABI_VERSION 7u
-// Version 33 adds exact entity-to-player materialization.
-#define DF_HOST_ABI_VERSION 33u
+// Version 34 adds current-transaction world and lazy entity iterators.
+#define DF_HOST_ABI_VERSION 34u
 #define DF_STATUS_OK 0
 #define DF_STATUS_ERROR 1
 
@@ -21,6 +21,7 @@ typedef struct { uint8_t bytes[16]; uint64_t generation; } DfPlayerId;
 typedef struct { uint8_t bytes[16]; uint64_t generation; } DfEntityId;
 typedef uint64_t DfInvocationId;
 typedef uint64_t DfBlockIteratorId;
+typedef uint64_t DfEntityIteratorId;
 typedef struct { double x; double y; double z; } DfVec3;
 typedef struct { double yaw; double pitch; } DfRotation;
 typedef struct { DfVec3 position; DfVec3 velocity; DfRotation rotation; } DfPlayerKinematics;
@@ -127,8 +128,6 @@ typedef struct { DfStringView name; uint32_t kind; uint8_t data; } DfHealingSour
 #define DF_ENTITY_HAS_VELOCITY 1u
 #define DF_ENTITY_HAS_NAME_TAG 2u
 #define DF_ENTITY_CAN_TELEPORT 4u
-typedef struct { DfEntityId *data; uint64_t len; uint64_t capacity; } DfEntityIdBuffer;
-typedef struct { DfPlayerId *data; uint64_t len; uint64_t capacity; } DfPlayerIdBuffer;
 typedef struct { DfVec3 position; DfRotation rotation; DfVec3 velocity; DfStringView name_tag; } DfEntitySpawnOptions;
 #define DF_ENTITY_FAMILY_BASE 0u
 #define DF_ENTITY_FAMILY_TICKING 1u
@@ -418,8 +417,6 @@ typedef DfStatus (*DfHostWorldTimeSetFn)(uint64_t context, DfInvocationId invoca
 typedef DfStatus (*DfHostWorldSpawnGetFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, DfBlockPos *position);
 typedef DfStatus (*DfHostWorldSpawnSetFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, DfBlockPos position);
 typedef DfStatus (*DfHostWorldEntitySpawnFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, const DfEntitySpawnViewV3 *entity, DfEntityId *output);
-typedef DfStatus (*DfHostWorldEntitiesFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, DfEntityIdBuffer *output);
-typedef DfStatus (*DfHostWorldPlayersFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, DfPlayerIdBuffer *output);
 typedef DfStatus (*DfHostEntityStateFn)(uint64_t context, DfInvocationId invocation, DfEntityId entity, DfEntityState *state);
 typedef DfStatus (*DfHostEntityPlayerFn)(uint64_t context, DfInvocationId invocation, DfEntityId entity, DfPlayerSnapshotBuffer *output);
 typedef DfStatus (*DfHostEntityTeleportFn)(uint64_t context, DfInvocationId invocation, DfEntityId entity, DfVec3 position);
@@ -429,6 +426,10 @@ typedef DfStatus (*DfHostEntityDespawnFn)(uint64_t context, DfInvocationId invoc
 typedef DfStatus (*DfHostWorldParticleAddFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, DfVec3 position, const DfParticleViewV1 *particle);
 typedef DfStatus (*DfHostWorldSoundPlayFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, DfVec3 position, const DfSoundViewV1 *sound);
 typedef DfStatus (*DfHostPlayerSoundPlayFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, const DfSoundViewV1 *sound);
+typedef DfStatus (*DfHostWorldCurrentFn)(uint64_t context, DfInvocationId invocation, DfWorldId *world);
+typedef DfStatus (*DfHostWorldEntityIteratorOpenFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, uint8_t players_only, DfEntityIteratorId *iterator);
+typedef DfStatus (*DfHostWorldEntityIteratorNextFn)(uint64_t context, DfInvocationId invocation, DfEntityIteratorId iterator, DfEntityId *entity, uint8_t *found);
+typedef void (*DfHostWorldEntityIteratorCloseFn)(uint64_t context, DfInvocationId invocation, DfEntityIteratorId iterator);
 typedef struct {
     uint32_t abi_version;
     uint32_t struct_size;
@@ -473,8 +474,6 @@ typedef struct {
     DfHostWorldSpawnGetFn world_spawn_get;
     DfHostWorldSpawnSetFn world_spawn_set;
     DfHostWorldEntitySpawnFn world_entity_spawn;
-    DfHostWorldEntitiesFn world_entities;
-    DfHostWorldPlayersFn world_players;
     DfHostEntityStateFn entity_state;
     DfHostEntityTeleportFn entity_teleport;
     DfHostEntityVelocitySetFn entity_velocity_set;
@@ -515,6 +514,10 @@ typedef struct {
     DfHostWorldCurrentTickFn world_current_tick;
     DfHostPlayerHeldItemsOpenFn player_held_items_open;
     DfHostEntityPlayerFn entity_player;
+    DfHostWorldCurrentFn world_current;
+    DfHostWorldEntityIteratorOpenFn world_entity_iterator_open;
+    DfHostWorldEntityIteratorNextFn world_entity_iterator_next;
+    DfHostWorldEntityIteratorCloseFn world_entity_iterator_close;
 
 } DfHostApiV27;
 #define DF_COMMAND_PARAMETER_SUBCOMMAND 1u

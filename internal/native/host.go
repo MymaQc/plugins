@@ -182,6 +182,10 @@ type BlockRange struct {
 
 type BlockIteratorID uint64
 
+// EntityIteratorID identifies one invocation-scoped pull iterator over the
+// entities in the current Dragonfly transaction.
+type EntityIteratorID uint64
+
 type WorldSetOpts struct {
 	DisableBlockUpdates       bool
 	DisableLiquidDisplacement bool
@@ -421,6 +425,7 @@ type Host interface {
 	SetHeldItems(InvocationID, PlayerID, ItemStack, ItemStack) bool
 	SetHeldSlot(InvocationID, PlayerID, uint32) bool
 	WorldByName(InvocationID, string) (WorldID, bool)
+	CurrentWorld(InvocationID) (WorldID, bool)
 	WorldName(InvocationID, WorldID) (string, bool)
 	OpenWorld(InvocationID, string, WorldDimension) (WorldID, bool)
 	OpenWorldSpec(InvocationID, string, WorldOpenSpec) (WorldID, bool)
@@ -454,8 +459,9 @@ type Host interface {
 	SetWorldSpawn(InvocationID, WorldID, BlockPos) bool
 	SaveWorld(InvocationID, WorldID) bool
 	SpawnWorldEntity(InvocationID, WorldID, EntitySpawn) (EntityID, bool)
-	WorldEntities(InvocationID, WorldID) ([]EntityID, bool)
-	WorldPlayers(InvocationID, WorldID) ([]PlayerID, bool)
+	OpenWorldEntityIterator(InvocationID, WorldID, bool) (EntityIteratorID, bool)
+	NextWorldEntity(InvocationID, EntityIteratorID) (EntityID, bool, bool)
+	CloseWorldEntities(InvocationID, EntityIteratorID)
 	EntityState(InvocationID, EntityID) (EntityState, bool)
 	EntityPlayer(InvocationID, EntityID) (PlayerSnapshot, bool)
 	TeleportEntity(InvocationID, EntityID, Vec3) bool
@@ -518,6 +524,7 @@ func (noopHost) HeldItems(InvocationID, PlayerID) (ItemStack, ItemStack, bool) {
 func (noopHost) SetHeldItems(InvocationID, PlayerID, ItemStack, ItemStack) bool { return false }
 func (noopHost) SetHeldSlot(InvocationID, PlayerID, uint32) bool                { return false }
 func (noopHost) WorldByName(InvocationID, string) (WorldID, bool)               { return 0, false }
+func (noopHost) CurrentWorld(InvocationID) (WorldID, bool)                      { return 0, false }
 func (noopHost) WorldName(InvocationID, WorldID) (string, bool)                 { return "", false }
 func (noopHost) OpenWorld(InvocationID, string, WorldDimension) (WorldID, bool) { return 0, false }
 func (noopHost) OpenWorldSpec(InvocationID, string, WorldOpenSpec) (WorldID, bool) {
@@ -587,8 +594,13 @@ func (noopHost) SaveWorld(InvocationID, WorldID) bool                        { r
 func (noopHost) SpawnWorldEntity(InvocationID, WorldID, EntitySpawn) (EntityID, bool) {
 	return EntityID{}, false
 }
-func (noopHost) WorldEntities(InvocationID, WorldID) ([]EntityID, bool) { return nil, false }
-func (noopHost) WorldPlayers(InvocationID, WorldID) ([]PlayerID, bool)  { return nil, false }
+func (noopHost) OpenWorldEntityIterator(InvocationID, WorldID, bool) (EntityIteratorID, bool) {
+	return 0, false
+}
+func (noopHost) NextWorldEntity(InvocationID, EntityIteratorID) (EntityID, bool, bool) {
+	return EntityID{}, false, false
+}
+func (noopHost) CloseWorldEntities(InvocationID, EntityIteratorID) {}
 func (noopHost) EntityState(InvocationID, EntityID) (EntityState, bool) {
 	return EntityState{}, false
 }

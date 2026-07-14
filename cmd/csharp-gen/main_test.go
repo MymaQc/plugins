@@ -415,6 +415,7 @@ func TestSyncGeneratedFilesChecksEveryOutput(t *testing.T) {
 func TestGeneratedWorldBlockSurfaceKeepsTransportPrivate(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "tx.go")
 	source := `package world
+func (tx *Tx) World() *World { return nil }
 func (tx *Tx) Range() cube.Range { return cube.Range{} }
 func (tx *Tx) SetBlock(pos cube.Pos, b Block, opts *SetOpts) {}
 func (tx *Tx) Block(pos cube.Pos) Block { return nil }
@@ -436,7 +437,9 @@ func (tx *Tx) ThunderingAt(pos cube.Pos) bool { return false }
 func (tx *Tx) Raining() bool { return false }
 func (tx *Tx) Thundering() bool { return false }
 func (tx *Tx) CurrentTick() int64 { return 0 }
-func (tx *Tx) AddParticle(pos mgl64.Vec3, p Particle) {}`
+func (tx *Tx) AddParticle(pos mgl64.Vec3, p Particle) {}
+func (tx *Tx) Entities() iter.Seq[Entity] { return nil }
+func (tx *Tx) Players() iter.Seq[Entity] { return nil }`
 	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -449,6 +452,8 @@ func (tx *Tx) AddParticle(pos mgl64.Vec3, p Particle) {}`
 	}, methods))
 	for _, expected := range []string{
 		"public interface Block { }",
+		"public World World()",
+		"PluginBridge.Host.TransactionWorld(Invocation)",
 		"public Cube.Range Range()",
 		"public void SetBlock(Cube.Pos pos, Block? b, SetOpts? opts = null)",
 		"public Block Block(Cube.Pos pos)",
@@ -477,6 +482,10 @@ func (tx *Tx) AddParticle(pos mgl64.Vec3, p Particle) {}`
 		"public interface Particle { }",
 		"public void AddParticle(Vector3 pos, Particle p)",
 		"PluginBridge.Host.AddWorldParticle(Invocation, pos, p)",
+		"public IEnumerable<Entity> Entities()",
+		"PluginBridge.Host.TransactionEntities(Invocation, playersOnly: false)",
+		"public IEnumerable<Entity> Players()",
+		"PluginBridge.Host.TransactionEntities(Invocation, playersOnly: true)",
 		"public bool DisableRedstoneUpdates;",
 	} {
 		if !strings.Contains(worldOutput, expected) {

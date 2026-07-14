@@ -333,8 +333,6 @@ type recordingHost struct {
 	entityPlayerCalls  int
 	entitySpawns       []EntitySpawn
 	spawnedEntity      EntityID
-	worldEntityIDs     []EntityID
-	worldPlayerIDs     []PlayerID
 	particleWorldID    WorldID
 	particlePositions  []Vec3
 	particles          []WorldParticle
@@ -523,6 +521,9 @@ func (h *recordingHost) WorldByName(_ InvocationID, name string) (WorldID, bool)
 	h.worldLookup = name
 	return h.worldID, h.worldLookupOK && h.worldID != 0
 }
+func (h *recordingHost) CurrentWorld(_ InvocationID) (WorldID, bool) {
+	return h.worldID, h.worldID != 0
+}
 func (h *recordingHost) WorldName(_ InvocationID, id WorldID) (string, bool) {
 	return h.worldName, id == h.worldID && h.worldName != ""
 }
@@ -620,12 +621,13 @@ func (h *recordingHost) SpawnWorldEntity(_ InvocationID, id WorldID, value Entit
 	h.entitySpawns = append(h.entitySpawns, value)
 	return h.spawnedEntity, id == h.worldID && h.spawnedEntity.Generation != 0
 }
-func (h *recordingHost) WorldEntities(_ InvocationID, id WorldID) ([]EntityID, bool) {
-	return append([]EntityID(nil), h.worldEntityIDs...), id == h.worldID
+func (h *recordingHost) OpenWorldEntityIterator(_ InvocationID, id WorldID, _ bool) (EntityIteratorID, bool) {
+	return 1, id == h.worldID
 }
-func (h *recordingHost) WorldPlayers(_ InvocationID, id WorldID) ([]PlayerID, bool) {
-	return append([]PlayerID(nil), h.worldPlayerIDs...), id == h.worldID
+func (h *recordingHost) NextWorldEntity(_ InvocationID, _ EntityIteratorID) (EntityID, bool, bool) {
+	return EntityID{}, false, true
 }
+func (h *recordingHost) CloseWorldEntities(InvocationID, EntityIteratorID) {}
 func (h *recordingHost) AddWorldParticle(_ InvocationID, id WorldID, position Vec3, value WorldParticle) bool {
 	h.particleWorldID = id
 	h.particlePositions = append(h.particlePositions, position)
@@ -1474,9 +1476,8 @@ func TestEntityCommandHostCalls(t *testing.T) {
 	library, plugins := nativeArtifacts(t)
 	host := &recordingHost{
 		worldID: 42, worldLookupOK: true,
-		entityState:    EntityState{World: 42, Type: "minecraft:player", Position: Vec3{X: 2, Y: 64, Z: 3}, CanTeleport: true},
-		spawnedEntity:  EntityID{UUID: [16]byte{7}, Generation: 88},
-		worldEntityIDs: []EntityID{{UUID: [16]byte{7}, Generation: 88}},
+		entityState:   EntityState{World: 42, Type: "minecraft:player", Position: Vec3{X: 2, Y: 64, Z: 3}, CanTeleport: true},
+		spawnedEntity: EntityID{UUID: [16]byte{7}, Generation: 88},
 	}
 	runtime, err := OpenWithHost(library, plugins, host)
 	if err != nil {
@@ -1492,7 +1493,6 @@ func TestEntityCommandHostCalls(t *testing.T) {
 	}
 	command := commandNamed(t, commands, "entity")
 	player := PlayerID{UUID: [16]byte{1, 2}, Generation: 17}
-	host.worldPlayerIDs = []PlayerID{player}
 	for _, arguments := range []string{"text", "sword", "list"} {
 		output, err := runtime.HandleCommand(command.Index, CommandInput{
 			Source: "Spawner", SourceKind: CommandSourcePlayer, SourcePlayer: &player, Arguments: commandArguments(arguments),

@@ -86,26 +86,29 @@ func (i *blockPositionIterator) close() {
 
 // WorldManager owns every world exposed through the plugin framework.
 type WorldManager struct {
-	mu              sync.RWMutex
-	worlds          map[WorldID]*managedWorld
-	handles         map[native.WorldID]*managedWorld
-	byWorld         map[*world.World]*managedWorld
-	next            native.WorldID
-	root            string
-	log             *slog.Logger
-	players         *host.Players
-	entityHandles   *host.Entities
-	blocks          world.BlockRegistry
-	entityTypes     world.EntityRegistry
-	registriesReady bool
-	openings        map[WorldID]*worldOpening
-	providerPaths   map[string]WorldID
-	closing         bool
-	closeDone       chan struct{}
-	closeErr        error
-	blockIteratorMu sync.Mutex
-	blockIterators  map[native.BlockIteratorID]*blockPositionIterator
-	nextBlockIter   native.BlockIteratorID
+	mu               sync.RWMutex
+	worlds           map[WorldID]*managedWorld
+	handles          map[native.WorldID]*managedWorld
+	byWorld          map[*world.World]*managedWorld
+	next             native.WorldID
+	root             string
+	log              *slog.Logger
+	players          *host.Players
+	entityHandles    *host.Entities
+	blocks           world.BlockRegistry
+	entityTypes      world.EntityRegistry
+	registriesReady  bool
+	openings         map[WorldID]*worldOpening
+	providerPaths    map[string]WorldID
+	closing          bool
+	closeDone        chan struct{}
+	closeErr         error
+	blockIteratorMu  sync.Mutex
+	blockIterators   map[native.BlockIteratorID]*blockPositionIterator
+	nextBlockIter    native.BlockIteratorID
+	entityIteratorMu sync.Mutex
+	entityIterators  map[native.EntityIteratorID]*worldEntityIterator
+	nextEntityIter   native.EntityIteratorID
 }
 
 // NewWorldManager constructs an in-memory manager, primarily useful to embedders and tests.
@@ -139,8 +142,9 @@ func newWorldManager(root string, log *slog.Logger, players *host.Players) *Worl
 	return &WorldManager{
 		worlds: make(map[WorldID]*managedWorld), handles: make(map[native.WorldID]*managedWorld), byWorld: make(map[*world.World]*managedWorld),
 		openings: make(map[WorldID]*worldOpening), providerPaths: make(map[string]WorldID),
-		blockIterators: make(map[native.BlockIteratorID]*blockPositionIterator),
-		root:           root, log: log, players: players, entityHandles: entityHandles,
+		blockIterators:  make(map[native.BlockIteratorID]*blockPositionIterator),
+		entityIterators: make(map[native.EntityIteratorID]*worldEntityIterator),
+		root:            root, log: log, players: players, entityHandles: entityHandles,
 	}
 }
 

@@ -13,7 +13,8 @@ Runnable parity showcase. Its single plugin class demonstrates:
 - player-action telemetry;
 - reflected command arguments and overloads;
 - direct `Player.Message` output;
-- transaction-safe range, lazy block search, height/light queries, and block access through `World.Tx`;
+- transaction-safe range, lazy block/entity/player iteration, current-world lookup, global player
+  messaging, height/light queries, and block access through `World.Tx`;
 - generated `Cube.Pos`, `Block.Sand`, and all `World.SetOpts` flags in `/kitchen block`;
 - promoted Dragonfly crop state through typed `Block.WheatSeeds(Growth: 7)` in `/kitchen crop`;
 - typed `World.Liquid`, `Block.Water`, liquid inspection, placement, and nullable removal;

@@ -474,6 +474,7 @@ var selectedFormElements = []string{
 }
 
 var selectedWorldTxMethods = []string{
+	"World",
 	"Range",
 	"SetBlock",
 	"Block",
@@ -496,6 +497,8 @@ var selectedWorldTxMethods = []string{
 	"Thundering",
 	"CurrentTick",
 	"AddParticle",
+	"Entities",
+	"Players",
 }
 
 func main() {
@@ -1312,6 +1315,7 @@ func inspectWorldTx(path string) ([]commandMethod, error) {
 
 func validateWorldTxMethod(method commandMethod) error {
 	expected := map[string]commandMethod{
+		"World": {Name: "World", ReturnType: "World"},
 		"Range": {Name: "Range", ReturnType: "Cube.Range"},
 		"SetBlock": {Name: "SetBlock", ReturnType: "void", Parameters: []parameter{
 			{Name: "pos", Type: "Cube.Pos"}, {Name: "b", Type: "Block?"}, {Name: "opts", Type: "SetOpts?"},
@@ -1370,6 +1374,8 @@ func validateWorldTxMethod(method commandMethod) error {
 		"AddParticle": {Name: "AddParticle", ReturnType: "void", Parameters: []parameter{
 			{Name: "pos", Type: "Vector3"}, {Name: "p", Type: "Particle"},
 		}},
+		"Entities": {Name: "Entities", ReturnType: "IEnumerable<Entity>"},
+		"Players":  {Name: "Players", ReturnType: "IEnumerable<Entity>"},
 	}[method.Name]
 	if !reflect.DeepEqual(method, expected) {
 		return fmt.Errorf("signature changed: got %s %s(%s)", method.ReturnType, method.Name, formatParameters(method.Parameters))
@@ -1438,6 +1444,12 @@ func translateWorldTxResult(method string, fields *ast.FieldList) (string, error
 		}
 	}
 	if len(results) == 1 {
+		if method == "World" {
+			if results[0] != "World?" {
+				return "", fmt.Errorf("expected *World, got %s", results[0])
+			}
+			return "World", nil
+		}
 		return results[0], nil
 	}
 	if method == "BlockLoaded" || method == "Liquid" {
@@ -1468,9 +1480,11 @@ func worldTxCSharpType(expression ast.Expr, parameter bool) (string, bool) {
 		typeName, ok := map[string]string{
 			"Block":    "Block",
 			"Biome":    "Biome",
+			"Entity":   "Entity",
 			"Liquid":   "Liquid",
 			"Particle": "Particle",
 			"SetOpts":  "SetOpts",
+			"World":    "World",
 			"bool":     "bool",
 			"float64":  "double",
 			"int":      "int",
@@ -1506,7 +1520,7 @@ func worldTxCSharpType(expression ast.Expr, parameter bool) (string, bool) {
 			return "", false
 		}
 		element, ok := worldTxCSharpType(value.Index, false)
-		if !ok || element != "Cube.Pos" {
+		if !ok || element != "Cube.Pos" && element != "Entity" {
 			return "", false
 		}
 		return "IEnumerable<" + element + ">", true
@@ -4886,6 +4900,8 @@ func generateWorldBlock(setOpts []string, methods []commandMethod) []byte {
 		}
 		fmt.Fprintf(&output, "        public %s %s(%s) =>\n", method.ReturnType, method.Name, parameters)
 		switch method.Name {
+		case "World":
+			output.WriteString("            PluginBridge.Host.TransactionWorld(Invocation);\n")
 		case "Range":
 			output.WriteString("            PluginBridge.Host.WorldRange(Invocation);\n")
 		case "SetBlock":
@@ -4938,6 +4954,10 @@ func generateWorldBlock(setOpts []string, methods []commandMethod) []byte {
 		case "AddParticle":
 			fmt.Fprintf(&output, "            PluginBridge.Host.AddWorldParticle(Invocation, %s, %s);\n",
 				method.Parameters[0].Name, method.Parameters[1].Name)
+		case "Entities":
+			output.WriteString("            PluginBridge.Host.TransactionEntities(Invocation, playersOnly: false);\n")
+		case "Players":
+			output.WriteString("            PluginBridge.Host.TransactionEntities(Invocation, playersOnly: true);\n")
 		default:
 			panic("unsupported world.Tx method: " + method.Name)
 		}

@@ -23,6 +23,9 @@ public sealed partial class World
 
     public partial class Tx
     {
+        public World World() =>
+            PluginBridge.Host.TransactionWorld(Invocation);
+
         public Cube.Range Range() =>
             PluginBridge.Host.WorldRange(Invocation);
 
@@ -88,5 +91,11 @@ public sealed partial class World
 
         public void AddParticle(Vector3 pos, Particle p) =>
             PluginBridge.Host.AddWorldParticle(Invocation, pos, p);
+
+        public IEnumerable<Entity> Entities() =>
+            PluginBridge.Host.TransactionEntities(Invocation, playersOnly: false);
+
+        public IEnumerable<Entity> Players() =>
+            PluginBridge.Host.TransactionEntities(Invocation, playersOnly: true);
     }
 }

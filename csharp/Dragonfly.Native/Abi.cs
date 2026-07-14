@@ -5,7 +5,7 @@ namespace Dragonfly.Native;
 public static class Abi
 {
     public const uint PluginVersion = 7;
-    public const uint HostVersion = 33;
+    public const uint HostVersion = 34;
     public const int Ok = 0;
     public const int Error = 1;
     public const uint PlayerMoveEvent = 1;
@@ -286,8 +286,6 @@ public unsafe struct HostApi
     public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, BlockPos*, int> WorldSpawnGet;
     public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, BlockPos, int> WorldSpawnSet;
     public void* WorldEntitySpawn;
-    public void* WorldEntities;
-    public void* WorldPlayers;
     public delegate* unmanaged[Cdecl]<ulong, ulong, EntityId, EntityState*, int> EntityState;
     public void* EntityTeleport;
     public void* EntityVelocitySet;
@@ -328,6 +326,10 @@ public unsafe struct HostApi
     public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, long*, int> WorldCurrentTick;
     public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, ItemStackSnapshot*, ItemStackSnapshot*, int> PlayerHeldItemsOpen;
     public delegate* unmanaged[Cdecl]<ulong, ulong, EntityId, PlayerSnapshotBuffer*, int> EntityPlayer;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId*, int> WorldCurrent;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, byte, ulong*, int> WorldEntityIteratorOpen;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, ulong, EntityId*, byte*, int> WorldEntityIteratorNext;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, ulong, void> WorldEntityIteratorClose;
 }
 
 [StructLayout(LayoutKind.Sequential)]
