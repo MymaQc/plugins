@@ -112,62 +112,21 @@ const (
 	WorldDimensionEnd
 )
 
-type WorldOpenMode uint32
+type WorldProviderKind uint32
 
 const (
-	WorldOpenOrCreate WorldOpenMode = iota
-	WorldOpenExisting
-	WorldCreateNew
+	WorldProviderNop WorldProviderKind = iota
+	WorldProviderMCDB
 )
 
-type WorldSavePolicy uint32
-
-const (
-	WorldSaveAutomatic WorldSavePolicy = iota
-	WorldSaveManual
-)
-
-type WorldRandomTickPolicy uint32
-
-const (
-	WorldRandomTicksDisabled WorldRandomTickPolicy = iota
-	WorldRandomTicksPerSubchunk
-)
-
-type WorldTimePolicy uint32
-
-const (
-	WorldTimePreserve WorldTimePolicy = iota
-	WorldTimeCycle
-	WorldTimeFixed
-)
-
-type WorldWeatherPolicy uint32
-
-const (
-	WorldWeatherPreserve WorldWeatherPolicy = iota
-	WorldWeatherCycle
-	WorldWeatherClear
-)
-
-type WorldChunkUnloadPolicy uint32
-
-const WorldChunkUnloadAfter WorldChunkUnloadPolicy = 0
-
-type WorldOpenSpec struct {
-	ProviderPath     string
-	Dimension        WorldDimension
-	OpenMode         WorldOpenMode
-	ReadOnly         bool
-	Save             WorldSavePolicy
-	SaveInterval     time.Duration
-	RandomTicks      WorldRandomTickPolicy
-	RandomTickRate   uint32
-	Time             WorldTimePolicy
-	FixedTime        int64
-	Weather          WorldWeatherPolicy
-	ChunkUnload      WorldChunkUnloadPolicy
-	ChunkUnloadAfter time.Duration
+type WorldConfig struct {
+	Dimension           WorldDimension
+	Provider            WorldProviderKind
+	ProviderPath        string
+	ReadOnly            bool
+	SaveInterval        time.Duration
+	ChunkUnloadInterval time.Duration
+	RandomTickSpeed     int
 }
 
 type WorldBlock struct {
@@ -428,11 +387,9 @@ type Host interface {
 	HeldItems(InvocationID, PlayerID) (ItemStack, ItemStack, bool)
 	SetHeldItems(InvocationID, PlayerID, ItemStack, ItemStack) bool
 	SetHeldSlot(InvocationID, PlayerID, uint32) bool
-	WorldByName(InvocationID, string) (WorldID, bool)
 	CurrentWorld(InvocationID) (WorldID, bool)
 	WorldName(InvocationID, WorldID) (string, bool)
-	OpenWorld(InvocationID, string, WorldDimension) (WorldID, bool)
-	OpenWorldSpec(InvocationID, string, WorldOpenSpec) (WorldID, bool)
+	CreateWorld(WorldConfig) (WorldID, bool)
 	UnloadWorld(InvocationID, WorldID) bool
 	WorldBlock(InvocationID, WorldID, BlockPos) (WorldBlock, bool)
 	WorldBlockLoaded(InvocationID, WorldID, BlockPos) (WorldBlock, bool, bool)
@@ -545,14 +502,10 @@ func (noopHost) HeldItems(InvocationID, PlayerID) (ItemStack, ItemStack, bool) {
 }
 func (noopHost) SetHeldItems(InvocationID, PlayerID, ItemStack, ItemStack) bool { return false }
 func (noopHost) SetHeldSlot(InvocationID, PlayerID, uint32) bool                { return false }
-func (noopHost) WorldByName(InvocationID, string) (WorldID, bool)               { return 0, false }
 func (noopHost) CurrentWorld(InvocationID) (WorldID, bool)                      { return 0, false }
 func (noopHost) WorldName(InvocationID, WorldID) (string, bool)                 { return "", false }
-func (noopHost) OpenWorld(InvocationID, string, WorldDimension) (WorldID, bool) { return 0, false }
-func (noopHost) OpenWorldSpec(InvocationID, string, WorldOpenSpec) (WorldID, bool) {
-	return 0, false
-}
-func (noopHost) UnloadWorld(InvocationID, WorldID) bool { return false }
+func (noopHost) CreateWorld(WorldConfig) (WorldID, bool)                        { return 0, false }
+func (noopHost) UnloadWorld(InvocationID, WorldID) bool                         { return false }
 func (noopHost) WorldBlock(InvocationID, WorldID, BlockPos) (WorldBlock, bool) {
 	return WorldBlock{}, false
 }

@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"runtime"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -315,6 +316,9 @@ type csharpWorldHost struct {
 	entityHandleRemoved        EntityID
 	entityHandleAddedPosition  *Vec3
 	entityHandleAdded          EntityID
+	scheduledWorlds            []WorldID
+	scheduledPlugins           []uint64
+	scheduledCallbacks         []uint64
 }
 
 type csharpWorldQueryCall struct {
@@ -390,6 +394,13 @@ func (h *csharpWorldHost) CurrentWorld(invocation InvocationID) (WorldID, bool) 
 	h.currentWorldCalls++
 	h.currentWorldInvocation = invocation
 	return h.worldID, h.worldID != 0
+}
+
+func (h *csharpWorldHost) ScheduleWorld(world WorldID, plugin, callback uint64) bool {
+	h.scheduledWorlds = append(h.scheduledWorlds, world)
+	h.scheduledPlugins = append(h.scheduledPlugins, plugin)
+	h.scheduledCallbacks = append(h.scheduledCallbacks, callback)
+	return world != 0 && plugin != 0 && callback != 0
 }
 
 func (h *csharpWorldHost) OpenWorldEntityIterator(invocation InvocationID, world WorldID, playersOnly bool) (EntityIteratorID, bool) {
@@ -766,20 +777,38 @@ func TestCSharpReflectedCommands(t *testing.T) {
 		host.heals[0].Health != 20 || host.heals[0].Source.Kind != HealingSourceInstant {
 		t.Fatalf("heal output=%#v calls=%+v error=%v", output, host.heals, err)
 	}
-	managedWorld := base
-	managedWorld.Overload = 20
-	managedWorld.Arguments = []string{"world"}
-	output, err = pluginRuntime.HandleCommand(kitchen.Index, managedWorld)
-	if err != nil || output.Failed || output.Message != "world=kitchen:arena, spawn=8,70,-4" {
-		t.Fatalf("managed world output=%#v error=%v", output, err)
+	configuredWorld := base
+	configuredWorld.Overload = 20
+	configuredWorld.Arguments = []string{"world"}
+	output, err = pluginRuntime.HandleCommand(kitchen.Index, configuredWorld)
+	if err != nil || output.Failed || output.Message != "memory=World, persistent=kitchen:arena, spawn=8,70,-4" {
+		t.Fatalf("configured world output=%#v error=%v", output, err)
 	}
-	if host.worldOpened != "kitchen:arena" || host.worldOpenSpec.ProviderPath != "kitchen/arena" ||
-		host.worldOpenSpec.Dimension != WorldDimensionOverworld || !host.worldSaved ||
+	if len(host.worldConfigs) != 2 || host.worldConfigs[0] != (WorldConfig{
+		Dimension: WorldDimensionOverworld,
+		Provider:  WorldProviderNop,
+	}) || host.worldConfigs[1] != (WorldConfig{
+		Dimension:       WorldDimensionOverworld,
+		Provider:        WorldProviderMCDB,
+		ProviderPath:    "kitchen/arena",
+		SaveInterval:    10 * time.Minute,
+		RandomTickSpeed: -1,
+	}) || !host.worldSaved ||
 		host.worldSpawn != (BlockPos{X: 8, Y: 70, Z: -4}) || host.transferInvocation != 42 ||
 		host.transferPlayer != player || host.transferWorld != 91 ||
-		host.transferPosition != (Vec3{X: 8.5, Y: 70, Z: -3.5}) {
-		t.Fatalf("managed world host state: %+v", host.recordingHost)
+		host.transferPosition != (Vec3{X: 8.5, Y: 70, Z: -3.5}) ||
+		!slices.Equal(host.scheduledWorlds, []WorldID{90}) || len(host.scheduledPlugins) != 1 ||
+		len(host.scheduledCallbacks) != 1 {
+		t.Fatalf("configured world host state: %+v", host.recordingHost)
 	}
+	longWorldName := strings.Repeat("arena", 80)
+	host.worldName = longWorldName
+	output, err = pluginRuntime.HandleCommand(kitchen.Index, configuredWorld)
+	if err != nil || output.Failed || output.Message !=
+		"memory=World, persistent="+longWorldName+", spawn=8,70,-4" {
+		t.Fatalf("long world name output=%#v error=%v", output, err)
+	}
+	host.worldName = "kitchen:arena"
 	playerEntity := EntityID{UUID: player.UUID, Generation: player.Generation}
 	nonPlayerEntity := EntityID{UUID: [16]byte{9}, Generation: 4}
 	host.entityIterator = 12

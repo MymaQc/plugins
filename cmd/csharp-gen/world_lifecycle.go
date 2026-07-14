@@ -75,15 +75,15 @@ func generateWorldLifecycleMethods(methods []worldLifecycleMethod) []byte {
 	for _, method := range methods {
 		switch method.Name {
 		case "Name":
-			output.WriteString("    public string Name() => PluginBridge.Host.ManagedWorldName(_invocation, Id) ?? string.Empty;\n")
+			output.WriteString("    public string Name() => PluginBridge.Host.WorldName(_invocation, Id) ?? string.Empty;\n")
 		case "Spawn":
-			output.WriteString("    public Cube.Pos Spawn() => PluginBridge.Host.ManagedWorldSpawn(_invocation, Id);\n")
+			output.WriteString("    public Cube.Pos Spawn() => PluginBridge.Host.WorldSpawn(_invocation, Id);\n")
 		case "SetSpawn":
-			fmt.Fprintf(&output, "    public void SetSpawn(Cube.Pos %s) =>\n        PluginBridge.Host.SetManagedWorldSpawn(_invocation, Id, %s);\n", method.Parameters[0], method.Parameters[0])
+			fmt.Fprintf(&output, "    public void SetSpawn(Cube.Pos %s) =>\n        PluginBridge.Host.SetWorldSpawn(_invocation, Id, %s);\n", method.Parameters[0], method.Parameters[0])
 		case "Save":
-			output.WriteString("    public void Save() => PluginBridge.Host.SaveManagedWorld(_invocation, Id);\n")
+			output.WriteString("    public void Save() => PluginBridge.Host.SaveWorld(_invocation, Id);\n")
 		case "Close":
-			output.WriteString("    public void Close() => PluginBridge.Host.CloseManagedWorld(_invocation, Id);\n")
+			output.WriteString("    public void Close() => PluginBridge.Host.CloseWorld(_invocation, Id);\n")
 		default:
 			panic("unsupported world lifecycle method: " + method.Name)
 		}

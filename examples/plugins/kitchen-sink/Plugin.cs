@@ -17,6 +17,8 @@ public sealed class KitchenSink : Plugin
     private long _commandExecutions;
     private long _diagnostics;
     private long _scheduled;
+    private World? _memoryWorld;
+    private World? _persistentWorld;
 
     public override void OnEnable()
     {
@@ -44,7 +46,7 @@ public sealed class KitchenSink : Plugin
             new KitchenCrop(),
             new KitchenKinematics(),
             new KitchenHeal(),
-            new KitchenWorld(),
+            new KitchenWorld(this),
             new KitchenEntities(),
             new KitchenServer(this),
             new KitchenHandle()));
@@ -417,7 +419,7 @@ public sealed class KitchenSink : Plugin
         }
     }
 
-    internal sealed class KitchenWorld : Cmd.Runnable
+    internal sealed class KitchenWorld(KitchenSink plugin) : Cmd.Runnable
     {
         public Cmd.SubCommand World;
 
@@ -428,19 +430,22 @@ public sealed class KitchenSink : Plugin
                 output.Error("This command can only be used by a player.");
                 return;
             }
-            var arena = Dragonfly.World.OpenManaged(
-                "kitchen:arena",
-                new Dragonfly.World.ManagedOpenSpec("kitchen/arena"));
-            if (arena is null)
+            var memory = plugin._memoryWorld ??= Dragonfly.World.New();
+            memory.Schedule(worldTx =>
+                worldTx.SetBlock(new Cube.Pos(0, 0, 0), new Block.Stone()));
+            var arena = plugin._persistentWorld ??= new Dragonfly.World.Config
             {
-                output.Error("Could not open the managed arena world.");
-                return;
-            }
+                Provider = new MCDB.Config().Open("kitchen/arena"),
+                SaveInterval = TimeSpan.FromMinutes(10),
+                RandomTickSpeed = -1,
+            }.New();
             var spawn = arena.Spawn();
             arena.SetSpawn(spawn);
             arena.Save();
             player.ChangeWorld(arena, spawn.Vec3Middle());
-            output.Printf("world={0}, spawn={1},{2},{3}", arena.Name(), spawn.X(), spawn.Y(), spawn.Z());
+            output.Printf(
+                "memory={0}, persistent={1}, spawn={2},{3},{4}",
+                memory.Name(), arena.Name(), spawn.X(), spawn.Y(), spawn.Z());
         }
     }
 

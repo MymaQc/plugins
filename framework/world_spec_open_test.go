@@ -227,6 +227,75 @@ func TestWorldManagerRetainsProviderPathWhenCloseFails(t *testing.T) {
 	}
 }
 
+type retryCloseProvider struct {
+	world.NopProvider
+	calls int
+}
+
+func (p *retryCloseProvider) Close() error {
+	p.calls++
+	if p.calls == 1 {
+		return errors.New("close failed")
+	}
+	return nil
+}
+
+func TestWorldManagerRetriesFailedProviderClose(t *testing.T) {
+	manager := NewWorldManager()
+	spec := normalizedWorldSpec{absoluteProviderPath: "/reserved"}
+	provider := &retryCloseProvider{}
+	entry := &managedWorld{
+		id: 1, name: "example:failing", spec: &spec,
+		provider: &recordingProvider{Provider: provider}, unloading: true,
+	}
+	manager.worlds[entry.name] = entry
+	manager.handles[entry.id] = entry
+	manager.providerPaths[spec.absoluteProviderPath] = entry.name
+	if err := manager.finishWorldClose(entry, entry.provider.Close); err == nil {
+		t.Fatal("first provider close unexpectedly succeeded")
+	}
+	if entry.unloading {
+		t.Fatal("failed close cannot be retried")
+	}
+	if err := manager.Unload(entry.name); err != nil {
+		t.Fatalf("retry provider close: %v", err)
+	}
+	if provider.calls != 2 {
+		t.Fatalf("provider close calls = %d, want 2", provider.calls)
+	}
+	if _, ok := manager.providerPaths[spec.absoluteProviderPath]; ok {
+		t.Fatal("successful retry retained provider reservation")
+	}
+	if _, ok := manager.handles[entry.id]; ok {
+		t.Fatal("successful retry retained world handle")
+	}
+}
+
+func TestWorldManagerCloseCustomRetriesFailedProviderClose(t *testing.T) {
+	manager := NewWorldManager()
+	spec := normalizedWorldSpec{absoluteProviderPath: "/reserved"}
+	provider := &retryCloseProvider{}
+	entry := &managedWorld{
+		id: 1, name: "example:failing", spec: &spec, closed: true,
+		provider: &recordingProvider{Provider: provider},
+	}
+	manager.worlds[entry.name] = entry
+	manager.handles[entry.id] = entry
+	manager.providerPaths[spec.absoluteProviderPath] = entry.name
+	if err := manager.CloseCustom(); err == nil {
+		t.Fatal("first close unexpectedly succeeded")
+	}
+	if err := manager.CloseCustom(); err != nil {
+		t.Fatalf("retry CloseCustom: %v", err)
+	}
+	if provider.calls != 2 {
+		t.Fatalf("provider close calls = %d, want 2", provider.calls)
+	}
+	if _, ok := manager.providerPaths[spec.absoluteProviderPath]; ok {
+		t.Fatal("successful retry retained provider reservation")
+	}
+}
+
 func createMCDBFixture(t *testing.T, path string) {
 	t.Helper()
 	provider, err := (mcdb.Config{}).Open(path)

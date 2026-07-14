@@ -5,7 +5,7 @@ namespace Dragonfly.Native;
 public static class Abi
 {
     public const uint PluginVersion = 8;
-    public const uint HostVersion = 40;
+    public const uint HostVersion = 41;
     public const int Ok = 0;
     public const int Error = 1;
     public const uint WorldDimensionOverworld = 0;
@@ -303,8 +303,6 @@ public unsafe struct HostApi
     public void* PlayerScoreboardRemove;
     public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, FormView*, int> PlayerFormSend;
     public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, int> PlayerFormClose;
-    public delegate* unmanaged[Cdecl]<ulong, ulong, StringView, WorldId*, int> WorldLookup;
-    public delegate* unmanaged[Cdecl]<ulong, ulong, StringView, uint, WorldId*, int> WorldOpen;
     public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, StringBuffer*, int> WorldName;
     public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, int> WorldUnload;
     public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, int> WorldSave;
@@ -327,7 +325,6 @@ public unsafe struct HostApi
     public void* PlayerHurt;
     public delegate* unmanaged[Cdecl]<ulong, ulong, ulong, SkinInfo*, int> SkinSnapshotInfo;
     public delegate* unmanaged[Cdecl]<ulong, ulong, ulong, SkinView*, int> SkinSnapshotSet;
-    public delegate* unmanaged[Cdecl]<ulong, ulong, StringView, WorldOpenSpecV1*, WorldId*, int> WorldOpenSpec;
     public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, WorldId, Vec3, int> PlayerTransfer;
     public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, EffectBuffer*, int> PlayerEffects;
     public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, int> PlayerEffectsClear;
@@ -377,6 +374,7 @@ public unsafe struct HostApi
     public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, StringBuffer*, int> PlayerXuid;
     public delegate* unmanaged[Cdecl]<ulong, uint, WorldId*, int> ServerWorld;
     public delegate* unmanaged[Cdecl]<ulong, WorldId, ulong, ulong, int> WorldSchedule;
+    public delegate* unmanaged[Cdecl]<ulong, WorldConfigV1*, WorldId*, int> WorldNew;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -534,23 +532,17 @@ public struct WorldId
 }
 
 [StructLayout(LayoutKind.Sequential)]
-public unsafe struct WorldOpenSpecV1
+public unsafe struct WorldConfigV1
 {
     public uint StructSize;
     public uint Dimension;
+    public uint ProviderKind;
+    public uint ReadOnly;
     public StringView ProviderPath;
-    public ulong SaveIntervalMilliseconds;
-    public ulong ChunkUnloadIntervalMilliseconds;
-    public long FixedTime;
-    public uint OpenMode;
-    public uint SavePolicy;
-    public uint RandomTickPolicy;
-    public uint RandomTickRate;
-    public uint TimePolicy;
-    public uint WeatherPolicy;
-    public uint ChunkUnloadPolicy;
-    public byte ReadOnly;
-    public fixed byte Reserved[3];
+    public long SaveIntervalNanoseconds;
+    public long ChunkUnloadIntervalNanoseconds;
+    public int RandomTickSpeed;
+    public uint Reserved;
 }
 
 [StructLayout(LayoutKind.Sequential)]

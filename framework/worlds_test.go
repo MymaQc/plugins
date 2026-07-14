@@ -106,7 +106,7 @@ func (r *closeWorldRuntime) HandleWorldClose(invocation native.InvocationID) err
 	position := native.BlockPos{X: 2, Y: 64, Z: 3}
 	setOK := r.manager.SetWorldBlock(invocation, 0, position, r.block, native.WorldSetOpts{})
 	got, blockOK := r.manager.WorldBlock(invocation, 0, position)
-	r.valid = currentOK && nameOK && name == "example:closing" && rangeOK && spawnOK && setOK && blockOK && got.Identifier == r.block.Identifier
+	r.valid = currentOK && nameOK && name == "World" && rangeOK && spawnOK && setOK && blockOK && got.Identifier == r.block.Identifier
 	return nil
 }
 
@@ -167,7 +167,7 @@ func TestWorldManagerNativeHandlesAreStableAndNeverReused(t *testing.T) {
 	if !ok {
 		t.Fatal("first world missing")
 	}
-	if name, ok := manager.WorldName(0, firstID); !ok || name != "example:first" {
+	if name, ok := manager.WorldName(0, firstID); !ok || name != "World" {
 		t.Fatalf("WorldName() = %q, %v", name, ok)
 	}
 	if err := manager.Unload("example:first"); err != nil {
@@ -519,8 +519,8 @@ func TestPersistentWorldManagerKeepsWorldsBelowRoot(t *testing.T) {
 	if err := manager.RegisterCore(OverworldID, core); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := manager.OpenWorld(0, "example:arenas/one", native.WorldDimensionOverworld); !ok {
-		t.Fatal("OpenWorld failed")
+	if _, err := manager.Open("example:arenas/one", native.WorldDimensionOverworld); err != nil {
+		t.Fatalf("Open failed: %v", err)
 	}
 	t.Cleanup(func() { _ = manager.CloseCustom() })
 	if _, err := manager.Open("example:../escape", native.WorldDimensionOverworld); err == nil {

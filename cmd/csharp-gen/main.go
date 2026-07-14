@@ -575,6 +575,15 @@ func main() {
 	if err := inspectWorldSchedule(filepath.Join(directory, "server", "world", "task.go")); err != nil {
 		fatal(err)
 	}
+	if err := inspectWorldConfig(
+		filepath.Join(directory, "server", "world", "conf.go"),
+		filepath.Join(directory, "server", "world", "world.go"),
+		filepath.Join(directory, "server", "world", "dimension.go"),
+		filepath.Join(directory, "server", "world", "provider.go"),
+		filepath.Join(directory, "server", "world", "mcdb", "conf.go"),
+	); err != nil {
+		fatal(err)
+	}
 	effects, err := inspectEffects(filepath.Join(directory, "server", "entity", "effect"))
 	if err != nil {
 		fatal(err)
@@ -687,6 +696,10 @@ func main() {
 		{
 			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "World.Schedule.g.cs"),
 			Content: generateWorldSchedule(),
+		},
+		{
+			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "World.Config.g.cs"),
+			Content: generateWorldConfig(),
 		},
 		{
 			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "Effect.Types.g.cs"),

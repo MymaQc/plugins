@@ -30,8 +30,9 @@ Runnable parity showcase. Its single plugin class demonstrates:
 - registered lookup, player reads, and custom `World.GameMode` in `/kitchen game-mode`;
 - food, health, experience, scale, visibility, and mobility state round-trips in `/kitchen state`;
 - direct typed healing in `/kitchen heal`;
-- managed MCDB opening, AST-generated world name/spawn/save methods, and safe cross-world player
-  movement in `/kitchen world`;
+- in-memory `World.New()`, writable MCDB-backed `World.Config.New()`, owner scheduling,
+  AST-generated world name/spawn/save methods, and safe cross-world player movement in
+  `/kitchen world`;
 - generated typed items (including finite stateful families, NBT-backed books, typed fireworks,
   seven armour tiers, four armour pieces, and 11 trim materials), firework explosions and shapes,
   armour defence/durability/repair/smelting behavior, all 28 armour round-trips, private dyed/trim

@@ -9,8 +9,8 @@ extern "C" {
 #endif
 
 #define DF_ABI_VERSION 8u
-// Version 40 adds world-owner callback scheduling.
-#define DF_HOST_ABI_VERSION 40u
+// Version 41 adds atomic world.Config construction.
+#define DF_HOST_ABI_VERSION 41u
 #define DF_STATUS_OK 0
 #define DF_STATUS_ERROR 1
 
@@ -64,21 +64,9 @@ typedef void (*DfItemStackViewsDropFn)(void *context);
 #define DF_WORLD_DIMENSION_OVERWORLD 0u
 #define DF_WORLD_DIMENSION_NETHER 1u
 #define DF_WORLD_DIMENSION_END 2u
-#define DF_WORLD_OPEN_OR_CREATE 0u
-#define DF_WORLD_OPEN_EXISTING 1u
-#define DF_WORLD_CREATE_NEW 2u
-#define DF_WORLD_SAVE_AUTOMATIC 0u
-#define DF_WORLD_SAVE_MANUAL 1u
-#define DF_WORLD_RANDOM_TICKS_DISABLED 0u
-#define DF_WORLD_RANDOM_TICKS_PER_SUBCHUNK 1u
-#define DF_WORLD_TIME_PRESERVE 0u
-#define DF_WORLD_TIME_CYCLE 1u
-#define DF_WORLD_TIME_FIXED 2u
-#define DF_WORLD_WEATHER_PRESERVE 0u
-#define DF_WORLD_WEATHER_CYCLE 1u
-#define DF_WORLD_WEATHER_CLEAR 2u
-#define DF_WORLD_CHUNK_UNLOAD_AFTER 0u
-typedef struct { uint32_t struct_size; uint32_t dimension; DfStringView provider_path; uint64_t save_interval_milliseconds; uint64_t chunk_unload_interval_milliseconds; int64_t fixed_time; uint32_t open_mode; uint32_t save_policy; uint32_t random_tick_policy; uint32_t random_tick_rate; uint32_t time_policy; uint32_t weather_policy; uint32_t chunk_unload_policy; uint8_t read_only; uint8_t reserved[3]; } DfWorldOpenSpecV1;
+#define DF_WORLD_PROVIDER_NOP 0u
+#define DF_WORLD_PROVIDER_MCDB 1u
+typedef struct { uint32_t struct_size; uint32_t dimension; uint32_t provider_kind; uint32_t read_only; DfStringView provider_path; int64_t save_interval_nanoseconds; int64_t chunk_unload_interval_nanoseconds; int32_t random_tick_speed; uint32_t reserved; } DfWorldConfigV1;
 typedef struct { DfStringBuffer identifier; DfStringBuffer properties_nbt; } DfBlockData;
 typedef struct { DfStringView identifier; DfStringView properties_nbt; } DfBlockView;
 #define DF_SET_BLOCK_DISABLE_BLOCK_UPDATES 1u
@@ -391,9 +379,6 @@ typedef DfStatus (*DfHostPlayerHeldItemsSetFn)(uint64_t context, DfInvocationId 
 typedef DfStatus (*DfHostPlayerHeldSlotSetFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t slot);
 /* Opens one atomic held-items read. Each returned snapshot is independently owned until item_stack_close. */
 typedef DfStatus (*DfHostPlayerHeldItemsOpenFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfItemStackSnapshot *main_hand, DfItemStackSnapshot *off_hand);
-typedef DfStatus (*DfHostWorldLookupFn)(uint64_t context, DfInvocationId invocation, DfStringView name, DfWorldId *world);
-typedef DfStatus (*DfHostWorldOpenFn)(uint64_t context, DfInvocationId invocation, DfStringView name, uint32_t dimension, DfWorldId *world);
-typedef DfStatus (*DfHostWorldOpenSpecFn)(uint64_t context, DfInvocationId invocation, DfStringView name, const DfWorldOpenSpecV1 *spec, DfWorldId *world);
 typedef DfStatus (*DfHostWorldNameFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, DfStringBuffer *name);
 typedef DfStatus (*DfHostWorldUnloadFn)(uint64_t context, DfInvocationId invocation, DfWorldId world);
 typedef DfStatus (*DfHostWorldSaveFn)(uint64_t context, DfInvocationId invocation, DfWorldId world);
@@ -443,6 +428,7 @@ typedef DfStatus (*DfHostServerPlayerByXuidFn)(uint64_t context, DfStringView xu
 typedef DfStatus (*DfHostPlayerXuidFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfStringBuffer *xuid);
 typedef DfStatus (*DfHostServerWorldFn)(uint64_t context, uint32_t dimension, DfWorldId *world);
 typedef DfStatus (*DfHostWorldScheduleFn)(uint64_t context, DfWorldId world, uint64_t plugin, uint64_t callback);
+typedef DfStatus (*DfHostWorldNewFn)(uint64_t context, const DfWorldConfigV1 *config, DfWorldId *world);
 typedef DfStatus (*DfHostEntityHandleFn)(uint64_t context, DfInvocationId invocation, DfEntityId entity, DfEntityHandleId *handle);
 typedef DfStatus (*DfHostEntityHandleEntityFn)(uint64_t context, DfInvocationId invocation, DfEntityHandleId handle, DfEntityId *entity, uint8_t *found);
 typedef DfStatus (*DfHostEntityHandleUuidFn)(uint64_t context, DfEntityHandleId handle, DfUuid *uuid);
@@ -482,8 +468,6 @@ typedef struct {
     DfHostPlayerScoreboardRemoveFn player_scoreboard_remove;
     DfHostPlayerFormSendFn player_form_send;
     DfHostPlayerFormCloseFn player_form_close;
-    DfHostWorldLookupFn world_lookup;
-    DfHostWorldOpenFn world_open;
     DfHostWorldNameFn world_name;
     DfHostWorldUnloadFn world_unload;
     DfHostWorldSaveFn world_save;
@@ -506,7 +490,6 @@ typedef struct {
     DfHostPlayerHurtFn player_hurt;
     DfHostSkinSnapshotInfoFn skin_snapshot_info;
     DfHostSkinSnapshotSetFn skin_snapshot_set;
-    DfHostWorldOpenSpecFn world_open_spec;
     DfHostPlayerTransferFn player_transfer;
     DfHostPlayerEffectsFn player_effects;
     DfHostPlayerEffectsClearFn player_effects_clear;
@@ -556,6 +539,7 @@ typedef struct {
     DfHostPlayerXuidFn player_xuid;
     DfHostServerWorldFn server_world;
     DfHostWorldScheduleFn world_schedule;
+    DfHostWorldNewFn world_new;
 
 } DfHostApiV27;
 #define DF_COMMAND_PARAMETER_SUBCOMMAND 1u

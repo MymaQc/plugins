@@ -203,69 +203,65 @@ _Static_assert(offsetof(DfWorldRedstoneUpdateInput, after) == 88, "DfWorldRedsto
 _Static_assert(offsetof(DfWorldRedstoneUpdateInput, current_tick) == 104, "DfWorldRedstoneUpdateInput.current_tick ABI offset changed");
 _Static_assert(offsetof(DfWorldRedstoneUpdateInput, cause) == 112, "DfWorldRedstoneUpdateInput.cause ABI offset changed");
 _Static_assert(sizeof(DfWorldCloseInput) == 8, "DfWorldCloseInput ABI layout changed");
-_Static_assert(sizeof(DfWorldOpenSpecV1) == 80, "DfWorldOpenSpecV1 ABI layout changed");
-_Static_assert(offsetof(DfWorldOpenSpecV1, provider_path) == 8, "DfWorldOpenSpecV1.provider_path ABI offset changed");
-_Static_assert(offsetof(DfWorldOpenSpecV1, fixed_time) == 40, "DfWorldOpenSpecV1.fixed_time ABI offset changed");
-_Static_assert(offsetof(DfWorldOpenSpecV1, open_mode) == 48, "DfWorldOpenSpecV1.open_mode ABI offset changed");
-_Static_assert(offsetof(DfWorldOpenSpecV1, read_only) == 76, "DfWorldOpenSpecV1.read_only ABI offset changed");
 _Static_assert(sizeof(DfBlockRange) == 8, "DfBlockRange ABI layout changed");
 _Static_assert(sizeof(DfEntityHandleId) == 16, "DfEntityHandleId ABI layout changed");
 _Static_assert(sizeof(DfUuid) == 16, "DfUuid ABI layout changed");
-_Static_assert(sizeof(DfHostApiV27) == 832, "DfHostApiV27 ABI layout changed");
-_Static_assert(DF_HOST_ABI_VERSION == 40u, "host ABI version changed without bridge review");
+_Static_assert(sizeof(DfHostApiV27) == 816, "DfHostApiV27 ABI layout changed");
+_Static_assert(DF_HOST_ABI_VERSION == 41u, "host ABI version changed without bridge review");
 _Static_assert(offsetof(DfHostApiV27, player_skin_open) == 80, "DfHostApiV27.player_skin_open ABI offset changed");
 _Static_assert(offsetof(DfHostApiV27, player_skin_set) == 112, "DfHostApiV27.player_skin_set ABI offset changed");
 _Static_assert(offsetof(DfHostApiV27, inventory_size) == 120, "DfHostApiV27.inventory_size ABI offset changed");
 _Static_assert(offsetof(DfHostApiV27, player_held_slot_set) == 200, "DfHostApiV27.player_held_slot_set ABI offset changed");
 _Static_assert(offsetof(DfHostApiV27, player_scoreboard) == 208, "DfHostApiV27.player_scoreboard ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, player_heal) == 400, "DfHostApiV27.player_heal ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, server_players_open) == 744, "DfHostApiV27.server_players_open ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, server_player_by_name) == 776, "DfHostApiV27.server_player_by_name ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, server_max_player_count) == 784, "DfHostApiV27.server_max_player_count ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, player_xuid) == 808, "DfHostApiV27.player_xuid ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, server_world) == 816, "DfHostApiV27.server_world ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, world_schedule) == 824, "DfHostApiV27.world_schedule ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, player_hurt) == 408, "DfHostApiV27.player_hurt ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, skin_snapshot_info) == 416, "DfHostApiV27.skin_snapshot_info ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, skin_snapshot_set) == 424, "DfHostApiV27.skin_snapshot_set ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, world_open_spec) == 432, "DfHostApiV27.world_open_spec ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, player_transfer) == 440, "DfHostApiV27.player_transfer ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, player_effects) == 448, "DfHostApiV27.player_effects ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, player_effects_clear) == 456, "DfHostApiV27.player_effects_clear ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, world_liquid_get) == 464, "DfHostApiV27.world_liquid_get ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, world_range) == 480, "DfHostApiV27.world_range ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, world_block_loaded) == 488, "DfHostApiV27.world_block_loaded ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, world_blocks_within_open) == 496, "DfHostApiV27.world_blocks_within_open ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, world_blocks_within_next) == 504, "DfHostApiV27.world_blocks_within_next ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, world_blocks_within_close) == 512, "DfHostApiV27.world_blocks_within_close ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, world_highest_light_blocker) == 520, "DfHostApiV27.world_highest_light_blocker ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, world_highest_block) == 528, "DfHostApiV27.world_highest_block ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, world_light) == 536, "DfHostApiV27.world_light ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, world_sky_light) == 544, "DfHostApiV27.world_sky_light ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, world_liquid_set) == 552, "DfHostApiV27.world_liquid_set ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, world_block_update_schedule) == 560, "DfHostApiV27.world_block_update_schedule ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, world_biome_get) == 568, "DfHostApiV27.world_biome_get ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, world_biome_set) == 576, "DfHostApiV27.world_biome_set ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, world_temperature) == 584, "DfHostApiV27.world_temperature ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, world_raining_at) == 592, "DfHostApiV27.world_raining_at ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, world_snowing_at) == 600, "DfHostApiV27.world_snowing_at ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, world_thundering_at) == 608, "DfHostApiV27.world_thundering_at ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, world_raining) == 616, "DfHostApiV27.world_raining ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, world_thundering) == 624, "DfHostApiV27.world_thundering ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, world_current_tick) == 632, "DfHostApiV27.world_current_tick ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, player_held_items_open) == 640, "DfHostApiV27.player_held_items_open ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, entity_player) == 648, "DfHostApiV27.entity_player ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, world_current) == 656, "DfHostApiV27.world_current ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, world_entity_iterator_open) == 664, "DfHostApiV27.world_entity_iterator_open ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, world_entity_iterator_next) == 672, "DfHostApiV27.world_entity_iterator_next ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, world_entity_iterator_close) == 680, "DfHostApiV27.world_entity_iterator_close ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, entity_handle) == 688, "DfHostApiV27.entity_handle ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, entity_handle_entity) == 696, "DfHostApiV27.entity_handle_entity ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, entity_handle_uuid) == 704, "DfHostApiV27.entity_handle_uuid ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, entity_handle_closed) == 712, "DfHostApiV27.entity_handle_closed ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, entity_handle_close) == 720, "DfHostApiV27.entity_handle_close ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, world_entity_remove) == 728, "DfHostApiV27.world_entity_remove ABI offset changed");
-_Static_assert(offsetof(DfHostApiV27, world_entity_add) == 736, "DfHostApiV27.world_entity_add ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, player_heal) == 384, "DfHostApiV27.player_heal ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, server_players_open) == 720, "DfHostApiV27.server_players_open ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, server_player_by_name) == 752, "DfHostApiV27.server_player_by_name ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, server_max_player_count) == 760, "DfHostApiV27.server_max_player_count ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, player_xuid) == 784, "DfHostApiV27.player_xuid ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, server_world) == 792, "DfHostApiV27.server_world ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, world_schedule) == 800, "DfHostApiV27.world_schedule ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, world_new) == 808, "DfHostApiV27.world_new ABI offset changed");
+_Static_assert(sizeof(DfWorldConfigV1) == 56, "DfWorldConfigV1 ABI layout changed");
+_Static_assert(offsetof(DfHostApiV27, player_hurt) == 392, "DfHostApiV27.player_hurt ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, skin_snapshot_info) == 400, "DfHostApiV27.skin_snapshot_info ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, skin_snapshot_set) == 408, "DfHostApiV27.skin_snapshot_set ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, player_transfer) == 416, "DfHostApiV27.player_transfer ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, player_effects) == 424, "DfHostApiV27.player_effects ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, player_effects_clear) == 432, "DfHostApiV27.player_effects_clear ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, world_liquid_get) == 440, "DfHostApiV27.world_liquid_get ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, world_range) == 456, "DfHostApiV27.world_range ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, world_block_loaded) == 464, "DfHostApiV27.world_block_loaded ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, world_blocks_within_open) == 472, "DfHostApiV27.world_blocks_within_open ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, world_blocks_within_next) == 480, "DfHostApiV27.world_blocks_within_next ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, world_blocks_within_close) == 488, "DfHostApiV27.world_blocks_within_close ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, world_highest_light_blocker) == 496, "DfHostApiV27.world_highest_light_blocker ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, world_highest_block) == 504, "DfHostApiV27.world_highest_block ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, world_light) == 512, "DfHostApiV27.world_light ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, world_sky_light) == 520, "DfHostApiV27.world_sky_light ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, world_liquid_set) == 528, "DfHostApiV27.world_liquid_set ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, world_block_update_schedule) == 536, "DfHostApiV27.world_block_update_schedule ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, world_biome_get) == 544, "DfHostApiV27.world_biome_get ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, world_biome_set) == 552, "DfHostApiV27.world_biome_set ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, world_temperature) == 560, "DfHostApiV27.world_temperature ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, world_raining_at) == 568, "DfHostApiV27.world_raining_at ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, world_snowing_at) == 576, "DfHostApiV27.world_snowing_at ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, world_thundering_at) == 584, "DfHostApiV27.world_thundering_at ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, world_raining) == 592, "DfHostApiV27.world_raining ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, world_thundering) == 600, "DfHostApiV27.world_thundering ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, world_current_tick) == 608, "DfHostApiV27.world_current_tick ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, player_held_items_open) == 616, "DfHostApiV27.player_held_items_open ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, entity_player) == 624, "DfHostApiV27.entity_player ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, world_current) == 632, "DfHostApiV27.world_current ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, world_entity_iterator_open) == 640, "DfHostApiV27.world_entity_iterator_open ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, world_entity_iterator_next) == 648, "DfHostApiV27.world_entity_iterator_next ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, world_entity_iterator_close) == 656, "DfHostApiV27.world_entity_iterator_close ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, entity_handle) == 664, "DfHostApiV27.entity_handle ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, entity_handle_entity) == 672, "DfHostApiV27.entity_handle_entity ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, entity_handle_uuid) == 680, "DfHostApiV27.entity_handle_uuid ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, entity_handle_closed) == 688, "DfHostApiV27.entity_handle_closed ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, entity_handle_close) == 696, "DfHostApiV27.entity_handle_close ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, world_entity_remove) == 704, "DfHostApiV27.world_entity_remove ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, world_entity_add) == 712, "DfHostApiV27.world_entity_add ABI offset changed");
 #endif
 
 extern DfStatus bg_go_player_text(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfStringView message);
@@ -308,9 +304,6 @@ extern DfStatus bg_go_inventory_clear(uint64_t context, DfInvocationId invocatio
 extern DfStatus bg_go_player_held_items_set(uint64_t context, DfInvocationId invocation, DfPlayerId player, const DfItemStackViewV3 *main_hand, const DfItemStackViewV3 *off_hand);
 extern DfStatus bg_go_player_held_slot_set(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t slot);
 extern DfStatus bg_go_player_held_items_open(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfItemStackSnapshot *main_hand, DfItemStackSnapshot *off_hand);
-extern DfStatus bg_go_world_lookup(uint64_t context, DfInvocationId invocation, DfStringView name, DfWorldId *world);
-extern DfStatus bg_go_world_open(uint64_t context, DfInvocationId invocation, DfStringView name, uint32_t dimension, DfWorldId *world);
-extern DfStatus bg_go_world_open_spec(uint64_t context, DfInvocationId invocation, DfStringView name, const DfWorldOpenSpecV1 *spec, DfWorldId *world);
 extern DfStatus bg_go_world_name(uint64_t context, DfInvocationId invocation, DfWorldId world, DfStringBuffer *name);
 extern DfStatus bg_go_world_unload(uint64_t context, DfInvocationId invocation, DfWorldId world);
 extern DfStatus bg_go_world_save(uint64_t context, DfInvocationId invocation, DfWorldId world);
@@ -373,6 +366,7 @@ extern DfStatus bg_go_server_player_by_xuid(uint64_t context, DfStringView xuid,
 extern DfStatus bg_go_player_xuid(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfStringBuffer *xuid);
 extern DfStatus bg_go_server_world(uint64_t context, uint32_t dimension, DfWorldId *world);
 extern DfStatus bg_go_world_schedule(uint64_t context, DfWorldId world, uint64_t plugin, uint64_t callback);
+extern DfStatus bg_go_world_new(uint64_t context, const DfWorldConfigV1 *config, DfWorldId *world);
 
 static DfStatus host_player_text(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfStringView message) {
     return bg_go_player_text(context, invocation, player, kind, message);
@@ -476,9 +470,6 @@ static DfStatus host_inventory_clear(uint64_t context, DfInvocationId invocation
 static DfStatus host_player_held_items_set(uint64_t context, DfInvocationId invocation, DfPlayerId player, const DfItemStackViewV3 *main_hand, const DfItemStackViewV3 *off_hand) { return bg_go_player_held_items_set(context, invocation, player, main_hand, off_hand); }
 static DfStatus host_player_held_slot_set(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t slot) { return bg_go_player_held_slot_set(context, invocation, player, slot); }
 static DfStatus host_player_held_items_open(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfItemStackSnapshot *main_hand, DfItemStackSnapshot *off_hand) { return bg_go_player_held_items_open(context, invocation, player, main_hand, off_hand); }
-static DfStatus host_world_lookup(uint64_t context, DfInvocationId invocation, DfStringView name, DfWorldId *world) { return bg_go_world_lookup(context, invocation, name, world); }
-static DfStatus host_world_open(uint64_t context, DfInvocationId invocation, DfStringView name, uint32_t dimension, DfWorldId *world) { return bg_go_world_open(context, invocation, name, dimension, world); }
-static DfStatus host_world_open_spec(uint64_t context, DfInvocationId invocation, DfStringView name, const DfWorldOpenSpecV1 *spec, DfWorldId *world) { return bg_go_world_open_spec(context, invocation, name, spec, world); }
 static DfStatus host_world_name(uint64_t context, DfInvocationId invocation, DfWorldId world, DfStringBuffer *name) { return bg_go_world_name(context, invocation, world, name); }
 static DfStatus host_world_unload(uint64_t context, DfInvocationId invocation, DfWorldId world) { return bg_go_world_unload(context, invocation, world); }
 static DfStatus host_world_save(uint64_t context, DfInvocationId invocation, DfWorldId world) { return bg_go_world_save(context, invocation, world); }
@@ -541,6 +532,7 @@ static DfStatus host_server_player_by_xuid(uint64_t context, DfStringView xuid, 
 static DfStatus host_player_xuid(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfStringBuffer *xuid) { return bg_go_player_xuid(context, invocation, player, xuid); }
 static DfStatus host_server_world(uint64_t context, uint32_t dimension, DfWorldId *world) { return bg_go_server_world(context, dimension, world); }
 static DfStatus host_world_schedule(uint64_t context, DfWorldId world, uint64_t plugin, uint64_t callback) { return bg_go_world_schedule(context, world, plugin, callback); }
+static DfStatus host_world_new(uint64_t context, const DfWorldConfigV1 *config, DfWorldId *world) { return bg_go_world_new(context, config, world); }
 
 typedef DfStatus (*RuntimeCreateFn)(const DfRuntimeConfig *, DfRuntime **, uint8_t *, uint64_t);
 typedef void (*RuntimeDestroyFn)(DfRuntime *);
@@ -696,8 +688,6 @@ DfStatus bg_runtime_open(
         .player_scoreboard_remove = host_player_scoreboard_remove,
         .player_form_send = host_player_form_send,
         .player_form_close = host_player_form_close,
-        .world_lookup = host_world_lookup,
-        .world_open = host_world_open,
         .world_name = host_world_name,
         .world_unload = host_world_unload,
         .world_save = host_world_save,
@@ -720,7 +710,6 @@ DfStatus bg_runtime_open(
         .player_hurt = host_player_hurt,
         .skin_snapshot_info = host_skin_snapshot_info,
         .skin_snapshot_set = host_skin_snapshot_set,
-        .world_open_spec = host_world_open_spec,
         .player_transfer = host_player_transfer,
         .player_effects = host_player_effects,
         .player_effects_clear = host_player_effects_clear,
@@ -770,6 +759,7 @@ DfStatus bg_runtime_open(
         .player_xuid = host_player_xuid,
         .server_world = host_server_world,
         .world_schedule = host_world_schedule,
+        .world_new = host_world_new,
     };
     DfRuntimeConfig config = {
         .plugin_directory = {

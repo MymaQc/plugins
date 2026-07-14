@@ -65,9 +65,11 @@ handler signatures, command-interface,
 player-text, player-state, game-mode, effect, form, item, and player-inventory surfaces are generated
 from Dragonfly's Go AST. Generated player state parity currently includes `Food`/`SetFood`,
 `Health`, `MaxHealth`/`SetMaxHealth`, level and progress experience accessors, scale accessors,
-visibility toggles, mobility toggles, and direct `Heal`. Managed MCDB worlds may be looked up or
-opened explicitly, and their AST-generated `Name`, `Spawn`, `SetSpawn`, `Save`, and `Close` methods
-use the same `World` type as handler callbacks. `Player.ChangeWorld` is the deliberately named host
+visibility toggles, mobility toggles, and direct `Heal`. `World.New()` creates a writable in-memory
+world. `World.Config.New()` accepts Dragonfly's dimension and runtime settings, and an
+`MCDB.Config().Open(...)` provider creates a writable, saveable world below the configured worlds
+directory. Their AST-generated `Name`, `Spawn`, `SetSpawn`, `Save`, and `Close` methods use the
+same `World` type as handler callbacks. `Player.ChangeWorld` is the deliberately named host
 extension for safe cross-world movement; Dragonfly's `Transfer` still means another server.
 `World.GameMode` includes Dragonfly's four registered values and exact `GameModeByID`/`GameModeID`
 lookups. `Player.SetGameMode` accepts custom implementations just like Dragonfly, and
@@ -213,12 +215,25 @@ overworld.Schedule(tx =>
     // Runs on the overworld owner with a fresh Dragonfly transaction.
     tx.SetBlock(new Cube.Pos(0, 64, 0), new Block.Stone());
 });
+
+var temporary = World.New();
+var arena = new World.Config
+{
+    Dim = World.Overworld,
+    Provider = new MCDB.Config().Open("arenas/nodebuff"),
+    SaveInterval = TimeSpan.FromMinutes(10),
+    RandomTickSpeed = -1,
+}.New();
 ```
 
 `World.Schedule(Action<World.Tx>)` is the fire-and-forget C# adaptation of Dragonfly's `World.Do`.
 The callback runs once on that world's owner. Its `World.Tx` is borrowed and expires when the
 callback returns; do not retain it or values borrowed through it. Scheduling is rejected once
 server shutdown starts, and accepted callbacks are drained or dropped before plugin unload.
+`World.New()` uses Dragonfly's `NopProvider`, so it is genuinely in-memory. An MCDB provider is
+opened atomically with the world and persists normal `Save()` calls and automatic saves. Provider
+paths are relative to the server's worlds directory; traversal, symlink escapes, and opening the
+same live database twice are rejected. Set `ReadOnly = true` only when writes must be discarded.
 
 Pass the current `World.Tx` when iterating from a callback or command, and pass `null` outside a
 transaction. Iteration is deliberately lazy: a yielded `Player` is valid only inside its current
@@ -237,7 +252,7 @@ Dragonfly field and cause.
 
 Public block, liquid, biome, particle, colour, instrument, sound, and item types come from Dragonfly's Go AST.
 Live registries feed internal generated codecs, so Minecraft identifiers, state NBT, numeric biome
-IDs, particle kinds, and instrument IDs never enter plugin code. Private host ABI 40 preserves the
+IDs, particle kinds, and instrument IDs never enter plugin code. Private host ABI 41 preserves the
 separate “no liquid” result, nullable liquid removal, signed nanosecond scheduling delays,
 biome/weather queries, particle payloads, registered/custom game-mode capabilities, and full
 callback-scoped player snapshots for form responses. Structurally valid form contexts receive

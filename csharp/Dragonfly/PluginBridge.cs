@@ -328,85 +328,81 @@ internal static unsafe class PluginBridge
             return new World.EntityHandle(handle);
         }
 
-        internal static World? LookupManagedWorld(string name)
+        internal static World NewWorld(World.Config config)
         {
+            ArgumentNullException.ThrowIfNull(config);
             var api = Api;
-            if (api is null || api->WorldLookup == null || !TryWorldText(name, 256, out var bytes))
-                return null;
-            fixed (byte* data = bytes)
+            if (api is null || api->WorldNew == null)
+                throw new InvalidOperationException("world creation is unavailable");
+            var dimension = config.Dim switch
             {
+                null => 0u,
+                World.BuiltinDimension value when value.Id <= 2 => value.Id,
+                _ => throw new ArgumentException("dimension is not registered", nameof(config)),
+            };
+            uint providerKind;
+            byte[] providerPath;
+            switch (config.Provider)
+            {
+                case null:
+                case World.NopProvider:
+                    providerKind = 0;
+                    providerPath = [];
+                    break;
+                case MCDB.DB provider when TryWorldText(provider.Directory, 4096, out providerPath):
+                    providerKind = 1;
+                    break;
+                case MCDB.DB:
+                    throw new ArgumentException("MCDB provider path is invalid", nameof(config));
+                default:
+                    throw new ArgumentException("provider is not supported", nameof(config));
+            }
+            var view = new WorldConfigV1
+            {
+                StructSize = (uint)sizeof(WorldConfigV1),
+                Dimension = dimension,
+                ProviderKind = providerKind,
+                ReadOnly = config.ReadOnly ? 1u : 0u,
+                SaveIntervalNanoseconds = DurationNanoseconds(config.SaveInterval, nameof(config.SaveInterval)),
+                ChunkUnloadIntervalNanoseconds = DurationNanoseconds(config.ChunkUnloadInterval, nameof(config.ChunkUnloadInterval)),
+                RandomTickSpeed = config.RandomTickSpeed,
+            };
+            fixed (byte* path = providerPath)
+            {
+                view.ProviderPath = new StringView { Data = path, Length = (ulong)providerPath.Length };
                 WorldId world;
-                var status = api->WorldLookup(
-                    api->Context,
-                    0,
-                    new StringView { Data = data, Length = (ulong)bytes.Length },
-                    &world);
-                return status == Abi.Ok && world.Value != 0 ? new World(0, world) : null;
+                if (api->WorldNew(api->Context, &view, &world) != Abi.Ok || world.Value == 0)
+                    throw new InvalidOperationException("world could not be created");
+                return new World(0, world);
             }
         }
 
-        internal static World? OpenManagedWorld(string name, World.ManagedDimension dimension)
+        private static long DurationNanoseconds(TimeSpan value, string parameter)
         {
-            var api = Api;
-            if (api is null || api->WorldOpen == null ||
-                (uint)dimension > (uint)World.ManagedDimension.End ||
-                !TryWorldText(name, 256, out var bytes))
-                return null;
-            fixed (byte* data = bytes)
-            {
-                WorldId world;
-                var status = api->WorldOpen(
-                    api->Context,
-                    0,
-                    new StringView { Data = data, Length = (ulong)bytes.Length },
-                    (uint)dimension,
-                    &world);
-                return status == Abi.Ok && world.Value != 0 ? new World(0, world) : null;
-            }
+            try { return checked(value.Ticks * 100L); }
+            catch (OverflowException) { throw new ArgumentOutOfRangeException(parameter); }
         }
 
-        internal static World? OpenManagedWorld(string name, World.ManagedOpenSpec spec)
-        {
-            ArgumentNullException.ThrowIfNull(spec);
-            var api = Api;
-            if (api is null || api->WorldOpenSpec == null ||
-                !TryWorldText(name, 256, out var nameBytes) ||
-                !TryWorldText(spec.ProviderPath, 4096, out var providerBytes) ||
-                !TryManagedWorldSpec(spec, out var view))
-                return null;
-            fixed (byte* nameData = nameBytes)
-            fixed (byte* providerData = providerBytes)
-            {
-                view.ProviderPath = new StringView
-                {
-                    Data = providerData,
-                    Length = (ulong)providerBytes.Length,
-                };
-                WorldId world;
-                var status = api->WorldOpenSpec(
-                    api->Context,
-                    0,
-                    new StringView { Data = nameData, Length = (ulong)nameBytes.Length },
-                    &view,
-                    &world);
-                return status == Abi.Ok && world.Value != 0 ? new World(0, world) : null;
-            }
-        }
-
-        internal static string? ManagedWorldName(ulong invocation, WorldId world)
+        internal static string? WorldName(ulong invocation, WorldId world)
         {
             var api = Api;
             if (api is null || api->WorldName == null) return null;
-            const int capacity = 256;
-            byte* data = stackalloc byte[capacity];
-            var output = new StringBuffer { Data = data, Capacity = capacity };
-            if (api->WorldName(api->Context, invocation, world, &output) != Abi.Ok ||
-                output.Length == 0 || output.Length > capacity)
+            StringBuffer probe = default;
+            _ = api->WorldName(api->Context, invocation, world, &probe);
+            if (probe.Length == 0 || probe.Length > int.MaxValue)
                 return null;
-            return Encoding.UTF8.GetString(data, checked((int)output.Length));
+            var data = new byte[checked((int)probe.Length)];
+            fixed (byte* pointer = data)
+            {
+                var output = new StringBuffer { Data = pointer, Capacity = (ulong)data.Length };
+                if (api->WorldName(api->Context, invocation, world, &output) != Abi.Ok ||
+                    output.Length != (ulong)data.Length)
+                    return null;
+            }
+            return Encoding.UTF8.GetString(data);
         }
 
-        internal static Cube.Pos ManagedWorldSpawn(ulong invocation, WorldId world)
+        internal static Cube.Pos WorldSpawn(ulong invocation, WorldId world)
         {
             var api = Api;
             if (api is null || api->WorldSpawnGet == null) return default;
@@ -416,7 +412,7 @@ internal static unsafe class PluginBridge
                 : default;
         }
 
-        internal static void SetManagedWorldSpawn(ulong invocation, WorldId world, Cube.Pos position)
+        internal static void SetWorldSpawn(ulong invocation, WorldId world, Cube.Pos position)
         {
             var api = Api;
             if (api is null || api->WorldSpawnSet == null) return;
@@ -427,14 +423,14 @@ internal static unsafe class PluginBridge
                 new BlockPos { X = position.X(), Y = position.Y(), Z = position.Z() });
         }
 
-        internal static void SaveManagedWorld(ulong invocation, WorldId world)
+        internal static void SaveWorld(ulong invocation, WorldId world)
         {
             var api = Api;
             if (api is null || api->WorldSave == null) return;
             _ = api->WorldSave(api->Context, invocation, world);
         }
 
-        internal static void CloseManagedWorld(ulong invocation, WorldId world)
+        internal static void CloseWorld(ulong invocation, WorldId world)
         {
             var api = Api;
             if (api is null || api->WorldUnload == null) return;
@@ -455,60 +451,6 @@ internal static unsafe class PluginBridge
                 player,
                 world,
                 new Vec3 { X = position.X, Y = position.Y, Z = position.Z });
-        }
-
-        private static bool TryManagedWorldSpec(
-            World.ManagedOpenSpec spec,
-            out WorldOpenSpecV1 view)
-        {
-            view = default;
-            if ((uint)spec.Dimension > (uint)World.ManagedDimension.End ||
-                (uint)spec.OpenMode > (uint)World.ManagedOpenMode.CreateNew ||
-                (uint)spec.Save > (uint)World.ManagedSavePolicy.Manual ||
-                (uint)spec.RandomTicks > (uint)World.ManagedRandomTickPolicy.PerSubchunk ||
-                (uint)spec.Time > (uint)World.ManagedTimePolicy.Fixed ||
-                (uint)spec.Weather > (uint)World.ManagedWeatherPolicy.Clear ||
-                !TryPositiveMilliseconds(spec.ChunkUnloadAfter, out var chunkUnloadMilliseconds))
-                return false;
-
-            ulong saveMilliseconds = 0;
-            var save = spec.ReadOnly ? World.ManagedSavePolicy.Manual : spec.Save;
-            if (save == World.ManagedSavePolicy.Automatic &&
-                !TryPositiveMilliseconds(spec.SaveInterval, out saveMilliseconds))
-                return false;
-
-            var randomTickRate = spec.RandomTicks == World.ManagedRandomTickPolicy.Disabled
-                ? 0
-                : spec.RandomTickRate;
-            if (spec.RandomTicks == World.ManagedRandomTickPolicy.PerSubchunk &&
-                (randomTickRate == 0 || randomTickRate > int.MaxValue))
-                return false;
-
-            view = new WorldOpenSpecV1
-            {
-                StructSize = (uint)sizeof(WorldOpenSpecV1),
-                Dimension = (uint)spec.Dimension,
-                SaveIntervalMilliseconds = saveMilliseconds,
-                ChunkUnloadIntervalMilliseconds = chunkUnloadMilliseconds,
-                FixedTime = spec.Time == World.ManagedTimePolicy.Fixed ? spec.FixedTime : 0,
-                OpenMode = (uint)spec.OpenMode,
-                SavePolicy = (uint)save,
-                RandomTickPolicy = (uint)spec.RandomTicks,
-                RandomTickRate = randomTickRate,
-                TimePolicy = (uint)spec.Time,
-                WeatherPolicy = (uint)spec.Weather,
-                ChunkUnloadPolicy = 0,
-                ReadOnly = spec.ReadOnly ? (byte)1 : (byte)0,
-            };
-            return true;
-        }
-
-        private static bool TryPositiveMilliseconds(TimeSpan duration, out ulong milliseconds)
-        {
-            milliseconds = 0;
-            if (duration.Ticks < TimeSpan.TicksPerMillisecond) return false;
-            milliseconds = checked((ulong)(duration.Ticks / TimeSpan.TicksPerMillisecond));
-            return true;
         }
 
         private static bool TryWorldText(string? value, int maxBytes, out byte[] bytes)
@@ -2393,7 +2335,7 @@ internal static unsafe class PluginBridge
     {
         if (host is null) return Abi.Error;
         var header = (HostHeader*)host;
-        if (header->Version != Abi.HostVersion || header->Size < 832) return Abi.Error;
+        if (header->Version != Abi.HostVersion || header->Size < 816) return Abi.Error;
         Host.Api = (HostApi*)host;
         return Abi.Ok;
     }

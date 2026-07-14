@@ -184,11 +184,16 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    callback completion, or runtime shutdown.
    `World.Schedule(Action<World.Tx>)` is the current fire-and-forget C# adaptation of Dragonfly's
    owner-scheduled `World.Do`. The generator validates the exact upstream `Do(func(*Tx)) *Task`
-   shape. The private ABI 40 callback trampoline keeps delegates plugin-owned, executes them on the
+   shape. The private ABI 41 callback trampoline keeps delegates plugin-owned, executes them on the
    selected world owner with a fresh borrowed transaction, and removes them on execution or task
    failure. Framework teardown stops admission and drains every accepted callback before closing
    the NativeAOT runtime. Managed `Task` cancellation, waiting, and completion callbacks remain a
-   later slice; the public method does not pretend to expose those semantics yet.
+   later slice; the public method does not pretend to expose those semantics yet. `World.New()`
+   constructs Dragonfly's in-memory NOP-provider world. `World.Config.New()` transports the
+   selected upstream config fields atomically; `MCDB.Config.Open(path)` selects a writable,
+   persistent provider rooted below the configured worlds directory. Created worlds are owned and
+   closed by the framework, but internal registry keys and provider handles never enter plugin
+   code. `World.Name()` remains Dragonfly's display name.
    The sound slice AST-generates all 87 concrete `server/world/sound` structs as `Sound.*` values
    implementing `World.Sound`. `HandleSound` materialises their exported bool, scalar, block, item,
    liquid, instrument, disc, horn, pitch, and stage fields. Bucket sounds preserve the exact typed
@@ -202,20 +207,21 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
 The combat callback foundation is present: hurt, attack, death, respawn, typed damage sources,
 mutable damage/knockback/hit delay, live entity transforms, player kinematics, and direct player
 teleportation and healing. `OnJoin` supplies the missing lobby-entry lifecycle without claiming to
-be an upstream handler method. The host's explicit managed-MCDB extension now covers lookup/open,
-world spawn, save/close, and safe `Player.ChangeWorld`; exact `World` instance methods remain
-AST-generated. Stack values and typed enchantments cover selector metadata and Protection kits.
+be an upstream handler method. Dragonfly-shaped `World.New()`, `World.Config.New()`, and
+`MCDB.Config.Open()` cover in-memory and writable persistent world construction; world spawn,
+save/close, and safe `Player.ChangeWorld` use exact AST-generated `World` methods. Stack values and
+typed enchantments cover selector metadata and Protection kits.
 Direct server-wide lazy player iteration and UUID/name lookup now make global broadcasts and
 online-player resolution possible without a public manager abstraction. Player-backed attack and
 entity-use targets are concrete `Player` values, so killer inventory inspection and refill are
 available too. Functional Nodebuff and Sumo FFA are therefore implementable with the current API.
 
-Remaining raw-Dragonfly parity work is concentrated in world construction and the rest of the
-entity transaction slice:
+Remaining raw-Dragonfly parity work is concentrated in the rest of the entity transaction slice
+and advanced world construction:
 
 - `EntitiesWithin`, player-capable raw handle transfer, and the remaining entity transaction methods;
-- arbitrary Dragonfly `World.Config`, provider, generator, and entity-type construction beyond the
-  bounded managed-MCDB bootstrap extension.
+- custom providers, generators, and entity-type construction beyond the current NOP/MCDB
+  `World.Config` surface.
 
 Dragonfly's `HandleTransfer` remains a transfer to another server address. It must not be reused or
 documented as cross-world movement.

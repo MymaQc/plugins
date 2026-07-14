@@ -229,12 +229,8 @@ type recordingHost struct {
 	inventoryAdds      []ItemStack
 	forms              []PlayerForm
 	formClosed         bool
-	worldOpened        string
-	worldDimension     WorldDimension
-	worldOpenSpec      WorldOpenSpec
+	worldConfigs       []WorldConfig
 	worldID            WorldID
-	worldLookup        string
-	worldLookupOK      bool
 	worldName          string
 	worldBlock         WorldBlock
 	worldBlockOK       bool
@@ -439,22 +435,23 @@ func (h *recordingHost) SetHeldItems(InvocationID, PlayerID, ItemStack, ItemStac
 	return true
 }
 func (h *recordingHost) SetHeldSlot(InvocationID, PlayerID, uint32) bool { return true }
-func (h *recordingHost) OpenWorld(_ InvocationID, name string, dimension WorldDimension) (WorldID, bool) {
-	h.worldOpened, h.worldDimension = name, dimension
-	return h.worldID, h.worldID != 0
-}
-func (h *recordingHost) OpenWorldSpec(_ InvocationID, name string, spec WorldOpenSpec) (WorldID, bool) {
-	h.worldOpened, h.worldOpenSpec = name, spec
-	return h.worldID, h.worldID != 0
-}
-func (h *recordingHost) WorldByName(_ InvocationID, name string) (WorldID, bool) {
-	h.worldLookup = name
-	return h.worldID, h.worldLookupOK && h.worldID != 0
+func (h *recordingHost) CreateWorld(config WorldConfig) (WorldID, bool) {
+	h.worldConfigs = append(h.worldConfigs, config)
+	if h.worldID == 0 {
+		return 0, false
+	}
+	if config.Provider == WorldProviderNop {
+		return h.worldID - 1, true
+	}
+	return h.worldID, true
 }
 func (h *recordingHost) CurrentWorld(_ InvocationID) (WorldID, bool) {
 	return h.worldID, h.worldID != 0
 }
 func (h *recordingHost) WorldName(_ InvocationID, id WorldID) (string, bool) {
+	if h.worldID != 0 && id == h.worldID-1 {
+		return "World", true
+	}
 	return h.worldName, id == h.worldID && h.worldName != ""
 }
 func (h *recordingHost) WorldBlock(_ InvocationID, id WorldID, position BlockPos) (WorldBlock, bool) {
