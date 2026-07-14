@@ -482,6 +482,21 @@ func (p *Players) PlayerKinematics(invocation native.InvocationID, id native.Pla
 	})
 }
 
+// EntityPlayer materializes an exact registered player entity as a fresh
+// transaction-safe player snapshot.
+func (p *Players) EntityPlayer(invocation native.InvocationID, id native.EntityID) (native.PlayerSnapshot, bool) {
+	playerID := native.PlayerID{UUID: id.UUID, Generation: id.Generation}
+	return readPlayer(p, invocation, playerID, func(connected *player.Player) native.PlayerSnapshot {
+		position := connected.Position()
+		return native.PlayerSnapshot{
+			Player:              playerID,
+			Name:                connected.Name(),
+			LatencyMilliseconds: uint64(max(connected.Latency().Milliseconds(), 0)),
+			Position:            native.Vec3{X: position.X(), Y: position.Y(), Z: position.Z()},
+		}
+	})
+}
+
 func (p *Players) SetPlayerState(invocation native.InvocationID, id native.PlayerID, kind native.PlayerStateKind, value native.PlayerStateValue) bool {
 	changed, ok := readPlayer(p, invocation, id, func(connected *player.Player) bool {
 		return setPlayerState(connected, kind, value)

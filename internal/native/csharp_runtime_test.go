@@ -1441,8 +1441,13 @@ func TestCSharpRuntimeReflectedPlayerHandlers(t *testing.T) {
 	}
 
 	target := EntityID{UUID: [16]byte{0x44}, Generation: 9}
+	host.entityPlayer = PlayerSnapshot{
+		Player: PlayerID{UUID: target.UUID, Generation: target.Generation},
+		Name:   "TargetPlayer", LatencyMilliseconds: 23,
+		Position: Vec3{X: 4, Y: 65, Z: 8},
+	}
 	host.entityState = EntityState{
-		Type: "minecraft:zombie", Position: Vec3{X: 4, Y: 65, Z: 8},
+		Type: "minecraft:player", Position: Vec3{X: 4, Y: 65, Z: 8},
 		Rotation: Rotation{Yaw: 90, Pitch: -15},
 	}
 	allowed("item use on entity", func() (bool, error) {
@@ -1455,8 +1460,9 @@ func TestCSharpRuntimeReflectedPlayerHandlers(t *testing.T) {
 		attack.KnockbackHeight != 0 || !attack.Critical {
 		t.Fatalf("attack output=%+v error=%v", attack, err)
 	}
-	if host.entityStateID != target {
-		t.Fatalf("event entity state read used %#v, want %#v", host.entityStateID, target)
+	if host.entityPlayerID != target || host.entityPlayerCalls != 2 {
+		t.Fatalf("event player resolution used %#v %d times, want %#v twice",
+			host.entityPlayerID, host.entityPlayerCalls, target)
 	}
 	host.entityState.Position.X = math.NaN()
 	closeInvocation := next()

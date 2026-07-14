@@ -147,6 +147,7 @@ public sealed class KitchenSink : Plugin
 
     public override void HandleItemUseOnEntity(Player.Context ctx, World.Entity entity)
     {
+        if (entity is Player target) _ = target.Name();
         if (!Finite(entity.Position()) || !Finite(entity.Rotation()))
         {
             entity.Close();
@@ -169,7 +170,8 @@ public sealed class KitchenSink : Plugin
     {
         force = Math.Max(0, force);
         height = Math.Max(0, height);
-        _ = (entity, critical);
+        if (entity is Player target) _ = target.Name();
+        _ = critical;
     }
     public override void HandleExperienceGain(Player.Context ctx, ref int amount) => amount = Math.Max(0, amount);
 

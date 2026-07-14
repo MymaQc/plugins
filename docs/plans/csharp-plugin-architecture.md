@@ -64,7 +64,7 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    plugins never handle identifiers, NBT, numeric biome IDs, world handles, iterator handles, or
    host errors. `Liquid` preserves Dragonfly's `(Liquid, bool)` result, and passing `null` to
    `SetLiquid` removes the liquid. Host
-   ABI 32 transports that distinction, signed `time.Duration` nanoseconds, private biome IDs,
+   ABI 33 transports that distinction, signed `time.Duration` nanoseconds, private biome IDs,
    particles, registered/custom game-mode capabilities, and the transaction owner's current tick
    without exposing them publicly. Form response callbacks additionally receive a borrowed full
    player snapshot, and ownership transfer guarantees exactly one response or drop callback.
@@ -121,7 +121,7 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    `SetHeldItems`, and `SetHeldSlot`; `Inventory.Value` exposes `Size`, `Item`, `SetItem`, and
    `AddItem`. C# setters return `void` as the chosen language adaptation, and invalid slots
    throw `ArgumentOutOfRangeException`; host statuses never enter the public API. The existing
-   ABI 32 includes one atomic held-item pair snapshot, so `HeldItems` observes the same player state
+   ABI 33 includes one atomic held-item pair snapshot, so `HeldItems` observes the same player state
    with one host read. Main and ender-chest inventory sizes are read from the live Dragonfly
    inventory, preserving custom `player.Config` sizes. Bounded open/read/close item snapshots preserve damage, unbreakable state, anvil cost, custom
    names, lore, item NBT, plugin values, and enchantments internally. `Stack.WithValue`, `Value`,
@@ -136,7 +136,7 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    value methods, and player method signatures from Dragonfly's Go AST, then validates all 28
    built-ins against the live registry. C# exposes `Effect.Value`, registered `Type`/`LastingType`
    values, all five constructors, `ResultingColour`, `ByID`/`ID`, and the four player effect methods.
-   ABI 32 transports signed nanosecond duration, level, potency, ambient/particle/infinite flags, and
+   ABI 33 transports signed nanosecond duration, level, potency, ambient/particle/infinite flags, and
    tick. C# `TimeSpan` has 100 ns precision and rejects snapshots outside that precision instead of
    truncating them. Re-adding a snapshot is bounded to one million elapsed ticks because Dragonfly
    exposes `Tick` but no constructor or setter for it. Pending initial instant-effect potency is
@@ -147,8 +147,10 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    generates Dragonfly's exact `World.Entity` interface (`Close`, `H`, `Position`, `Rotation`)
    from `server/world/entity.go`. Handler entities are live host-backed values, not public ID
    tokens; `EntityHandle` retains stable identity without conflating handle closure with entity
-   despawning. `Player` implements `World.Entity`, as it does in
-   Dragonfly. Entity IDs, generations, state buffers, and host status codes remain private.
+   despawning. Player-backed entity handles resolve to the concrete `Player` type, preserving
+   `entity is Player` checks and `Player.Name()` in attack and entity-use handlers. `Player`
+   implements `World.Entity`, as it does in Dragonfly. Entity IDs, generations, state buffers, and
+   host status codes remain private.
    Next entity slices add the remaining `EntityHandle` surface, `entity.Ent` capabilities,
    transaction add/remove/list methods, then plugin-defined entity types and callbacks.
 9. Convert practice-core and expand parity tests against Dragonfly.
@@ -166,7 +168,6 @@ Remaining raw-Dragonfly parity work is concentrated in the world/entity transact
 
 - `Tx.World`, lazy entity/player iteration, and reusable-handle `AddEntity`, `AddEntityAt`, and
   `RemoveEntity` semantics;
-- concrete player identity/name resolution for attacked entity handles;
 - arbitrary Dragonfly `World.Config`, provider, generator, and entity-type construction beyond the
   bounded managed-MCDB bootstrap extension.
 
@@ -211,8 +212,8 @@ The same one-file plugin overrides the host `OnJoin` lifecycle extension and all
 `Player.Handler` methods; mutable damage, healing,
 immunity, keep-inventory, respawn, skin, knockback, transfer, command arguments, drops, pickup,
 experience, page, and reminder values traverse the real private ABI.
-Its entity-use handler reads the target's live position and rotation and checks its stable handle,
-covering the generated `World.Entity` foundation without exposing the private entity ID.
+Its attack and entity-use handlers preserve concrete player targets, read `Player.Name()`, inspect
+live position/rotation, and check the stable handle without exposing private entity or player IDs.
 `/kitchen form` exercises reflected menu, custom, and modal forms, every built-in element,
 submitted values, closers, and nested sends. `/kitchen raw-form` exercises the open `Form.Value`
 contract plus public element/menu-element JSON marshalling.

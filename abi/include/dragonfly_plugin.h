@@ -9,8 +9,8 @@ extern "C" {
 #endif
 
 #define DF_ABI_VERSION 7u
-// Version 32 adds exact player displacement and one player-kinematics snapshot.
-#define DF_HOST_ABI_VERSION 32u
+// Version 33 adds exact entity-to-player materialization.
+#define DF_HOST_ABI_VERSION 33u
 #define DF_STATUS_OK 0
 #define DF_STATUS_ERROR 1
 
@@ -324,6 +324,7 @@ typedef struct { uint32_t kind; uint32_t data; int32_t integer; uint32_t flags; 
 typedef struct { DfStringView text; DfStringView subtitle; DfStringView action_text; uint64_t fade_in_milliseconds; uint64_t duration_milliseconds; uint64_t fade_out_milliseconds; } DfTitleView;
 typedef struct { DfStringView name; const DfStringView *lines; uint64_t line_count; uint8_t padding; uint8_t descending; } DfScoreboardView;
 typedef struct { DfPlayerId player; DfStringView name; uint64_t latency_milliseconds; DfVec3 position; } DfPlayerSnapshot;
+typedef struct { DfPlayerId player; DfStringBuffer name; uint64_t latency_milliseconds; DfVec3 position; } DfPlayerSnapshotBuffer;
 /* The snapshot and its name are borrowed for the duration of the callback. */
 typedef DfStatus (*DfFormResponseFn)(void *callback_context, DfInvocationId invocation, const DfPlayerSnapshot *submitter, uint32_t outcome, DfStringView response_json);
 typedef void (*DfFormDropFn)(void *callback_context);
@@ -420,6 +421,7 @@ typedef DfStatus (*DfHostWorldEntitySpawnFn)(uint64_t context, DfInvocationId in
 typedef DfStatus (*DfHostWorldEntitiesFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, DfEntityIdBuffer *output);
 typedef DfStatus (*DfHostWorldPlayersFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, DfPlayerIdBuffer *output);
 typedef DfStatus (*DfHostEntityStateFn)(uint64_t context, DfInvocationId invocation, DfEntityId entity, DfEntityState *state);
+typedef DfStatus (*DfHostEntityPlayerFn)(uint64_t context, DfInvocationId invocation, DfEntityId entity, DfPlayerSnapshotBuffer *output);
 typedef DfStatus (*DfHostEntityTeleportFn)(uint64_t context, DfInvocationId invocation, DfEntityId entity, DfVec3 position);
 typedef DfStatus (*DfHostEntityVelocitySetFn)(uint64_t context, DfInvocationId invocation, DfEntityId entity, DfVec3 velocity);
 typedef DfStatus (*DfHostEntityNameTagSetFn)(uint64_t context, DfInvocationId invocation, DfEntityId entity, DfStringView name_tag);
@@ -512,6 +514,7 @@ typedef struct {
     DfHostWorldWeatherFn world_thundering;
     DfHostWorldCurrentTickFn world_current_tick;
     DfHostPlayerHeldItemsOpenFn player_held_items_open;
+    DfHostEntityPlayerFn entity_player;
 
 } DfHostApiV27;
 #define DF_COMMAND_PARAMETER_SUBCOMMAND 1u

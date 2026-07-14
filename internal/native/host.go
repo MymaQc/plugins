@@ -457,6 +457,7 @@ type Host interface {
 	WorldEntities(InvocationID, WorldID) ([]EntityID, bool)
 	WorldPlayers(InvocationID, WorldID) ([]PlayerID, bool)
 	EntityState(InvocationID, EntityID) (EntityState, bool)
+	EntityPlayer(InvocationID, EntityID) (PlayerSnapshot, bool)
 	TeleportEntity(InvocationID, EntityID, Vec3) bool
 	SetEntityVelocity(InvocationID, EntityID, Vec3) bool
 	SetEntityNameTag(InvocationID, EntityID, string) bool
@@ -590,6 +591,9 @@ func (noopHost) WorldEntities(InvocationID, WorldID) ([]EntityID, bool) { return
 func (noopHost) WorldPlayers(InvocationID, WorldID) ([]PlayerID, bool)  { return nil, false }
 func (noopHost) EntityState(InvocationID, EntityID) (EntityState, bool) {
 	return EntityState{}, false
+}
+func (noopHost) EntityPlayer(InvocationID, EntityID) (PlayerSnapshot, bool) {
+	return PlayerSnapshot{}, false
 }
 func (noopHost) TeleportEntity(InvocationID, EntityID, Vec3) bool     { return false }
 func (noopHost) SetEntityVelocity(InvocationID, EntityID, Vec3) bool  { return false }

@@ -5,7 +5,7 @@ namespace Dragonfly.Native;
 public static class Abi
 {
     public const uint PluginVersion = 7;
-    public const uint HostVersion = 32;
+    public const uint HostVersion = 33;
     public const int Ok = 0;
     public const int Error = 1;
     public const uint PlayerMoveEvent = 1;
@@ -223,6 +223,15 @@ public unsafe struct PlayerSnapshot
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public unsafe struct PlayerSnapshotBuffer
+{
+    public PlayerId Player;
+    public StringBuffer Name;
+    public ulong LatencyMilliseconds;
+    public Vec3 Position;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 public unsafe struct FormView
 {
     public StringView RequestJson;
@@ -318,6 +327,7 @@ public unsafe struct HostApi
     public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, byte*, int> WorldThundering;
     public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, long*, int> WorldCurrentTick;
     public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, ItemStackSnapshot*, ItemStackSnapshot*, int> PlayerHeldItemsOpen;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, EntityId, PlayerSnapshotBuffer*, int> EntityPlayer;
 }
 
 [StructLayout(LayoutKind.Sequential)]

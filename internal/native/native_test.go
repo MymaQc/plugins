@@ -328,6 +328,9 @@ type recordingHost struct {
 	worldSpawn         BlockPos
 	entityStateID      EntityID
 	entityState        EntityState
+	entityPlayerID     EntityID
+	entityPlayer       PlayerSnapshot
+	entityPlayerCalls  int
 	entitySpawns       []EntitySpawn
 	spawnedEntity      EntityID
 	worldEntityIDs     []EntityID
@@ -606,6 +609,12 @@ func (h *recordingHost) WorldSpawn(_ InvocationID, id WorldID) (BlockPos, bool) 
 func (h *recordingHost) EntityState(_ InvocationID, id EntityID) (EntityState, bool) {
 	h.entityStateID = id
 	return h.entityState, h.entityState.Type != ""
+}
+
+func (h *recordingHost) EntityPlayer(_ InvocationID, id EntityID) (PlayerSnapshot, bool) {
+	h.entityPlayerID = id
+	h.entityPlayerCalls++
+	return h.entityPlayer, h.entityPlayer.Player.Generation != 0
 }
 func (h *recordingHost) SpawnWorldEntity(_ InvocationID, id WorldID, value EntitySpawn) (EntityID, bool) {
 	h.entitySpawns = append(h.entitySpawns, value)

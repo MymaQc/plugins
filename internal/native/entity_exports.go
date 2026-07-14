@@ -14,6 +14,7 @@ const (
 	maxEntityTextBytes = 4 << 10
 	maxEntityTagBytes  = 4 << 10
 	maxEntityTypeBytes = 256
+	maxPlayerNameBytes = 256
 	maxWorldEntities   = 1 << 20
 )
 
@@ -134,6 +135,28 @@ func bg_go_entity_state(context C.uint64_t, invocation C.DfInvocationId, id C.Df
 	}
 	writeSkinBuffer(&output.entity_type, typeBytes)
 	writeSkinBuffer(&output.name_tag, nameTag)
+	return C.DF_STATUS_OK
+}
+
+//export bg_go_entity_player
+func bg_go_entity_player(context C.uint64_t, invocation C.DfInvocationId, id C.DfEntityId, output *C.DfPlayerSnapshotBuffer) C.DfStatus {
+	host, ok := resolveHost(uint64(context))
+	if !ok || output == nil {
+		return C.DF_STATUS_ERROR
+	}
+	snapshot, ok := host.EntityPlayer(InvocationID(invocation), entityID(id))
+	name := []byte(snapshot.Name)
+	if !ok || len(name) == 0 || len(name) > maxPlayerNameBytes || !utf8.Valid(name) {
+		return C.DF_STATUS_ERROR
+	}
+	output.name.len = C.uint64_t(len(name))
+	if !canWriteSkinBuffer(&output.name, name) {
+		return C.DF_STATUS_ERROR
+	}
+	output.player = cPlayerID(snapshot.Player)
+	output.latency_milliseconds = C.uint64_t(snapshot.LatencyMilliseconds)
+	output.position = cEntityVec3(snapshot.Position)
+	writeSkinBuffer(&output.name, name)
 	return C.DF_STATUS_OK
 }
 

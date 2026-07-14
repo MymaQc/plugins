@@ -157,6 +157,38 @@ internal static unsafe class PluginBridge
             return true;
         }
 
+        internal static Player? ResolveEntityPlayer(ulong invocation, EntityId entity)
+        {
+            var api = Api;
+            if (api is null || api->EntityPlayer == null) return null;
+
+            const int maxPlayerNameBytes = 256;
+            byte* name = stackalloc byte[maxPlayerNameBytes];
+            PlayerSnapshotBuffer snapshot = new()
+            {
+                Name = new StringBuffer { Data = name, Capacity = maxPlayerNameBytes },
+            };
+            if (api->EntityPlayer(api->Context, invocation, entity, &snapshot) != Abi.Ok ||
+                snapshot.Player.Generation == 0 || snapshot.Player.Generation != entity.Generation ||
+                snapshot.Name.Data != name || snapshot.Name.Capacity != maxPlayerNameBytes ||
+                snapshot.Name.Length == 0 || snapshot.Name.Length > maxPlayerNameBytes ||
+                !double.IsFinite(snapshot.Position.X) || !double.IsFinite(snapshot.Position.Y) ||
+                !double.IsFinite(snapshot.Position.Z))
+                return null;
+            for (var index = 0; index < 16; index++)
+            {
+                if (snapshot.Player.Bytes[index] != entity.Bytes[index]) return null;
+            }
+            return new Player(
+                snapshot.Player,
+                Utf8(snapshot.Name),
+                TimeSpan.FromMilliseconds(Math.Min(
+                    (double)snapshot.LatencyMilliseconds,
+                    TimeSpan.MaxValue.TotalMilliseconds)),
+                new Vector3(snapshot.Position.X, snapshot.Position.Y, snapshot.Position.Z),
+                invocation: invocation);
+        }
+
         internal static void TransformPlayer(
             ulong invocation,
             PlayerId player,
@@ -1895,7 +1927,7 @@ internal static unsafe class PluginBridge
     {
         if (host is null) return Abi.Error;
         var header = (HostHeader*)host;
-        if (header->Version != Abi.HostVersion || header->Size < 664) return Abi.Error;
+        if (header->Version != Abi.HostVersion || header->Size < 672) return Abi.Error;
         Host.Api = (HostApi*)host;
         return Abi.Ok;
     }
@@ -2508,7 +2540,9 @@ internal static unsafe class PluginBridge
     }
 
     private static World.Entity? EventEntity(EntityId entity, ulong invocation) =>
-        entity.Generation == 0 ? null : World.HostEntityFrom(invocation, entity);
+        entity.Generation == 0
+            ? null
+            : Host.ResolveEntityPlayer(invocation, entity) ?? World.HostEntityFrom(invocation, entity);
 
     private static World.DamageSource EventDamageSource(DamageSourceView source, ulong invocation)
     {

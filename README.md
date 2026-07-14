@@ -69,6 +69,8 @@ extension for safe cross-world movement; Dragonfly's `Transfer` still means anot
 `World.GameMode` includes Dragonfly's four registered values and exact `GameModeByID`/`GameModeID`
 lookups. `Player.SetGameMode` accepts custom implementations just like Dragonfly, and
 `Player.GameMode` returns their capabilities without exposing the transport descriptor.
+Player-backed attack and entity-use targets retain their concrete `Player` type, so normal
+`entity is Player target` checks and `target.Name()` work without public handle adapters.
 Forms use Dragonfly's reflected public-field model through `Form.New`, `NewMenu`, and `NewModal`,
 with typed elements, submitted values, `Closer`, and callback-owned `World.Tx`. `Form.Value`
 remains open for custom implementations, matching Dragonfly's public `form.Form` interface.
@@ -172,7 +174,7 @@ Dragonfly iterator and closes it on exhaustion, early exit, or callback completi
 
 Public block, liquid, biome, particle, colour, instrument, and item types come from Dragonfly's Go AST.
 Live registries feed internal generated codecs, so Minecraft identifiers, state NBT, numeric biome
-IDs, particle kinds, and instrument IDs never enter plugin code. Private host ABI 32 preserves the
+IDs, particle kinds, and instrument IDs never enter plugin code. Private host ABI 33 preserves the
 separate “no liquid” result, nullable liquid removal, signed nanosecond scheduling delays,
 biome/weather queries, particle payloads, registered/custom game-mode capabilities, and full
 callback-scoped player snapshots for form responses. Structurally valid form contexts receive
@@ -181,7 +183,7 @@ capability descriptors, and ABI errors also remain private transport details.
 
 The generated effect slice exposes all 28 registered Dragonfly effects, `Effect.Value`, the five
 constructors, value methods, colour mixing, registry lookup, and `Player.AddEffect`, `RemoveEffect`,
-`Effect`, and `Effects`. ABI 32 carries effect duration, potency, ambient/particle/infinite flags,
+`Effect`, and `Effects`. ABI 33 carries effect duration, potency, ambient/particle/infinite flags,
 and the current tick; C# exposes duration at `TimeSpan`'s 100 ns precision. Custom effect callbacks,
 registration, and concrete effect-specific multiplier methods wait for the entity and damage-source
 slices; no identifier-based fallback is exposed.
