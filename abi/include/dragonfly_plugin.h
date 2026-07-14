@@ -9,7 +9,7 @@ extern "C" {
 #endif
 
 #define DF_ABI_VERSION 4u
-#define DF_HOST_ABI_VERSION 19u
+#define DF_HOST_ABI_VERSION 20u
 #define DF_STATUS_OK 0
 #define DF_STATUS_ERROR 1
 
@@ -186,6 +186,7 @@ typedef struct { uint32_t kind; uint32_t data; int32_t integer; uint32_t flags; 
 #define DF_PLAYER_STATE_IMMOBILE 10u
 #define DF_PLAYER_OPERATION_HEAL 0u
 #define DF_PLAYER_OPERATION_HURT 1u
+#define DF_PLAYER_OPERATION_EXPERIENCE 2u
 #define DF_EFFECT_SPEED 1
 #define DF_EFFECT_SLOWNESS 2
 #define DF_EFFECT_HASTE 3
@@ -335,6 +336,8 @@ typedef DfStatus (*DfHostPlayerTransformFn)(uint64_t context, DfInvocationId inv
 typedef DfStatus (*DfHostPlayerRotationFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfRotation *rotation);
 typedef DfStatus (*DfHostPlayerStateSetFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfPlayerStateValue value);
 typedef DfStatus (*DfHostPlayerStateGetFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfPlayerStateValue *value);
+typedef DfStatus (*DfHostPlayerExperienceSetFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, int32_t level, double progress);
+
 typedef DfStatus (*DfHostPlayerHealFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, double health, const DfHealingSourceView *source, DfPlayerHealResult *result);
 typedef DfStatus (*DfHostPlayerHurtFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, double damage, const DfDamageSourceView *source, DfPlayerHurtResult *result);
 typedef DfStatus (*DfHostPlayerEffectFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t operation, DfEffectView effect);
@@ -449,7 +452,9 @@ typedef struct {
     DfHostPlayerEffectsFn player_effects;
     DfHostPlayerEffectsClearFn player_effects_clear;
     DfHostWorldLiquidGetFn world_liquid_get;
-} DfHostApiV19;
+    DfHostPlayerExperienceSetFn player_experience_set;
+
+} DfHostApiV20;
 #define DF_COMMAND_PARAMETER_SUBCOMMAND 1u
 #define DF_COMMAND_PARAMETER_ENUM 2u
 #define DF_COMMAND_PARAMETER_STRING 3u
@@ -962,7 +967,7 @@ typedef DfStatus (*DfPluginEntityTypeAtFn)(void *instance, uint64_t index, DfEnt
 typedef DfStatus (*DfPluginHandleEntityFn)(void *instance, uint64_t local_type, uint32_t operation, uint64_t entity_instance, const void *input, void *state);
 typedef DfStatus (*DfHandleCommandFn)(void *instance, uint64_t command, const DfCommandInput *input, DfCommandState *state);
 typedef DfStatus (*DfCommandEnumOptionsFn)(void *instance, uint64_t command, uint64_t overload, uint64_t parameter, const DfCommandEnumContext *context, DfStringBuffer *output);
-typedef DfStatus (*DfPluginSetHostFn)(void *instance, const DfHostApiV19 *host);
+typedef DfStatus (*DfPluginSetHostFn)(void *instance, const DfHostApiV20 *host);
 typedef void (*DfPluginDestroyFn)(void *instance);
 
 typedef struct {
@@ -985,7 +990,7 @@ typedef struct {
 typedef const DfPluginApiV4 *(*DfPluginEntryV4Fn)(void);
 
 typedef struct DfRuntime DfRuntime;
-typedef struct { DfStringView plugin_directory; const DfHostApiV19 *host; } DfRuntimeConfig;
+typedef struct { DfStringView plugin_directory; const DfHostApiV20 *host; } DfRuntimeConfig;
 
 DfStatus df_runtime_create(const DfRuntimeConfig *config, DfRuntime **out, uint8_t *error, uint64_t error_capacity);
 DfStatus df_runtime_enable(DfRuntime *runtime, uint8_t *error, uint64_t error_capacity);

@@ -50,7 +50,7 @@ mod tests {
 
     #[test]
     #[cfg(target_pointer_width = "64")]
-    fn host_v19_layout_is_stable() {
+    fn host_v20_layout_is_stable() {
         assert_eq!(size_of::<DfInventoryId>(), 32);
         assert_eq!(size_of::<DfItemStackInfo>(), 80);
         assert_eq!(size_of::<DfItemStackSnapshot>(), 88);
@@ -113,39 +113,40 @@ mod tests {
         assert_eq!(offset_of!(DfWorldOpenSpecV1, fixed_time), 40);
         assert_eq!(offset_of!(DfWorldOpenSpecV1, open_mode), 48);
         assert_eq!(offset_of!(DfWorldOpenSpecV1, read_only), 76);
-        assert_eq!(size_of::<DfHostApiV19>(), 488);
-        assert_eq!(align_of::<DfHostApiV19>(), 8);
-        assert_eq!(offset_of!(DfHostApiV19, context), 8);
-        assert_eq!(offset_of!(DfHostApiV19, player_text), 16);
-        assert_eq!(offset_of!(DfHostApiV19, player_skin_open), 80);
-        assert_eq!(offset_of!(DfHostApiV19, player_skin_set), 112);
-        assert_eq!(offset_of!(DfHostApiV19, inventory_size), 120);
-        assert_eq!(offset_of!(DfHostApiV19, player_held_slot_set), 200);
-        assert_eq!(offset_of!(DfHostApiV19, player_scoreboard), 208);
-        assert_eq!(offset_of!(DfHostApiV19, player_form_close), 232);
-        assert_eq!(offset_of!(DfHostApiV19, world_lookup), 240);
-        assert_eq!(offset_of!(DfHostApiV19, world_spawn_set), 320);
-        assert_eq!(offset_of!(DfHostApiV19, world_entity_spawn), 328);
-        assert_eq!(offset_of!(DfHostApiV19, entity_despawn), 384);
-        assert_eq!(offset_of!(DfHostApiV19, world_particle_add), 392);
-        assert_eq!(offset_of!(DfHostApiV19, world_sound_play), 400);
-        assert_eq!(offset_of!(DfHostApiV19, player_sound_play), 408);
-        assert_eq!(offset_of!(DfHostApiV19, player_heal), 416);
-        assert_eq!(offset_of!(DfHostApiV19, player_hurt), 424);
-        assert_eq!(offset_of!(DfHostApiV19, skin_snapshot_info), 432);
-        assert_eq!(offset_of!(DfHostApiV19, skin_snapshot_set), 440);
-        assert_eq!(offset_of!(DfHostApiV19, world_open_spec), 448);
-        assert_eq!(offset_of!(DfHostApiV19, player_transfer), 456);
-        assert_eq!(offset_of!(DfHostApiV19, player_effects), 464);
-        assert_eq!(offset_of!(DfHostApiV19, player_effects_clear), 472);
-        assert_eq!(offset_of!(DfHostApiV19, world_liquid_get), 480);
+        assert_eq!(size_of::<DfHostApiV20>(), 496);
+        assert_eq!(align_of::<DfHostApiV20>(), 8);
+        assert_eq!(offset_of!(DfHostApiV20, context), 8);
+        assert_eq!(offset_of!(DfHostApiV20, player_text), 16);
+        assert_eq!(offset_of!(DfHostApiV20, player_skin_open), 80);
+        assert_eq!(offset_of!(DfHostApiV20, player_skin_set), 112);
+        assert_eq!(offset_of!(DfHostApiV20, inventory_size), 120);
+        assert_eq!(offset_of!(DfHostApiV20, player_held_slot_set), 200);
+        assert_eq!(offset_of!(DfHostApiV20, player_scoreboard), 208);
+        assert_eq!(offset_of!(DfHostApiV20, player_form_close), 232);
+        assert_eq!(offset_of!(DfHostApiV20, world_lookup), 240);
+        assert_eq!(offset_of!(DfHostApiV20, world_spawn_set), 320);
+        assert_eq!(offset_of!(DfHostApiV20, world_entity_spawn), 328);
+        assert_eq!(offset_of!(DfHostApiV20, entity_despawn), 384);
+        assert_eq!(offset_of!(DfHostApiV20, world_particle_add), 392);
+        assert_eq!(offset_of!(DfHostApiV20, world_sound_play), 400);
+        assert_eq!(offset_of!(DfHostApiV20, player_sound_play), 408);
+        assert_eq!(offset_of!(DfHostApiV20, player_heal), 416);
+        assert_eq!(offset_of!(DfHostApiV20, player_hurt), 424);
+        assert_eq!(offset_of!(DfHostApiV20, skin_snapshot_info), 432);
+        assert_eq!(offset_of!(DfHostApiV20, skin_snapshot_set), 440);
+        assert_eq!(offset_of!(DfHostApiV20, world_open_spec), 448);
+        assert_eq!(offset_of!(DfHostApiV20, player_transfer), 456);
+        assert_eq!(offset_of!(DfHostApiV20, player_effects), 464);
+        assert_eq!(offset_of!(DfHostApiV20, player_effects_clear), 472);
+        assert_eq!(offset_of!(DfHostApiV20, world_liquid_get), 480);
+        assert_eq!(offset_of!(DfHostApiV20, player_experience_set), 488);
     }
 
     #[test]
     #[cfg(target_pointer_width = "64")]
     fn entity_v3_layout_is_stable() {
         assert_eq!(DF_ABI_VERSION, 4);
-        assert_eq!(DF_HOST_ABI_VERSION, 19);
+        assert_eq!(DF_HOST_ABI_VERSION, 20);
         assert_eq!(size_of::<DfEntityTypeDescriptorV2>(), 144);
         assert_eq!(offset_of!(DfEntityTypeDescriptorV2, type_key), 80);
         assert_eq!(offset_of!(DfEntityTypeDescriptorV2, family), 88);

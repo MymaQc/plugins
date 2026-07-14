@@ -134,23 +134,26 @@ func TestValidEntityTypeDefinition(t *testing.T) {
 
 type recordingHost struct {
 	noopHost
-	player            PlayerID
-	textPlayers       []PlayerID
-	texts             []string
-	kinds             []PlayerTextKind
-	title             PlayerTitle
-	scoreboard        PlayerScoreboard
-	scoreboardRemoved bool
-	rotation          Rotation
-	transforms        []PlayerTransformKind
-	vectors           []Vec3
-	yaws              []float64
-	pitches           []float64
-	states            []PlayerStateKind
-	values            []PlayerStateValue
-	state             PlayerStateValue
-	reads             []PlayerStateKind
-	heals             []struct {
+	player             PlayerID
+	textPlayers        []PlayerID
+	texts              []string
+	kinds              []PlayerTextKind
+	title              PlayerTitle
+	scoreboard         PlayerScoreboard
+	scoreboardRemoved  bool
+	rotation           Rotation
+	transforms         []PlayerTransformKind
+	vectors            []Vec3
+	yaws               []float64
+	pitches            []float64
+	states             []PlayerStateKind
+	values             []PlayerStateValue
+	state              PlayerStateValue
+	reads              []PlayerStateKind
+	experienceLevel    int32
+	experienceProgress float64
+	experienceCalls    int
+	heals              []struct {
 		Health float64
 		Source HealingSource
 	}
@@ -270,6 +273,13 @@ func (h *recordingHost) SetPlayerState(_ InvocationID, _ PlayerID, kind PlayerSt
 func (h *recordingHost) PlayerState(_ InvocationID, _ PlayerID, kind PlayerStateKind) (PlayerStateValue, bool) {
 	h.reads = append(h.reads, kind)
 	return h.state, true
+}
+
+func (h *recordingHost) SetPlayerExperience(_ InvocationID, _ PlayerID, level int32, progress float64) bool {
+	h.experienceLevel = level
+	h.experienceProgress = progress
+	h.experienceCalls++
+	return true
 }
 
 func (h *recordingHost) HealPlayer(_ InvocationID, _ PlayerID, health float64, source HealingSource) (float64, bool) {
@@ -749,7 +759,7 @@ func TestPlayerStateHostCalls(t *testing.T) {
 		t.Fatal(err)
 	}
 	id := PlayerID{Generation: 8}
-	for _, arguments := range []string{"gamemode creative", "heal 4", "hurt 3", "food 15", "max-health 40", "experience-level 12", "experience-progress 0.5"} {
+	for _, arguments := range []string{"gamemode creative", "heal 4", "hurt 3", "food 15", "max-health 40", "experience-level 12", "experience-progress 0.5", "experience 30 0.75"} {
 		output, err := runtime.HandleCommand(commandNamed(t, commands, "player").Index, CommandInput{
 			Source: "TestPlayer", SourceKind: CommandSourcePlayer, SourcePlayer: &id,
 			OnlinePlayers: []CommandPlayer{{Player: id, Name: "TestPlayer"}}, Arguments: arguments,
@@ -784,6 +794,9 @@ func TestPlayerStateHostCalls(t *testing.T) {
 	}
 	if host.values[3].Integer != 12 || host.values[4].Number != 0.5 {
 		t.Fatalf("experience values = %+v", host.values[3:])
+	}
+	if host.experienceCalls != 1 || host.experienceLevel != 30 || host.experienceProgress != 0.75 {
+		t.Fatalf("batched experience = %d calls, %d, %f", host.experienceCalls, host.experienceLevel, host.experienceProgress)
 	}
 	if len(host.heals) != 2 || host.heals[0].Health != 4 || host.heals[0].Source.Kind != HealingSourceInstant ||
 		host.heals[1].Health != 2 || host.heals[1].Source.Kind != HealingSourceFood || !host.heals[1].Source.Data {

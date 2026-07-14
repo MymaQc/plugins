@@ -51,7 +51,7 @@ unsafe extern "C" fn record_block(
 fn set_block_sends_typed_identifier_and_properties_to_host() {
     let _host_guard = crate::TEST_HOST_LOCK.lock().unwrap();
     *RECORDED_BLOCK.lock().unwrap() = None;
-    let mut host: dragonfly_plugin_sys::DfHostApiV19 = unsafe { core::mem::zeroed() };
+    let mut host: dragonfly_plugin_sys::DfHostApiV20 = unsafe { core::mem::zeroed() };
     host.context = 17;
     host.world_block_set = Some(record_block);
     unsafe { crate::install_host(&host) };

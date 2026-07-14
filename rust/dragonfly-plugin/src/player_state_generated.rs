@@ -25,4 +25,11 @@ impl Player {
     pub fn invisible(&self) -> bool { self.state(dragonfly_plugin_sys::DF_PLAYER_STATE_INVISIBLE).integer != 0 }
     pub fn set_immobile(&self, value: bool) { self.set_state(dragonfly_plugin_sys::DF_PLAYER_STATE_IMMOBILE, 0.0, value as i64); }
     pub fn immobile(&self) -> bool { self.state(dragonfly_plugin_sys::DF_PLAYER_STATE_IMMOBILE).integer != 0 }
+    /// Performs the `experience` player operation. Invalid values and unavailable hosts are ignored.
+    pub fn set_experience(&self, level: i32, progress: f64) {
+        if level < 0 || !progress.is_finite() || !(0.0..=1.0).contains(&progress) { return; }
+        let Some(host) = host_api() else { return };
+        let Some(call) = host.player_experience_set else { return };
+        let _ = unsafe { call(host.context, current_invocation(), self.raw_id(), level, progress) };
+    }
 }

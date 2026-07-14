@@ -361,6 +361,7 @@ type WorldSound struct {
 
 // Host executes synchronous actions requested by native plugins.
 type Host interface {
+	generatedPlayerOperationsHost
 	SendPlayerText(InvocationID, PlayerID, PlayerTextKind, string) bool
 	SendPlayerTitle(InvocationID, PlayerID, PlayerTitle) bool
 	SendPlayerScoreboard(InvocationID, PlayerID, PlayerScoreboard) bool

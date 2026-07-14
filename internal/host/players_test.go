@@ -278,6 +278,79 @@ func TestPlayersReadsAndChangesState(t *testing.T) {
 	})
 }
 
+func TestPlayersSetExperienceValidatesAndBatches(t *testing.T) {
+	withPlayer(t, func(connected *player.Player) {
+		players := NewPlayers()
+		id := players.Register(connected, 73)
+		invocation, leave := players.BeginInvocation(connected.Tx())
+		defer leave()
+
+		for _, invalid := range []struct {
+			level    int32
+			progress float64
+		}{
+			{-1, 0.5},
+			{1, math.NaN()},
+			{1, math.Inf(1)},
+			{1, -0.1},
+			{1, 1.1},
+		} {
+			if players.SetPlayerExperience(invocation, id, invalid.level, invalid.progress) {
+				t.Fatalf("invalid experience accepted: %+v", invalid)
+			}
+		}
+		if !players.SetPlayerExperience(invocation, id, 30, 0.75) {
+			t.Fatal("valid experience rejected")
+		}
+		if connected.ExperienceLevel() != 30 || math.Abs(connected.ExperienceProgress()-0.75) > 0.02 {
+			t.Fatalf("experience = %d, %f", connected.ExperienceLevel(), connected.ExperienceProgress())
+		}
+	})
+}
+
+func TestPlayersSetExperienceSchedulesAcrossWorldInvocation(t *testing.T) {
+	source := world.Config{Synchronous: true}.New()
+	destination := world.Config{Synchronous: true}.New()
+	t.Cleanup(func() {
+		_ = source.Close()
+		_ = destination.Close()
+	})
+	players := NewPlayers()
+	spawn := func(id uuid.UUID, name string) *world.EntityHandle {
+		position := mgl64.Vec3{1, 64, 1}
+		return world.EntitySpawnOpts{ID: id, Position: position}.New(
+			player.Type,
+			player.Config{UUID: id, Name: name, Position: position},
+		)
+	}
+	sourceHandle := spawn(uuid.MustParse("a6423d6a-cb19-4cff-8d30-362027f20f00"), "Source")
+	destinationHandle := spawn(uuid.MustParse("581b4619-d662-4514-bd27-d2c30a94bb08"), "Destination")
+	var destinationID native.PlayerID
+	if err := destination.Do(func(tx *world.Tx) {
+		destinationID = players.Register(tx.AddEntity(destinationHandle).(*player.Player), 75)
+	}).Wait(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := source.Do(func(tx *world.Tx) {
+		players.Register(tx.AddEntity(sourceHandle).(*player.Player), 74)
+		invocation, leave := players.BeginInvocation(tx)
+		defer leave()
+		if !players.SetPlayerExperience(invocation, destinationID, 20, 0.5) {
+			t.Fatal("cross-world experience write was not scheduled")
+		}
+	}).Wait(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	level, ok := players.PlayerState(0, destinationID, native.PlayerStateExperienceLevel)
+	if !ok || level.Integer != 20 {
+		t.Fatalf("level = %+v, %v", level, ok)
+	}
+	progress, ok := players.PlayerState(0, destinationID, native.PlayerStateExperienceProgress)
+	if !ok || math.Abs(progress.Number-0.5) > 0.02 {
+		t.Fatalf("progress = %+v, %v", progress, ok)
+	}
+}
+
 type testLastingEffect struct{}
 
 func (testLastingEffect) RGBA() color.RGBA                  { return color.RGBA{} }

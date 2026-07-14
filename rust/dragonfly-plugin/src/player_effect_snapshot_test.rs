@@ -133,7 +133,7 @@ fn player() -> Player {
 fn player_effects_retry_and_preserve_typed_snapshot_values() {
     let _host_guard = TEST_HOST_LOCK.lock().unwrap();
     SNAPSHOT_CALLS.store(0, AtomicOrdering::Relaxed);
-    let mut host: dragonfly_plugin_sys::DfHostApiV19 = unsafe { core::mem::zeroed() };
+    let mut host: dragonfly_plugin_sys::DfHostApiV20 = unsafe { core::mem::zeroed() };
     host.context = 27;
     host.player_effects = Some(snapshot_effects);
     unsafe { install_host(&host) };
@@ -158,7 +158,7 @@ fn player_effects_retry_and_preserve_typed_snapshot_values() {
 fn player_clear_effects_forwards_identity_and_hides_host_status() {
     let _host_guard = TEST_HOST_LOCK.lock().unwrap();
     *CLEAR_CALL.lock().unwrap() = None;
-    let mut host: dragonfly_plugin_sys::DfHostApiV19 = unsafe { core::mem::zeroed() };
+    let mut host: dragonfly_plugin_sys::DfHostApiV20 = unsafe { core::mem::zeroed() };
     host.context = 41;
     host.player_effects_clear = Some(clear_effects);
     unsafe { install_host(&host) };
@@ -180,7 +180,7 @@ fn player_clear_effects_forwards_identity_and_hides_host_status() {
 #[test]
 fn player_effects_fail_closed_for_invalid_protocol_and_values() {
     let _host_guard = TEST_HOST_LOCK.lock().unwrap();
-    let mut host: dragonfly_plugin_sys::DfHostApiV19 = unsafe { core::mem::zeroed() };
+    let mut host: dragonfly_plugin_sys::DfHostApiV20 = unsafe { core::mem::zeroed() };
     host.player_effects = Some(malformed_snapshot);
     unsafe { install_host(&host) };
 

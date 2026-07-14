@@ -72,11 +72,11 @@ unsafe extern "C" fn record_open(
 
 fn install_recording_host(
     result: dragonfly_plugin_sys::DfStatus,
-) -> dragonfly_plugin_sys::DfHostApiV19 {
+) -> dragonfly_plugin_sys::DfHostApiV20 {
     CALLS.store(0, Ordering::Relaxed);
     RESULT.store(result, Ordering::Relaxed);
     *RECORDED.lock().unwrap() = None;
-    let mut host: dragonfly_plugin_sys::DfHostApiV19 = unsafe { core::mem::zeroed() };
+    let mut host: dragonfly_plugin_sys::DfHostApiV20 = unsafe { core::mem::zeroed() };
     host.world_open_spec = Some(record_open);
     host
 }

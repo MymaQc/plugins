@@ -6,6 +6,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "player_operations_generated.h"
+
 #if UINTPTR_MAX == UINT64_MAX
 _Static_assert(sizeof(DfSkinAnimationInfo) == 40, "DfSkinAnimationInfo ABI layout changed");
 _Static_assert(offsetof(DfSkinAnimationInfo, frame_count) == 16, "DfSkinAnimationInfo.frame_count ABI offset changed");
@@ -67,21 +69,21 @@ _Static_assert(offsetof(DfWorldOpenSpecV1, provider_path) == 8, "DfWorldOpenSpec
 _Static_assert(offsetof(DfWorldOpenSpecV1, fixed_time) == 40, "DfWorldOpenSpecV1.fixed_time ABI offset changed");
 _Static_assert(offsetof(DfWorldOpenSpecV1, open_mode) == 48, "DfWorldOpenSpecV1.open_mode ABI offset changed");
 _Static_assert(offsetof(DfWorldOpenSpecV1, read_only) == 76, "DfWorldOpenSpecV1.read_only ABI offset changed");
-_Static_assert(sizeof(DfHostApiV19) == 488, "DfHostApiV19 ABI layout changed");
-_Static_assert(offsetof(DfHostApiV19, player_skin_open) == 80, "DfHostApiV19.player_skin_open ABI offset changed");
-_Static_assert(offsetof(DfHostApiV19, player_skin_set) == 112, "DfHostApiV19.player_skin_set ABI offset changed");
-_Static_assert(offsetof(DfHostApiV19, inventory_size) == 120, "DfHostApiV19.inventory_size ABI offset changed");
-_Static_assert(offsetof(DfHostApiV19, player_held_slot_set) == 200, "DfHostApiV19.player_held_slot_set ABI offset changed");
-_Static_assert(offsetof(DfHostApiV19, player_scoreboard) == 208, "DfHostApiV19.player_scoreboard ABI offset changed");
-_Static_assert(offsetof(DfHostApiV19, player_heal) == 416, "DfHostApiV19.player_heal ABI offset changed");
-_Static_assert(offsetof(DfHostApiV19, player_hurt) == 424, "DfHostApiV19.player_hurt ABI offset changed");
-_Static_assert(offsetof(DfHostApiV19, skin_snapshot_info) == 432, "DfHostApiV19.skin_snapshot_info ABI offset changed");
-_Static_assert(offsetof(DfHostApiV19, skin_snapshot_set) == 440, "DfHostApiV19.skin_snapshot_set ABI offset changed");
-_Static_assert(offsetof(DfHostApiV19, world_open_spec) == 448, "DfHostApiV19.world_open_spec ABI offset changed");
-_Static_assert(offsetof(DfHostApiV19, player_transfer) == 456, "DfHostApiV19.player_transfer ABI offset changed");
-_Static_assert(offsetof(DfHostApiV19, player_effects) == 464, "DfHostApiV19.player_effects ABI offset changed");
-_Static_assert(offsetof(DfHostApiV19, player_effects_clear) == 472, "DfHostApiV19.player_effects_clear ABI offset changed");
-_Static_assert(offsetof(DfHostApiV19, world_liquid_get) == 480, "DfHostApiV19.world_liquid_get ABI offset changed");
+_Static_assert(sizeof(DfHostApiV20) == 496, "DfHostApiV20 ABI layout changed");
+_Static_assert(offsetof(DfHostApiV20, player_skin_open) == 80, "DfHostApiV20.player_skin_open ABI offset changed");
+_Static_assert(offsetof(DfHostApiV20, player_skin_set) == 112, "DfHostApiV20.player_skin_set ABI offset changed");
+_Static_assert(offsetof(DfHostApiV20, inventory_size) == 120, "DfHostApiV20.inventory_size ABI offset changed");
+_Static_assert(offsetof(DfHostApiV20, player_held_slot_set) == 200, "DfHostApiV20.player_held_slot_set ABI offset changed");
+_Static_assert(offsetof(DfHostApiV20, player_scoreboard) == 208, "DfHostApiV20.player_scoreboard ABI offset changed");
+_Static_assert(offsetof(DfHostApiV20, player_heal) == 416, "DfHostApiV20.player_heal ABI offset changed");
+_Static_assert(offsetof(DfHostApiV20, player_hurt) == 424, "DfHostApiV20.player_hurt ABI offset changed");
+_Static_assert(offsetof(DfHostApiV20, skin_snapshot_info) == 432, "DfHostApiV20.skin_snapshot_info ABI offset changed");
+_Static_assert(offsetof(DfHostApiV20, skin_snapshot_set) == 440, "DfHostApiV20.skin_snapshot_set ABI offset changed");
+_Static_assert(offsetof(DfHostApiV20, world_open_spec) == 448, "DfHostApiV20.world_open_spec ABI offset changed");
+_Static_assert(offsetof(DfHostApiV20, player_transfer) == 456, "DfHostApiV20.player_transfer ABI offset changed");
+_Static_assert(offsetof(DfHostApiV20, player_effects) == 464, "DfHostApiV20.player_effects ABI offset changed");
+_Static_assert(offsetof(DfHostApiV20, player_effects_clear) == 472, "DfHostApiV20.player_effects_clear ABI offset changed");
+_Static_assert(offsetof(DfHostApiV20, world_liquid_get) == 480, "DfHostApiV20.world_liquid_get ABI offset changed");
 #endif
 
 extern DfStatus bg_go_player_text(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfStringView message);
@@ -295,7 +297,7 @@ typedef DfStatus (*RuntimeEventFn)(DfRuntime *, DfEventId, const void *, void *)
 struct BgRuntimeLibrary {
     void *handle;
     DfRuntime *runtime;
-    DfHostApiV19 host_api;
+    DfHostApiV20 host_api;
     RuntimeDestroyFn destroy;
     RuntimeEnableFn enable;
     RuntimeDisableFn begin_disable;
@@ -392,9 +394,9 @@ DfStatus bg_runtime_open(
         return DF_STATUS_ERROR;
     }
 
-    library->host_api = (DfHostApiV19) {
+    library->host_api = (DfHostApiV20) {
         .abi_version = DF_HOST_ABI_VERSION,
-        .struct_size = sizeof(DfHostApiV19),
+        .struct_size = sizeof(DfHostApiV20),
         .context = host_context,
         .player_text = host_player_text,
         .player_title = host_player_title,
@@ -455,6 +457,7 @@ DfStatus bg_runtime_open(
         .player_effects = host_player_effects,
         .player_effects_clear = host_player_effects_clear,
         .world_liquid_get = host_world_liquid_get,
+        BG_PLAYER_OPERATION_HOST_FIELDS
     };
     DfRuntimeConfig config = {
         .plugin_directory = {

@@ -164,6 +164,11 @@ impl Plugin for PlayerCommand {
         ));
     }
 
+    #[subcommand("experience")]
+    fn experience(&self, context: &mut Context<'_, Player>, level: i32, progress: f64) {
+        context.source().set_experience(level, progress);
+    }
+
     #[subcommand("speed")]
     fn speed(&self, context: &mut Context<'_, Player>, level: i32, seconds: i32) {
         let duration = std::time::Duration::from_secs(seconds.max(0) as u64);

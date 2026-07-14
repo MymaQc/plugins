@@ -43,12 +43,19 @@ type playerSchema struct {
 }
 
 type playerOperation struct {
-	Name   string `yaml:"name"`
-	ID     uint32 `yaml:"id"`
-	Go     string `yaml:"go"`
-	Rust   string `yaml:"rust"`
-	Source string `yaml:"source"`
-	Result string `yaml:"result"`
+	Name   string               `yaml:"name"`
+	ID     uint32               `yaml:"id"`
+	Go     string               `yaml:"go"`
+	Rust   string               `yaml:"rust"`
+	Source string               `yaml:"source"`
+	Result string               `yaml:"result"`
+	Args   []playerOperationArg `yaml:"args"`
+}
+
+type playerOperationArg struct {
+	Name     string `yaml:"name"`
+	Type     string `yaml:"type"`
+	Validate string `yaml:"validate"`
 }
 
 type itemSchema struct {
@@ -151,6 +158,8 @@ func main() {
 		filepath.Join(*root, "rust", "dragonfly-plugin-sys", "src", "generated.rs"):          generateRust(events, player),
 		filepath.Join(*root, "internal", "host", "player_state_generated.go"):                generateGoPlayerStates(player),
 		filepath.Join(*root, "internal", "native", "player_state_generated.go"):              generateGoNativePlayerStates(player),
+		filepath.Join(*root, "internal", "native", "player_operations_generated.go"):         generateGoNativePlayerOperations(player),
+		filepath.Join(*root, "internal", "native", "player_operations_generated.h"):          generateCNativePlayerOperations(player),
 		filepath.Join(*root, "rust", "dragonfly-plugin", "src", "player_state_generated.rs"): generateRustPlayerStates(player),
 		filepath.Join(*root, "rust", "dragonfly-plugin", "src", "effects_generated.rs"):      generateRustEffects(player),
 		filepath.Join(*root, "rust", "dragonfly-plugin", "src", "items_generated.rs"):        generateRustItems(items),
@@ -284,11 +293,25 @@ func readPlayer(path string) (playerSchema, error) {
 	validSources := map[string]bool{"damage": true, "healing": true}
 	validResults := map[string]bool{"healed": true, "damage_vulnerable": true}
 	for _, operation := range schema.Operations {
-		if operation.Name == "" || operation.Go == "" || operation.Rust == "" || operationIDs[operation.ID] || operationNames[operation.Name] || !validSources[operation.Source] || !validResults[operation.Result] {
+		if !validSchemaName(operation.Name) || operation.Go != title(operation.Name) || !validRustValueName(operation.Rust) || operationIDs[operation.ID] || operationNames[operation.Name] {
 			return playerSchema{}, fmt.Errorf("invalid or duplicate player operation %+v", operation)
 		}
-		if operation.Source == "healing" && operation.Result != "healed" || operation.Source == "damage" && operation.Result != "damage_vulnerable" {
-			return playerSchema{}, fmt.Errorf("incompatible player operation source and result %+v", operation)
+		if len(operation.Args) == 0 {
+			if !validSources[operation.Source] || !validResults[operation.Result] || operation.Source == "healing" && operation.Result != "healed" || operation.Source == "damage" && operation.Result != "damage_vulnerable" {
+				return playerSchema{}, fmt.Errorf("incompatible player operation source and result %+v", operation)
+			}
+		} else {
+			if operation.Source != "" || operation.Result != "" {
+				return playerSchema{}, fmt.Errorf("composite player operation cannot declare source or result %+v", operation)
+			}
+			argumentNames := map[string]bool{}
+			for _, argument := range operation.Args {
+				validValidation := argument.Validate == "" || argument.Type == "i32" && argument.Validate == "non_negative" || argument.Type == "f64" && (argument.Validate == "non_negative" || argument.Validate == "positive" || argument.Validate == "unit_interval")
+				if !validRustValueName(argument.Name) || argumentNames[argument.Name] || argument.Type != "i32" && argument.Type != "f64" || !validValidation {
+					return playerSchema{}, fmt.Errorf("invalid composite player operation argument %+v in %+v", argument, operation)
+				}
+				argumentNames[argument.Name] = true
+			}
 		}
 		operationIDs[operation.ID], operationNames[operation.Name] = true, true
 	}
@@ -415,7 +438,7 @@ extern "C" {
 #endif
 
 #define DF_ABI_VERSION 4u
-#define DF_HOST_ABI_VERSION 19u
+#define DF_HOST_ABI_VERSION 20u
 #define DF_STATUS_OK 0
 #define DF_STATUS_ERROR 1
 
@@ -624,6 +647,11 @@ typedef DfStatus (*DfHostPlayerTransformFn)(uint64_t context, DfInvocationId inv
 typedef DfStatus (*DfHostPlayerRotationFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfRotation *rotation);
 typedef DfStatus (*DfHostPlayerStateSetFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfPlayerStateValue value);
 typedef DfStatus (*DfHostPlayerStateGetFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfPlayerStateValue *value);
+`)
+	for _, operation := range compositePlayerOperations(player) {
+		fmt.Fprintf(&b, "typedef DfStatus (*DfHostPlayer%sSetFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player%s);\n", title(operation.Name), cPlayerOperationArguments(operation))
+	}
+	b.WriteString(`
 typedef DfStatus (*DfHostPlayerHealFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, double health, const DfHealingSourceView *source, DfPlayerHealResult *result);
 typedef DfStatus (*DfHostPlayerHurtFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, double damage, const DfDamageSourceView *source, DfPlayerHurtResult *result);
 typedef DfStatus (*DfHostPlayerEffectFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t operation, DfEffectView effect);
@@ -738,7 +766,12 @@ typedef struct {
     DfHostPlayerEffectsFn player_effects;
     DfHostPlayerEffectsClearFn player_effects_clear;
     DfHostWorldLiquidGetFn world_liquid_get;
-} DfHostApiV19;
+`)
+	for _, operation := range compositePlayerOperations(player) {
+		fmt.Fprintf(&b, "    DfHostPlayer%sSetFn player_%s_set;\n", title(operation.Name), operation.Name)
+	}
+	b.WriteString(`
+} DfHostApiV20;
 #define DF_COMMAND_PARAMETER_SUBCOMMAND 1u
 #define DF_COMMAND_PARAMETER_ENUM 2u
 #define DF_COMMAND_PARAMETER_STRING 3u
@@ -798,7 +831,7 @@ typedef DfStatus (*DfPluginEntityTypeAtFn)(void *instance, uint64_t index, DfEnt
 typedef DfStatus (*DfPluginHandleEntityFn)(void *instance, uint64_t local_type, uint32_t operation, uint64_t entity_instance, const void *input, void *state);
 typedef DfStatus (*DfHandleCommandFn)(void *instance, uint64_t command, const DfCommandInput *input, DfCommandState *state);
 typedef DfStatus (*DfCommandEnumOptionsFn)(void *instance, uint64_t command, uint64_t overload, uint64_t parameter, const DfCommandEnumContext *context, DfStringBuffer *output);
-typedef DfStatus (*DfPluginSetHostFn)(void *instance, const DfHostApiV19 *host);
+typedef DfStatus (*DfPluginSetHostFn)(void *instance, const DfHostApiV20 *host);
 typedef void (*DfPluginDestroyFn)(void *instance);
 
 typedef struct {
@@ -821,7 +854,7 @@ typedef struct {
 typedef const DfPluginApiV4 *(*DfPluginEntryV4Fn)(void);
 
 typedef struct DfRuntime DfRuntime;
-typedef struct { DfStringView plugin_directory; const DfHostApiV19 *host; } DfRuntimeConfig;
+typedef struct { DfStringView plugin_directory; const DfHostApiV20 *host; } DfRuntimeConfig;
 
 DfStatus df_runtime_create(const DfRuntimeConfig *config, DfRuntime **out, uint8_t *error, uint64_t error_capacity);
 DfStatus df_runtime_enable(DfRuntime *runtime, uint8_t *error, uint64_t error_capacity);
@@ -863,7 +896,7 @@ func generateRust(events []event, player playerSchema) []byte {
 	b.WriteString(`use core::ffi::c_void;
 
 pub const DF_ABI_VERSION: u32 = 4;
-pub const DF_HOST_ABI_VERSION: u32 = 19;
+pub const DF_HOST_ABI_VERSION: u32 = 20;
 pub const DF_STATUS_OK: DfStatus = 0;
 pub const DF_STATUS_ERROR: DfStatus = 1;
 pub type DfStatus = i32;
@@ -1180,6 +1213,11 @@ pub type DfHostPlayerTransformFn = unsafe extern "C" fn(context: u64, invocation
 pub type DfHostPlayerRotationFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, player: DfPlayerId, rotation: *mut DfRotation) -> DfStatus;
 pub type DfHostPlayerStateSetFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, player: DfPlayerId, kind: u32, value: DfPlayerStateValue) -> DfStatus;
 pub type DfHostPlayerStateGetFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, player: DfPlayerId, kind: u32, value: *mut DfPlayerStateValue) -> DfStatus;
+`)
+	for _, operation := range compositePlayerOperations(player) {
+		fmt.Fprintf(&b, "pub type DfHostPlayer%sSetFn = unsafe extern \"C\" fn(context: u64, invocation: DfInvocationId, player: DfPlayerId%s) -> DfStatus;\n", title(operation.Name), rustPlayerOperationArguments(operation))
+	}
+	b.WriteString(`
 pub type DfHostPlayerHealFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, player: DfPlayerId, health: f64, source: *const DfHealingSourceView, result: *mut DfPlayerHealResult) -> DfStatus;
 pub type DfHostPlayerHurtFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, player: DfPlayerId, damage: f64, source: *const DfDamageSourceView, result: *mut DfPlayerHurtResult) -> DfStatus;
 pub type DfHostPlayerEffectFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, player: DfPlayerId, operation: u32, effect: DfEffectView) -> DfStatus;
@@ -1231,7 +1269,12 @@ pub type DfHostWorldSoundPlayFn = unsafe extern "C" fn(context: u64, invocation:
 pub type DfHostPlayerSoundPlayFn = unsafe extern "C" fn(context: u64, invocation: DfInvocationId, player: DfPlayerId, sound: *const DfSoundViewV1) -> DfStatus;
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
-pub struct DfHostApiV19 { pub abi_version: u32, pub struct_size: u32, pub context: u64, pub player_text: Option<DfHostPlayerTextFn>, pub player_title: Option<DfHostPlayerTitleFn>, pub player_transform: Option<DfHostPlayerTransformFn>, pub player_rotation: Option<DfHostPlayerRotationFn>, pub player_state_set: Option<DfHostPlayerStateSetFn>, pub player_state_get: Option<DfHostPlayerStateGetFn>, pub player_effect: Option<DfHostPlayerEffectFn>, pub player_entity_visibility: Option<DfHostPlayerEntityVisibilityFn>, pub player_skin_open: Option<DfHostPlayerSkinOpenFn>, pub player_skin_animation_info: Option<DfHostPlayerSkinAnimationInfoFn>, pub player_skin_read: Option<DfHostPlayerSkinReadFn>, pub player_skin_close: Option<DfHostPlayerSkinCloseFn>, pub player_skin_set: Option<DfHostPlayerSkinSetFn>, pub inventory_size: Option<DfHostInventorySizeFn>, pub inventory_item_open: Option<DfHostInventoryItemOpenFn>, pub player_held_item_open: Option<DfHostPlayerHeldItemOpenFn>, pub item_stack_read: Option<DfHostItemStackReadFn>, pub item_stack_close: Option<DfHostItemStackCloseFn>, pub inventory_item_set: Option<DfHostInventoryItemSetFn>, pub inventory_item_add: Option<DfHostInventoryItemAddFn>, pub inventory_clear_slot: Option<DfHostInventoryClearSlotFn>, pub inventory_clear: Option<DfHostInventoryClearFn>, pub player_held_items_set: Option<DfHostPlayerHeldItemsSetFn>, pub player_held_slot_set: Option<DfHostPlayerHeldSlotSetFn>, pub player_scoreboard: Option<DfHostPlayerScoreboardFn>, pub player_scoreboard_remove: Option<DfHostPlayerScoreboardRemoveFn>, pub player_form_send: Option<DfHostPlayerFormSendFn>, pub player_form_close: Option<DfHostPlayerFormCloseFn>, pub world_lookup: Option<DfHostWorldLookupFn>, pub world_open: Option<DfHostWorldOpenFn>, pub world_name: Option<DfHostWorldNameFn>, pub world_unload: Option<DfHostWorldUnloadFn>, pub world_save: Option<DfHostWorldSaveFn>, pub world_block_get: Option<DfHostWorldBlockGetFn>, pub world_block_set: Option<DfHostWorldBlockSetFn>, pub world_time_get: Option<DfHostWorldTimeGetFn>, pub world_time_set: Option<DfHostWorldTimeSetFn>, pub world_spawn_get: Option<DfHostWorldSpawnGetFn>, pub world_spawn_set: Option<DfHostWorldSpawnSetFn>, pub world_entity_spawn: Option<DfHostWorldEntitySpawnFn>, pub world_entities: Option<DfHostWorldEntitiesFn>, pub world_players: Option<DfHostWorldPlayersFn>, pub entity_state: Option<DfHostEntityStateFn>, pub entity_teleport: Option<DfHostEntityTeleportFn>, pub entity_velocity_set: Option<DfHostEntityVelocitySetFn>, pub entity_name_tag_set: Option<DfHostEntityNameTagSetFn>, pub entity_despawn: Option<DfHostEntityDespawnFn>, pub world_particle_add: Option<DfHostWorldParticleAddFn>, pub world_sound_play: Option<DfHostWorldSoundPlayFn>, pub player_sound_play: Option<DfHostPlayerSoundPlayFn>, pub player_heal: Option<DfHostPlayerHealFn>, pub player_hurt: Option<DfHostPlayerHurtFn>, pub skin_snapshot_info: Option<DfHostSkinSnapshotInfoFn>, pub skin_snapshot_set: Option<DfHostSkinSnapshotSetFn>, pub world_open_spec: Option<DfHostWorldOpenSpecFn>, pub player_transfer: Option<DfHostPlayerTransferFn>, pub player_effects: Option<DfHostPlayerEffectsFn>, pub player_effects_clear: Option<DfHostPlayerEffectsClearFn>, pub world_liquid_get: Option<DfHostWorldLiquidGetFn> }
+pub struct DfHostApiV20 { pub abi_version: u32, pub struct_size: u32, pub context: u64, pub player_text: Option<DfHostPlayerTextFn>, pub player_title: Option<DfHostPlayerTitleFn>, pub player_transform: Option<DfHostPlayerTransformFn>, pub player_rotation: Option<DfHostPlayerRotationFn>, pub player_state_set: Option<DfHostPlayerStateSetFn>, pub player_state_get: Option<DfHostPlayerStateGetFn>, pub player_effect: Option<DfHostPlayerEffectFn>, pub player_entity_visibility: Option<DfHostPlayerEntityVisibilityFn>, pub player_skin_open: Option<DfHostPlayerSkinOpenFn>, pub player_skin_animation_info: Option<DfHostPlayerSkinAnimationInfoFn>, pub player_skin_read: Option<DfHostPlayerSkinReadFn>, pub player_skin_close: Option<DfHostPlayerSkinCloseFn>, pub player_skin_set: Option<DfHostPlayerSkinSetFn>, pub inventory_size: Option<DfHostInventorySizeFn>, pub inventory_item_open: Option<DfHostInventoryItemOpenFn>, pub player_held_item_open: Option<DfHostPlayerHeldItemOpenFn>, pub item_stack_read: Option<DfHostItemStackReadFn>, pub item_stack_close: Option<DfHostItemStackCloseFn>, pub inventory_item_set: Option<DfHostInventoryItemSetFn>, pub inventory_item_add: Option<DfHostInventoryItemAddFn>, pub inventory_clear_slot: Option<DfHostInventoryClearSlotFn>, pub inventory_clear: Option<DfHostInventoryClearFn>, pub player_held_items_set: Option<DfHostPlayerHeldItemsSetFn>, pub player_held_slot_set: Option<DfHostPlayerHeldSlotSetFn>, pub player_scoreboard: Option<DfHostPlayerScoreboardFn>, pub player_scoreboard_remove: Option<DfHostPlayerScoreboardRemoveFn>, pub player_form_send: Option<DfHostPlayerFormSendFn>, pub player_form_close: Option<DfHostPlayerFormCloseFn>, pub world_lookup: Option<DfHostWorldLookupFn>, pub world_open: Option<DfHostWorldOpenFn>, pub world_name: Option<DfHostWorldNameFn>, pub world_unload: Option<DfHostWorldUnloadFn>, pub world_save: Option<DfHostWorldSaveFn>, pub world_block_get: Option<DfHostWorldBlockGetFn>, pub world_block_set: Option<DfHostWorldBlockSetFn>, pub world_time_get: Option<DfHostWorldTimeGetFn>, pub world_time_set: Option<DfHostWorldTimeSetFn>, pub world_spawn_get: Option<DfHostWorldSpawnGetFn>, pub world_spawn_set: Option<DfHostWorldSpawnSetFn>, pub world_entity_spawn: Option<DfHostWorldEntitySpawnFn>, pub world_entities: Option<DfHostWorldEntitiesFn>, pub world_players: Option<DfHostWorldPlayersFn>, pub entity_state: Option<DfHostEntityStateFn>, pub entity_teleport: Option<DfHostEntityTeleportFn>, pub entity_velocity_set: Option<DfHostEntityVelocitySetFn>, pub entity_name_tag_set: Option<DfHostEntityNameTagSetFn>, pub entity_despawn: Option<DfHostEntityDespawnFn>, pub world_particle_add: Option<DfHostWorldParticleAddFn>, pub world_sound_play: Option<DfHostWorldSoundPlayFn>, pub player_sound_play: Option<DfHostPlayerSoundPlayFn>, pub player_heal: Option<DfHostPlayerHealFn>, pub player_hurt: Option<DfHostPlayerHurtFn>, pub skin_snapshot_info: Option<DfHostSkinSnapshotInfoFn>, pub skin_snapshot_set: Option<DfHostSkinSnapshotSetFn>, pub world_open_spec: Option<DfHostWorldOpenSpecFn>, pub player_transfer: Option<DfHostPlayerTransferFn>, pub player_effects: Option<DfHostPlayerEffectsFn>, pub player_effects_clear: Option<DfHostPlayerEffectsClearFn>, pub world_liquid_get: Option<DfHostWorldLiquidGetFn>`)
+	for _, operation := range compositePlayerOperations(player) {
+		fmt.Fprintf(&b, ", pub player_%s_set: Option<DfHostPlayer%sSetFn>", operation.Name, title(operation.Name))
+	}
+	b.WriteString(" }\n")
+	b.WriteString(`
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct DfCommandParameter { pub kind: u32, pub optional: u8, pub name: DfStringView, pub values: *const DfStringView, pub value_count: u64 }
@@ -1304,7 +1347,7 @@ pub type DfPluginEntityTypeAtFn = unsafe extern "C" fn(instance: *mut c_void, in
 pub type DfPluginHandleEntityFn = unsafe extern "C" fn(instance: *mut c_void, local_type: u64, operation: u32, entity_instance: u64, input: *const c_void, state: *mut c_void) -> DfStatus;
 pub type DfHandleCommandFn = unsafe extern "C" fn(instance: *mut c_void, command: u64, input: *const DfCommandInput, state: *mut DfCommandState) -> DfStatus;
 pub type DfCommandEnumOptionsFn = unsafe extern "C" fn(instance: *mut c_void, command: u64, overload: u64, parameter: u64, context: *const DfCommandEnumContext, output: *mut DfStringBuffer) -> DfStatus;
-pub type DfPluginSetHostFn = unsafe extern "C" fn(instance: *mut c_void, host: *const DfHostApiV19) -> DfStatus;
+pub type DfPluginSetHostFn = unsafe extern "C" fn(instance: *mut c_void, host: *const DfHostApiV20) -> DfStatus;
 pub type DfPluginDestroyFn = unsafe extern "C" fn(instance: *mut c_void);
 pub type DfHandleEventFn = unsafe extern "C" fn(instance: *mut c_void, event_id: DfEventId, input: *const c_void, state: *mut c_void) -> DfStatus;
 
@@ -1408,6 +1451,72 @@ func generateGoNativePlayerStates(player playerSchema) []byte {
 	return b.Bytes()
 }
 
+func generateGoNativePlayerOperations(player playerSchema) []byte {
+	operations := compositePlayerOperations(player)
+	var b bytes.Buffer
+	fmt.Fprintf(&b, "// Code generated by abi-gen v%s. DO NOT EDIT.\n\n", generatorVersion)
+	b.WriteString("package native\n\n")
+	if len(operations) != 0 {
+		b.WriteString("/*\n#include \"bridge.h\"\n*/\nimport \"C\"\n")
+		hasFloat := false
+		for _, operation := range operations {
+			for _, argument := range operation.Args {
+				hasFloat = hasFloat || argument.Type == "f64"
+			}
+		}
+		if hasFloat {
+			b.WriteString("\nimport \"math\"\n")
+		}
+		b.WriteString("\n")
+	}
+	b.WriteString("type generatedPlayerOperationsHost interface {\n")
+	for _, operation := range operations {
+		fmt.Fprintf(&b, "\tSetPlayer%s(InvocationID, PlayerID%s) bool\n", operation.Go, goPlayerOperationArguments(operation))
+	}
+	b.WriteString("}\n\n")
+	for _, operation := range operations {
+		fmt.Fprintf(&b, "func (noopHost) SetPlayer%s(InvocationID, PlayerID%s) bool { return false }\n\n", operation.Go, goPlayerOperationArguments(operation))
+		fmt.Fprintf(&b, "//export bg_go_player_%s_set\n", operation.Name)
+		fmt.Fprintf(&b, "func bg_go_player_%s_set(context C.uint64_t, invocation C.DfInvocationId, player C.DfPlayerId%s) C.DfStatus {\n", operation.Name, goCPlayerOperationArguments(operation))
+		for _, argument := range operation.Args {
+			fmt.Fprintf(&b, "\t%sValue := %s(%s)\n", argument.Name, goType(argument.Type), argument.Name)
+		}
+		b.WriteString("\thost, ok := resolveHost(uint64(context))\n")
+		validations := goPlayerOperationValidations(operation)
+		if validations != "" {
+			fmt.Fprintf(&b, "\tif !ok || %s || !host.SetPlayer%s(InvocationID(invocation), playerID(player)%s) {\n", validations, operation.Go, goPlayerOperationValues(operation))
+		} else {
+			fmt.Fprintf(&b, "\tif !ok || !host.SetPlayer%s(InvocationID(invocation), playerID(player)%s) {\n", operation.Go, goPlayerOperationValues(operation))
+		}
+		b.WriteString("\t\treturn C.DF_STATUS_ERROR\n\t}\n\treturn C.DF_STATUS_OK\n}\n\n")
+	}
+	return b.Bytes()
+}
+
+func generateCNativePlayerOperations(player playerSchema) []byte {
+	operations := compositePlayerOperations(player)
+	var b bytes.Buffer
+	fmt.Fprintf(&b, "/* Code generated by abi-gen v%s. DO NOT EDIT. */\n", generatorVersion)
+	b.WriteString("#ifndef BEDROCK_GOPHERS_PLAYER_OPERATIONS_GENERATED_H\n#define BEDROCK_GOPHERS_PLAYER_OPERATIONS_GENERATED_H\n\n")
+	b.WriteString("#if UINTPTR_MAX == UINT64_MAX\n")
+	for index, operation := range operations {
+		offset := 488 + index*8
+		fmt.Fprintf(&b, "_Static_assert(offsetof(DfHostApiV20, player_%s_set) == %d, \"DfHostApiV20.player_%s_set ABI offset changed\");\n", operation.Name, offset, operation.Name)
+	}
+	b.WriteString("#endif\n\n")
+	for _, operation := range operations {
+		fmt.Fprintf(&b, "extern DfStatus bg_go_player_%s_set(uint64_t context, DfInvocationId invocation, DfPlayerId player%s);\n", operation.Name, cPlayerOperationArguments(operation))
+		fmt.Fprintf(&b, "static DfStatus host_player_%s_set(uint64_t context, DfInvocationId invocation, DfPlayerId player%s) {\n", operation.Name, cPlayerOperationArguments(operation))
+		fmt.Fprintf(&b, "    return bg_go_player_%s_set(context, invocation, player%s);\n}\n\n", operation.Name, playerOperationValues(operation))
+	}
+	b.WriteString("#define BG_PLAYER_OPERATION_HOST_FIELDS")
+	for _, operation := range operations {
+		fmt.Fprintf(&b, " \\\n    .player_%s_set = host_player_%s_set,", operation.Name, operation.Name)
+	}
+	b.WriteString("\n\n#endif\n")
+	return b.Bytes()
+}
+
 func generateGoValidation(b *bytes.Buffer, state playerState) {
 	if state.Type == "f64" {
 		b.WriteString("\t\tif math.IsNaN(value.Number) || math.IsInf(value.Number, 0)")
@@ -1467,6 +1576,16 @@ func generateRustPlayerStates(player playerSchema) []byte {
 				fmt.Fprintf(&b, "    pub fn %s(&self) -> bool { self.state(%s).integer != 0 }\n", state.RustGet, constant)
 			}
 		}
+	}
+	for _, operation := range compositePlayerOperations(player) {
+		fmt.Fprintf(&b, "    /// Performs the `%s` player operation. Invalid values and unavailable hosts are ignored.\n", operation.Name)
+		fmt.Fprintf(&b, "    pub fn %s(&self%s) {\n", operation.Rust, rustPlayerOperationArguments(operation))
+		if validation := rustPlayerOperationValidations(operation); validation != "" {
+			fmt.Fprintf(&b, "        if %s { return; }\n", validation)
+		}
+		fmt.Fprintf(&b, "        let Some(host) = host_api() else { return };\n        let Some(call) = host.player_%s_set else { return };\n", operation.Name)
+		fmt.Fprintf(&b, "        let _ = unsafe { call(host.context, current_invocation(), self.raw_id()%s) };\n", playerOperationValues(operation))
+		b.WriteString("    }\n")
 	}
 	b.WriteString("}\n")
 	return b.Bytes()
@@ -1565,6 +1684,112 @@ func generateRustItems(items itemSchema) []byte {
 	}
 	b.WriteString("            _ => Self::Custom(id),\n        }\n    }\n}\n")
 	return b.Bytes()
+}
+
+func compositePlayerOperations(player playerSchema) []playerOperation {
+	operations := make([]playerOperation, 0, len(player.Operations))
+	for _, operation := range player.Operations {
+		if len(operation.Args) != 0 {
+			operations = append(operations, operation)
+		}
+	}
+	return operations
+}
+
+func cPlayerOperationArguments(operation playerOperation) string {
+	var b strings.Builder
+	for _, argument := range operation.Args {
+		fmt.Fprintf(&b, ", %s %s", cType(argument.Type), argument.Name)
+	}
+	return b.String()
+}
+
+func rustPlayerOperationArguments(operation playerOperation) string {
+	var b strings.Builder
+	for _, argument := range operation.Args {
+		fmt.Fprintf(&b, ", %s: %s", argument.Name, argument.Type)
+	}
+	return b.String()
+}
+
+func goPlayerOperationArguments(operation playerOperation) string {
+	var b strings.Builder
+	for _, argument := range operation.Args {
+		fmt.Fprintf(&b, ", %s", goType(argument.Type))
+	}
+	return b.String()
+}
+
+func goCPlayerOperationArguments(operation playerOperation) string {
+	var b strings.Builder
+	for _, argument := range operation.Args {
+		fmt.Fprintf(&b, ", %s C.%s", argument.Name, goCType(argument.Type))
+	}
+	return b.String()
+}
+
+func playerOperationValues(operation playerOperation) string {
+	var b strings.Builder
+	for _, argument := range operation.Args {
+		fmt.Fprintf(&b, ", %s", argument.Name)
+	}
+	return b.String()
+}
+
+func goPlayerOperationValues(operation playerOperation) string {
+	var b strings.Builder
+	for _, argument := range operation.Args {
+		fmt.Fprintf(&b, ", %sValue", argument.Name)
+	}
+	return b.String()
+}
+
+func rustPlayerOperationValidations(operation playerOperation) string {
+	validations := make([]string, 0, len(operation.Args)*2)
+	for _, argument := range operation.Args {
+		if argument.Type == "f64" {
+			validations = append(validations, "!"+argument.Name+".is_finite()")
+		}
+		switch argument.Validate {
+		case "non_negative":
+			validations = append(validations, argument.Name+" < 0")
+			if argument.Type == "f64" {
+				validations[len(validations)-1] += ".0"
+			}
+		case "positive":
+			validations = append(validations, argument.Name+" <= 0.0")
+		case "unit_interval":
+			validations = append(validations, "!(0.0..=1.0).contains(&"+argument.Name+")")
+		}
+	}
+	return strings.Join(validations, " || ")
+}
+
+func goPlayerOperationValidations(operation playerOperation) string {
+	validations := make([]string, 0, len(operation.Args)*2)
+	for _, argument := range operation.Args {
+		value := argument.Name + "Value"
+		if argument.Type == "f64" {
+			validations = append(validations, "math.IsNaN("+value+")", "math.IsInf("+value+", 0)")
+		}
+		switch argument.Validate {
+		case "non_negative":
+			validations = append(validations, value+" < 0")
+		case "positive":
+			validations = append(validations, value+" <= 0")
+		case "unit_interval":
+			validations = append(validations, value+" < 0", value+" > 1")
+		}
+	}
+	return strings.Join(validations, " || ")
+}
+
+func goType(t string) string {
+	return map[string]string{"f64": "float64", "i32": "int32"}[t]
+}
+
+func goCType(t string) string {
+	return map[string]string{"f64": "double", "i32": "int32_t"}[t]
 }
 
 func cType(t string) string {

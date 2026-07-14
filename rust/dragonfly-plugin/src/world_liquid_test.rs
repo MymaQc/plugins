@@ -50,7 +50,7 @@ unsafe extern "C" fn read_liquid(
 fn reads_and_decodes_typed_water_from_appended_host_function() {
     let _host_guard = crate::TEST_HOST_LOCK.lock().unwrap();
     *RECORDED_READ.lock().unwrap() = None;
-    let mut host: dragonfly_plugin_sys::DfHostApiV19 = unsafe { core::mem::zeroed() };
+    let mut host: dragonfly_plugin_sys::DfHostApiV20 = unsafe { core::mem::zeroed() };
     host.context = 29;
     host.world_liquid_get = Some(read_liquid);
     unsafe { crate::install_host(&host) };

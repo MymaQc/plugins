@@ -1,6 +1,13 @@
 operations:
   - { name: heal, id: 0, go: Heal, rust: heal, source: healing, result: healed }
   - { name: hurt, id: 1, go: Hurt, rust: hurt, source: damage, result: damage_vulnerable }
+  - name: experience
+    id: 2
+    go: Experience
+    rust: set_experience
+    args:
+      - { name: level, type: i32, validate: non_negative }
+      - { name: progress, type: f64, validate: unit_interval }
 
 states:
   - name: game_mode

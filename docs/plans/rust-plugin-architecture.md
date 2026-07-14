@@ -119,6 +119,13 @@ operations:
     rust: heal
     source: healing
     result: healed
+  - name: experience
+    id: 2
+    go: Experience
+    rust: set_experience
+    args:
+      - { name: level, type: i32, validate: non_negative }
+      - { name: progress, type: f64, validate: unit_interval }
 states:
   - name: experience_level
     id: 6
@@ -130,7 +137,7 @@ states:
     validate: non_negative
 ```
 
-Player entries map the stable ABI ID, Dragonfly method, idiomatic Rust method, wire value type, validation, and optional named adapter. Named adapters cover state semantics that method reflection cannot express, such as game-mode conversion. The `operations` table maps result-bearing calls such as damage and healing to dedicated ABI functions instead of flattening them into state setters.
+Player entries map the stable ABI ID, Dragonfly method, idiomatic Rust method, wire value type, validation, and optional named adapter. Named adapters cover state semantics that method reflection cannot express, such as game-mode conversion. The `operations` table maps result-bearing calls such as damage and healing, plus validated composite calls such as the batched experience display update, to dedicated ABI functions instead of flattening them into state setters.
 
 A generator produces:
 
@@ -205,11 +212,11 @@ Every ABI structure must:
 - Avoid platform-sized `long`, `size_t` in persisted layouts, and C bitfields.
 - Have generated size, alignment, and offset tests.
 
-The ABI is intentionally strict while the project is WIP. Host ABI v19 retains
-the complete v18 prefix (including player effect snapshot and clear-all calls at
-offsets 464 and 472), then appends `world_liquid_get` at offset 480. The host
-table is 488 bytes on supported 64-bit targets. Plugin ABI v4 adds the bounded
-fallible-enable callback.
+The ABI is intentionally strict while the project is WIP. Host ABI v20 retains
+the complete v19 prefix (including `world_liquid_get` at offset 480), then
+appends `player_experience_set` at offset 488. The host table is 496 bytes on
+supported 64-bit targets. Plugin ABI v4 adds the bounded fallible-enable
+callback.
 A breaking layout or callback change increments its owning ABI version, and
 mismatched runtimes/plugins fail to load. Compatibility shims are deferred until
 the API is stable enough to justify them. Independent ABI branches must never
@@ -532,7 +539,7 @@ Current host actions include:
 
 Every synchronous player callback registers one invocation ID for its exact transaction. Same-world block and liquid reads use that `world.Tx` directly, so `World::liquid` preserves liquids stored behind waterloggable foreground blocks. Calls with no invocation are off-owner: writes enqueue through `World.Do` and reads use `world.Call`. Cross-world writes from callbacks enqueue, while cross-world synchronous block and liquid reads are rejected because reciprocal owner calls can deadlock. Save/unload are rejected from callbacks and run only off-owner. Transaction values never cross or survive the ABI; the asynchronous task API will provide callback-safe cross-world reads and lifecycle operations.
 
-The host ABI is currently v19 and the plugin ABI is v4. WIP releases
+The host ABI is currently v20 and the plugin ABI is v4. WIP releases
 intentionally make breaking ABI changes instead of retaining compatibility
 shims; runtime and plugins must be compiled from the same revision.
 
@@ -597,6 +604,8 @@ Dragonfly v0.11 does not expose `Player.StopSound`: the packet writer and player
 Player effects mirror Dragonfly's type split. Rust uses `effect::new(effect::Speed, level, duration)`, `effect::ambient`, `effect::infinite`, and `effect::instant_with_potency(effect::InstantHealth, level, potency)`. Generated zero-sized built-ins implement either `effect::LastingType` or `effect::InstantType`, so invalid combinations do not compile. `RegisteredLasting` and `RegisteredInstant` carry custom effect IDs already registered in Dragonfly and the Go host verifies the declared kind before applying them. The ABI preserves signed protocol IDs, exact instant potency, and particle visibility. Invalid levels are rejected before Dragonfly's `EffectManager` can panic. Saturation is correctly classified as lasting in Dragonfly v0.11.
 
 `Player::effects()` returns a bounded, transaction-coherent snapshot of active registered lasting effects. Each owned `effect::Effect` exposes its signed type ID, level, remaining millisecond duration, ambient/infinite classification, and particle visibility. Initial instant effects are filtered, negative between-tick duration residue clamps to zero, and malformed or rejected host snapshots fail closed to an empty vector. `Player::clear_effects()` removes registered lasting effects in one player-owner pass and exposes no host status. Before the first player tick, Dragonfly's public removal path flushes and applies valid pending initial instant effects once; malformed initial values are rejected before that flush. Snapshot tick age is intentionally omitted, so snapshots inspect current status rather than promise byte-for-byte reapplication state.
+
+`Player::set_experience(level, progress)` validates a non-negative level and finite progress in `0.0..=1.0`, then sends both display values through one host ABI v20 call. The Go host resolves or schedules the player owner once and applies both Dragonfly setters inside that operation. Invalid input, stale players, and host transport failures remain private no-ops.
 
 ## Items and inventories
 
