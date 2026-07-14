@@ -3,14 +3,12 @@ using Dragonfly;
 
 public sealed class KitchenSink : Plugin
 {
-    private bool _enabled;
-
-    public override void OnEnable() => _enabled = true;
-    public override void OnDisable() => _enabled = false;
+    public override void OnEnable() => Console.WriteLine("kitchen-sink enabled");
+    public override void OnDisable() => Console.WriteLine("kitchen-sink disabled");
 
     public override void HandleMove(Player.Context ctx, Vector3 newPos, Rotation newRot)
     {
-        if (!_enabled || !Finite(newPos) || !double.IsFinite(newRot.Yaw) || !double.IsFinite(newRot.Pitch))
+        if (!Finite(newPos) || !double.IsFinite(newRot.Yaw) || !double.IsFinite(newRot.Pitch))
             ctx.Cancel();
     }
 
@@ -18,7 +16,7 @@ public sealed class KitchenSink : Plugin
 
     public override void HandleTeleport(Player.Context ctx, Vector3 pos)
     {
-        if (!_enabled || !Finite(pos)) ctx.Cancel();
+        if (!Finite(pos)) ctx.Cancel();
     }
 
     public override void HandleToggleSprint(Player.Context ctx, bool after) => _ = (ctx, after);
@@ -26,7 +24,6 @@ public sealed class KitchenSink : Plugin
 
     public override void HandleChat(Player.Context ctx, ref string message)
     {
-        if (!_enabled) ctx.Cancel();
         message = message.Trim();
     }
 
