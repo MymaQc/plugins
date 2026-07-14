@@ -12,34 +12,6 @@ import (
 	"testing"
 )
 
-func TestRunFailedPluginEnableNeverBindsListener(t *testing.T) {
-	t.Skip("legacy Rust lifecycle failure plugin removed")
-	probe, err := net.ListenPacket("udp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	address := probe.LocalAddr().String()
-	if err := probe.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	t.Setenv("BEDROCK_GOPHERS_LIFECYCLE_ERROR", "missing FFA arena database")
-	config := nativeRunConfig(t, address)
-
-	err = Run(context.Background(), config, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	if err == nil || !strings.Contains(err.Error(), "missing FFA arena database") {
-		t.Fatalf("Run error = %v", err)
-	}
-
-	rebound, err := net.ListenPacket("udp", address)
-	if err != nil {
-		t.Fatalf("failed enable leaked listener %s: %v", address, err)
-	}
-	if err := rebound.Close(); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestRunReportsListenerBindFailure(t *testing.T) {
 	occupied, err := net.ListenPacket("udp", "127.0.0.1:0")
 	if err != nil {

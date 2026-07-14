@@ -32,7 +32,7 @@ func openCSharpRuntime(t testing.TB) *Runtime {
 	return openCSharpRuntimeWithHost(t, nil)
 }
 
-func openCSharpRuntimeWithHost(t testing.TB, host Host) *Runtime {
+func csharpArtifacts(t testing.TB) (string, string) {
 	t.Helper()
 	root, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
@@ -49,6 +49,12 @@ func openCSharpRuntimeWithHost(t testing.TB, host Host) *Runtime {
 	if _, err := os.Stat(library); err != nil {
 		t.Skipf("C# runtime not built: run make build-native (%v)", err)
 	}
+	return library, plugins
+}
+
+func openCSharpRuntimeWithHost(t testing.TB, host Host) *Runtime {
+	t.Helper()
+	library, plugins := csharpArtifacts(t)
 	pluginRuntime, err := OpenWithHost(library, plugins, host)
 	if err != nil {
 		t.Fatal(err)

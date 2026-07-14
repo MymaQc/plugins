@@ -20,7 +20,7 @@ func TestPlayersInventoryItemRoundTrip(t *testing.T) {
 		invocation, leave := players.BeginInvocation(player.Tx())
 		defer leave()
 		valuesNBT, ok := marshalItemNBT(map[string]any{
-			"owner": "rust", "level": int32(12), "flags": []byte{1, 0, 1},
+			"owner": "csharp", "level": int32(12), "flags": []byte{1, 0, 1},
 		})
 		if !ok {
 			t.Fatal("encode values")

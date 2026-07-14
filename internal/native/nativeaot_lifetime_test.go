@@ -10,7 +10,7 @@ const nativeAOTLifetimeChild = "BEDROCK_GOPHERS_NATIVEAOT_LIFETIME_CHILD"
 
 func TestNativeAOTLibrariesRemainMappedAfterClose(t *testing.T) {
 	if os.Getenv(nativeAOTLifetimeChild) == "1" {
-		library, plugins := nativeArtifacts(t)
+		library, plugins := csharpArtifacts(t)
 		runtime, err := Open(library, plugins)
 		if err != nil {
 			t.Fatal(err)
