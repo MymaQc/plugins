@@ -53,8 +53,8 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    `World.Tx.BlockLoaded`, `World.Tx.BlocksWithin`, `World.Tx.SetBlock`,
    `World.Tx.ScheduleBlockUpdate`,
    `World.Tx.HighestLightBlocker`, `World.Tx.HighestBlock`, `World.Tx.Light`,
-   `World.Tx.SkyLight`, `World.Liquid`, `World.Tx.Liquid`, `World.Tx.SetLiquid`, 112 non-liquid
-   block types covering all 306 registered states whose varying registry-state fields are primitive,
+   `World.Tx.SkyLight`, `World.Liquid`, `World.Tx.Liquid`, `World.Tx.SetLiquid`, 118 non-liquid
+   block types covering all 314 registered states whose varying registry-state fields are primitive,
    plus `Block.Water` and `Block.Lava`. Promoted fields are expanded through Dragonfly's AST, so
    all eight growth stages of `BeetrootSeeds`, `Carrot`, `Potato`, and `WheatSeeds` remain typed.
    The biome slice adds
@@ -123,8 +123,10 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    the ABI; the private opaque fallback fails explicitly instead of treating a block identifier as
    a liquid type.
    Dragonfly's live item registry supplies the private identifier/metadata and capability codecs.
-   `Item.Stack` exposes `NewStack`, count/growth/max-count, durability/damage/unbreakable,
-   attack damage, custom names, lore, anvil cost, comparison/equality, and stack merging.
+   `Item.Stack` is generated from Dragonfly's `item.Stack` AST and exposes the complete public
+   method set: `NewStack`, count/growth/max-count, durability/damage/unbreakable, attack damage,
+   custom names, lore, values, enchantments, anvil cost, `WithItem`, `String`, comparison/equality,
+   and stack merging.
    Generated player methods expose `Inventory`, `EnderChestInventory`, `Armour`, `HeldItems`,
    `SetHeldItems`, and `SetHeldSlot`; `Inventory.Value` exposes `Size`, `Item`, `SetItem`, and
    `AddItem`. C# setters return `void` as the chosen language adaptation, and invalid slots
@@ -137,9 +139,11 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    registered enchantments from Dragonfly's AST and live registry; normal and forced addition,
    removal, lookup, deterministic listing, item compatibility, and enchantment compatibility mirror
    `item.Stack`. Unknown registered stateful
-   NBT-backed items decode to a private opaque item and round-trip losslessly. Public
-   `WithItem` and custom items remain next; no public identifier
-   fallback is added.
+   NBT-backed items decode to a private opaque item and round-trip losslessly. `WithItem` rebuilds
+   the stack in Dragonfly's exact order, retaining only damage, enchantments, and anvil cost valid
+   for the replacement typed item. Private opaque items retain their NBT through `WithItem`, and
+   `Comparable` compares decoded NBT values rather than encoded key order. Custom items remain
+   next; no public identifier fallback is added.
 7. Effects. The generator reads `server/entity/effect` registrations, interfaces, constructors,
    value methods, and player method signatures from Dragonfly's Go AST, then validates all 28
    built-ins against the live registry. C# exposes `Effect.Value`, registered `Type`/`LastingType`
@@ -231,12 +235,14 @@ online-player resolution possible without a public manager abstraction. Player-b
 entity-use targets are concrete `Player` values, so killer inventory inspection and refill are
 available too. Functional Nodebuff and Sumo FFA are therefore implementable with the current API.
 
-Remaining raw-Dragonfly parity work is concentrated in concrete entity capabilities and advanced
-world construction:
+Remaining raw-Dragonfly parity work includes:
 
-- player-capable raw handle transfer and the remaining entity transaction methods;
-- custom providers and generators beyond the current NOP/MCDB
-  `World.Config` surface.
+- remaining `Player`, `World`, and `World.Tx` methods, including transaction defer/event,
+  world configuration, presentation, combat, and player-control surfaces;
+- exact package-shaped damage/healing sources, command behavior, and skin types;
+- player-capable raw handle transfer and remaining concrete entity capabilities;
+- custom items, blocks, providers, and generators beyond current generated registries and
+  NOP/MCDB `World.Config` surface.
 
 Dragonfly's `HandleTransfer` remains a transfer to another server address. It must not be reused or
 documented as cross-world movement.
@@ -273,9 +279,10 @@ game mode.
 `/kitchen state` exercises all 17 generated food, health, experience-level/progress, scale,
 visibility, and mobility methods without changing the final player state.
 `/kitchen item` exercises stack count, durability, unbreakable, attack damage, anvil cost,
-comparison and merging, then round-trips all eleven finite stateful item families plus both typed
-book and firework item families through player inventory before restoring all changed player
-state. Its firework coverage also exercises typed explosion shapes, colours, fades, twinkle,
+values, `WithItem`, `String`, semantic NBT comparison, and merging, then round-trips all eleven
+finite stateful item families plus both typed book and firework item families through player
+inventory before restoring all changed player state. Its firework coverage also exercises typed
+explosion shapes, colours, fades, twinkle,
 trail, off-hand support, and randomised duration. Its armour coverage checks tier, defence,
 durability, repair, smelting, trim-material, and private dyed/trim NBT behavior, then round-trips
 all 28 tier-and-piece combinations. It also constructs a charged typed crossbow, checks its pure

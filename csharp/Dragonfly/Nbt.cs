@@ -183,6 +183,54 @@ internal static class Nbt
         }
     }
 
+    internal static bool Equivalent(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)
+    {
+        if (left.SequenceEqual(right)) return true;
+        return TryDecode(left, out var leftRoot) && TryDecode(right, out var rightRoot) &&
+            Equivalent(leftRoot!, rightRoot!);
+    }
+
+    private static bool Equivalent(Compound left, Compound right)
+    {
+        if (left.Count != right.Count) return false;
+        foreach (var (key, value) in left)
+        {
+            if (!right.TryGetValue(key, out var other) || !Equivalent(value, other)) return false;
+        }
+        return true;
+    }
+
+    private static bool Equivalent(Value left, Value right)
+    {
+        if (left.Type != right.Type) return false;
+        return left.Type switch
+        {
+            TagType.Byte => left.AsByte() == right.AsByte(),
+            TagType.Short => left.AsShort() == right.AsShort(),
+            TagType.Int => left.AsInt() == right.AsInt(),
+            TagType.Long => left.AsLong() == right.AsLong(),
+            TagType.Float => left.AsFloat() == right.AsFloat(),
+            TagType.Double => left.AsDouble() == right.AsDouble(),
+            TagType.ByteArray => left.AsByteArray().AsSpan().SequenceEqual(right.AsByteArray()),
+            TagType.String => left.AsString() == right.AsString(),
+            TagType.List => Equivalent(left.AsList(), right.AsList()),
+            TagType.Compound => Equivalent(left.AsCompound(), right.AsCompound()),
+            TagType.IntArray => left.AsIntArray().AsSpan().SequenceEqual(right.AsIntArray()),
+            TagType.LongArray => left.AsLongArray().AsSpan().SequenceEqual(right.AsLongArray()),
+            _ => false,
+        };
+    }
+
+    private static bool Equivalent(ListValue left, ListValue right)
+    {
+        if (left.ElementType != right.ElementType || left.Count != right.Count) return false;
+        for (var index = 0; index < left.Count; index++)
+        {
+            if (!Equivalent(left[index], right[index])) return false;
+        }
+        return true;
+    }
+
     private sealed class Writer
     {
         private readonly ArrayBufferWriter<byte> _buffer = new(256);

@@ -62,7 +62,7 @@ func TestInspectBlocksIncludesPrimitiveRegistryStates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, want := len(spec.Types), 112; got != want {
+	if got, want := len(spec.Types), 118; got != want {
 		t.Fatalf("primitive block types = %d, want %d", got, want)
 	}
 	states := 0
@@ -74,13 +74,13 @@ func TestInspectBlocksIncludesPrimitiveRegistryStates(t *testing.T) {
 			}
 		}
 	}
-	if want := 306; states != want {
+	if want := 314; states != want {
 		t.Fatalf("primitive block states = %d, want %d", states, want)
 	}
 	generated := string(generateBlocks(spec))
 	blockCases, liquidCases := blockDecodeCases(spec)
 	allCases := append(blockCases, liquidCases...)
-	if got, want := len(allCases), 370; got != want {
+	if got, want := len(allCases), 378; got != want {
 		t.Fatalf("generated codec states = %d, want %d", got, want)
 	}
 	for index, state := range allCases {

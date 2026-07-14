@@ -3,7 +3,7 @@ module github.com/bedrock-gophers/plugins
 go 1.26.0
 
 require (
-	github.com/df-mc/dragonfly v0.11.0
+	github.com/df-mc/dragonfly v0.11.1-0.20260714151819-dbbd8b787946
 	github.com/go-gl/mathgl v1.2.0
 	github.com/google/uuid v1.6.0
 	github.com/pelletier/go-toml v1.9.5

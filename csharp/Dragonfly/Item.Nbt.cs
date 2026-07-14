@@ -39,6 +39,7 @@ internal static class ItemNbtCodec
                 data = CrossbowStackNbt.Encode(crossbow.Item, depth + 1);
                 return true;
             default:
+                if (ItemCodec.TryRawNbt(item, out data)) return true;
                 data = [];
                 return false;
         }
@@ -84,6 +85,11 @@ internal static class ItemNbtCodec
                 consumed = true;
                 return new Item.Crossbow(CrossbowStackNbt.Decode(data, depth + 1));
             default:
+                if (ItemCodec.TryWithRawNbt(item, data, out var encoded))
+                {
+                    consumed = true;
+                    return encoded;
+                }
                 consumed = false;
                 return item;
         }

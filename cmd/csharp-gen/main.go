@@ -639,6 +639,10 @@ func main() {
 	if err != nil {
 		fatal(err)
 	}
+	itemStack, err := inspectItemStack(filepath.Join(directory, "server", "item", "stack.go"))
+	if err != nil {
+		fatal(err)
+	}
 	inventories, err := inspectInventories(filepath.Join(directory, "server", "item", "inventory"))
 	if err != nil {
 		fatal(err)
@@ -755,6 +759,10 @@ func main() {
 		{
 			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "Item.Types.g.cs"),
 			Content: generateItems(items),
+		},
+		{
+			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "Item.Stack.g.cs"),
+			Content: generateItemStack(itemStack),
 		},
 		{
 			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "Inventory.g.cs"),
@@ -5398,9 +5406,11 @@ func generateItems(spec itemSpec) []byte {
 			output.WriteString(");\n")
 		}
 	}
-	output.WriteString("            return new EncodedItem(identifier, metadata);\n        }\n\n")
+	output.WriteString("            return new EncodedItem(identifier, metadata, []);\n        }\n\n")
 	fmt.Fprintf(&output, "        internal static bool IsAir(World.Item item) =>\n            TryEncode(item, out var identifier, out _) && identifier == %s;\n\n", strconv.Quote(spec.AirIdentifier))
-	output.WriteString("        private sealed record EncodedItem(string Identifier, int Metadata) : World.Item;\n")
+	output.WriteString("        internal static bool TryRawNbt(World.Item? item, out byte[] nbt)\n        {\n            if (item is EncodedItem encoded)\n            {\n                nbt = encoded.Nbt;\n                return true;\n            }\n            nbt = [];\n            return false;\n        }\n\n")
+	output.WriteString("        internal static bool TryWithRawNbt(World.Item item, ReadOnlySpan<byte> nbt, out World.Item result)\n        {\n            if (item is EncodedItem encoded)\n            {\n                result = encoded with { Nbt = nbt.ToArray() };\n                return true;\n            }\n            result = item;\n            return false;\n        }\n\n")
+	output.WriteString("        private sealed record EncodedItem(string Identifier, int Metadata, byte[] Nbt) : World.Item;\n")
 	output.WriteString("    }\n\n")
 	generateArmourCodec(&output, spec)
 	generateItemCapabilities(&output, spec)

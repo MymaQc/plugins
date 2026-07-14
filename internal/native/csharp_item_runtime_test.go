@@ -1,6 +1,7 @@
 package native
 
 import (
+	"bytes"
 	"reflect"
 	"slices"
 	"testing"
@@ -134,7 +135,16 @@ func TestCSharpTypedItemInventoryFlow(t *testing.T) {
 		CustomName: "Opaque main", Lore: []string{"preserve"}, NBT: []byte{10, 0, 0},
 		ValuesNBT: []byte{10, 0, 0}, Enchantments: []ItemEnchantment{{ID: 17, Level: 3}},
 	}
-	offHand := ItemStack{Identifier: "minecraft:filled_map", Metadata: 2, Count: 1, CustomName: "Opaque off"}
+	offHandNBT, err := nbt.MarshalEncoding(map[string]any{
+		"map_uuid": int64(42),
+	}, nbt.LittleEndian)
+	if err != nil {
+		t.Fatal(err)
+	}
+	offHand := ItemStack{
+		Identifier: "minecraft:filled_map", Metadata: 2, Count: 1, CustomName: "Opaque off",
+		NBT: offHandNBT,
+	}
 	host := &csharpItemHost{
 		recordingHost: &recordingHost{},
 		inventory:     previous,
@@ -183,6 +193,9 @@ func TestCSharpTypedItemInventoryFlow(t *testing.T) {
 	}
 	if len(host.sets) != 3500 || len(host.heldSets) != 140 {
 		t.Fatalf("item writes=%d held writes=%d", len(host.sets), len(host.heldSets))
+	}
+	if !bytes.Equal(host.heldSets[0][1].NBT, offHandNBT) {
+		t.Fatalf("opaque WithItem NBT=%x, want %x", host.heldSets[0][1].NBT, offHandNBT)
 	}
 	if len(host.armourSets) != 140 || len(host.adds) != 70 || host.adds[0].Identifier != "" || host.adds[0].Count != 0 {
 		t.Fatalf("armour writes=%d adds=%d", len(host.armourSets), len(host.adds))

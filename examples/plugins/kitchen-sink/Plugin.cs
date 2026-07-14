@@ -1005,6 +1005,7 @@ public sealed class KitchenSink : Plugin
             var enderChest = player.EnderChestInventory();
             var previousEnderItem = enderChest.Item(0);
             var (mainHand, offHand) = player.HeldItems();
+            var sameOffHandItem = offHand.Empty() ? offHand : offHand.WithItem(offHand.Item()!);
             var armour = player.Armour();
             var helmet = armour.Helmet();
             var sword = Dragonfly.Item.NewStack(
@@ -1018,7 +1019,7 @@ public sealed class KitchenSink : Plugin
             {
                 inventory.SetItem(0, sword);
                 enderChest.SetItem(0, sword);
-                player.SetHeldItems(sword, offHand);
+                player.SetHeldItems(sword, sameOffHandItem);
                 var stored = inventory.Item(0);
                 var enderStored = enderChest.Item(0);
                 var (held, _) = player.HeldItems();
@@ -1053,6 +1054,16 @@ public sealed class KitchenSink : Plugin
                 var zeroSword = Dragonfly.Item.NewStack(
                     new Dragonfly.Item.Sword(Dragonfly.Item.ToolTierDiamond), 0);
                 var persistentElytra = Dragonfly.Item.NewStack(new Dragonfly.Item.Elytra(), 1);
+                var axe = damagedSword.WithAnvilCost(7).WithItem(
+                    new Dragonfly.Item.Axe(Dragonfly.Item.ToolTierDiamond));
+                var apple = axe.WithItem(new Dragonfly.Item.Apple());
+                var axeValues = axe.Values();
+                var orderedValues = Dragonfly.Item.NewStack(new Dragonfly.Item.Snowball(), 1)
+                    .WithValue("first", 1)
+                    .WithValue("second", 2);
+                var reverseValues = Dragonfly.Item.NewStack(new Dragonfly.Item.Snowball(), 1)
+                    .WithValue("second", 2)
+                    .WithValue("first", 1);
                 if (sword.MaxCount() != 1 || sword.MaxDurability() != 1561 || sword.Durability() != 1561 ||
                     sword.AttackDamage() != 8d || damagedSword.Durability() != 1551 ||
                     unbreakableSword.Damage(100).Durability() != 1551 || !unbreakableSword.Unbreakable() ||
@@ -1062,7 +1073,14 @@ public sealed class KitchenSink : Plugin
                     snowballs.MaxCount() != 16 || fullSnowballs.Count() != 16 || remainingSnowballs.Count() != 2 ||
                     !snowballs.Comparable(moreSnowballs) || snowballs.Equal(moreSnowballs) ||
                     !zeroSword.Grow(1).Item()!.Equals(new Dragonfly.Item.Sword(Dragonfly.Item.ToolTierDiamond)) ||
-                    persistentElytra.Damage(433).Empty())
+                    persistentElytra.Damage(433).Empty() ||
+                    axe.Item() is not Dragonfly.Item.Axe || axe.Durability() != 1551 || axe.AnvilCost() != 7 ||
+                    axe.CustomName() != "Kitchen sword" || axe.Lore().Length != 2 || axe.Enchantments().Length != 1 ||
+                    !axeValues.TryGetValue("practice:item", out var axeValue) ||
+                    axeValue is not string axeSelector || axeSelector != "lobby_ffa_selector" ||
+                    !axe.String().StartsWith("Stack<", StringComparison.Ordinal) ||
+                    apple.Durability() != -1 || apple.AnvilCost() != 0 || apple.Enchantments().Length != 0 ||
+                    !orderedValues.Comparable(reverseValues) || !sameOffHandItem.Equal(offHand))
                 {
                     output.Error("Stack behavior failed.");
                     return;

@@ -2,7 +2,9 @@
 
 C# NativeAOT plugins for [df-mc/dragonfly](https://github.com/df-mc/dragonfly).
 
-The public C# API follows Dragonfly. The native ABI is internal plumbing, and generated C# API code is derived from Dragonfly's Go AST rather than a separate public schema.
+The implemented public C# surface follows Dragonfly. Full Dragonfly parity is still in progress.
+The native ABI is internal plumbing, and generated C# API code is derived from Dragonfly's Go AST
+rather than a separate public schema.
 
 ## Run
 
@@ -135,9 +137,10 @@ states whose concrete Dragonfly types still implement `Fuel`.
 `Bucket` and its private-state `BucketContent` mirror Dragonfly's empty, water, lava, and milk
 states through typed content factories. Pure count, consumption, duration, empty, and fuel behavior
 is preserved; lava burns for 1000 seconds and leaves a typed empty bucket residue.
-`Item.Stack` also exposes Dragonfly's generated max-count, durability, unbreakable, attack-damage,
-anvil-cost, comparison, equality, and stack-merging behavior. Capability tables are derived from
-the live item implementations; they are not duplicated in a public adapter model.
+`Item.Stack` is generated from Dragonfly's `item.Stack` AST, including `WithItem`, `String`,
+max-count, durability, unbreakable, attack-damage, anvil-cost, values, comparison, equality, and
+stack-merging behavior. Capability tables are derived from the live item implementations; they are
+not duplicated in a public adapter model.
 `Inventory.Value` currently exposes `Size`, `Item`, `SetItem`, and `AddItem`; player armour
 and held-item access use the same typed `Item.Stack`. Invalid C# slot indices throw
 `ArgumentOutOfRangeException`; setters return `void`.
@@ -147,7 +150,7 @@ World callbacks now carry Dragonfly-shaped transactions. `Player.Context` inheri
 `World.Block`, `World.Liquid`, `World.Biome`, `World.SetOpts`, and the current `World.Tx` block and
 biome surface are generated from Dragonfly source. This includes `Range`, `Block`, `BlockLoaded`,
 `Liquid`, `SetLiquid`, `ScheduleBlockUpdate`, `HighestLightBlocker`, `HighestBlock`, `Light`, and
-`SkyLight`, `CurrentTick`, `AddParticle`, plus 112 concrete non-liquid block types covering 306
+`SkyLight`, `CurrentTick`, `AddParticle`, plus 118 concrete non-liquid block types covering 314
 canonical primitive-state registry entries, `Block.Water`, `Block.Lava`, all 88 registered vanilla
 biome types, and all 20 Dragonfly particle types with typed colours, blocks, faces, positions, and
 note instruments. Promoted Dragonfly fields remain visible, so crops use typed growth stages:

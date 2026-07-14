@@ -3174,13 +3174,35 @@ namespace Dragonfly
             if (identifier == "minecraft:warped_fungus_on_a_stick" && metadata == 0) return new Item.WarpedFungusOnAStick();
             if (identifier == "minecraft:wheat" && metadata == 0) return new Item.Wheat();
             if (identifier == "minecraft:written_book" && metadata == 0) return new Item.WrittenBook();
-            return new EncodedItem(identifier, metadata);
+            return new EncodedItem(identifier, metadata, []);
         }
 
         internal static bool IsAir(World.Item item) =>
             TryEncode(item, out var identifier, out _) && identifier == "minecraft:air";
 
-        private sealed record EncodedItem(string Identifier, int Metadata) : World.Item;
+        internal static bool TryRawNbt(World.Item? item, out byte[] nbt)
+        {
+            if (item is EncodedItem encoded)
+            {
+                nbt = encoded.Nbt;
+                return true;
+            }
+            nbt = [];
+            return false;
+        }
+
+        internal static bool TryWithRawNbt(World.Item item, ReadOnlySpan<byte> nbt, out World.Item result)
+        {
+            if (item is EncodedItem encoded)
+            {
+                result = encoded with { Nbt = nbt.ToArray() };
+                return true;
+            }
+            result = item;
+            return false;
+        }
+
+        private sealed record EncodedItem(string Identifier, int Metadata, byte[] Nbt) : World.Item;
     }
 
     internal static class ArmourCodec
