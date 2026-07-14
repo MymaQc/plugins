@@ -474,6 +474,7 @@ namespace Dragonfly
         public interface Durable { DurabilityInfo DurabilityInfo(); }
         public interface Repairable : Durable { bool RepairableBy(Stack stack); }
         public interface Smeltable { SmeltInfo SmeltInfo(); }
+        public interface Fuel { FuelInfo FuelInfo(); }
 
         public readonly record struct ArmourTrim(SmithingTemplateType Template, ArmourTrimMaterial? Material)
         {
@@ -492,6 +493,11 @@ namespace Dragonfly
             double Experience = 0d,
             bool Food = false,
             bool Ores = false);
+
+        public readonly record struct FuelInfo(TimeSpan Duration = default, Stack Residue = default)
+        {
+            public FuelInfo WithResidue(Stack residue) => this with { Residue = residue };
+        }
 
         public readonly record struct ArmourTierLeather(global::Dragonfly.Color.RGBA Colour = default) : ArmourTier
         {
@@ -599,14 +605,20 @@ namespace Dragonfly
         }
         public readonly record struct Apple : World.Item;
         public readonly record struct Arrow(global::Dragonfly.Potion.Value Tip) : World.Item;
-        public readonly record struct Axe(ToolTier Tier) : World.Item;
+        public readonly record struct Axe(ToolTier Tier) : World.Item, Fuel
+        {
+            public FuelInfo FuelInfo() => ItemCapabilities.FuelInfo(this);
+        }
         public readonly record struct BakedPotato : World.Item;
         public readonly record struct BannerPattern(BannerPatternType Type) : World.Item;
         public readonly record struct Beef(bool Cooked) : World.Item;
         public readonly record struct Beetroot : World.Item;
         public readonly record struct BeetrootSoup : World.Item;
         public readonly record struct BlazePowder : World.Item;
-        public readonly record struct BlazeRod : World.Item;
+        public readonly record struct BlazeRod : World.Item, Fuel
+        {
+            public FuelInfo FuelInfo() => ItemCapabilities.FuelInfo(this);
+        }
         public readonly record struct Bone : World.Item;
         public readonly record struct BoneMeal : World.Item;
         public readonly record struct Book : World.Item;
@@ -718,12 +730,21 @@ namespace Dragonfly
         }
 
         public readonly record struct BottleOfEnchanting : World.Item;
-        public readonly record struct Bow : World.Item;
-        public readonly record struct Bowl : World.Item;
+        public readonly record struct Bow : World.Item, Fuel
+        {
+            public FuelInfo FuelInfo() => ItemCapabilities.FuelInfo(this);
+        }
+        public readonly record struct Bowl : World.Item, Fuel
+        {
+            public FuelInfo FuelInfo() => ItemCapabilities.FuelInfo(this);
+        }
         public readonly record struct Bread : World.Item;
         public readonly record struct Brick : World.Item;
         public readonly record struct CarrotOnAStick : World.Item;
-        public readonly record struct Charcoal : World.Item;
+        public readonly record struct Charcoal : World.Item, Fuel
+        {
+            public FuelInfo FuelInfo() => ItemCapabilities.FuelInfo(this);
+        }
         public readonly record struct Chestplate(ArmourTier Tier, ArmourTrim Trim = default) : World.Item, ChestplateType, Trimmable, MaxCounter, Enchantable, Repairable, Smeltable
         {
             public int MaxCount() => 1;
@@ -772,7 +793,10 @@ namespace Dragonfly
         public readonly record struct Chicken(bool Cooked) : World.Item;
         public readonly record struct ClayBall : World.Item;
         public readonly record struct Clock : World.Item;
-        public readonly record struct Coal : World.Item;
+        public readonly record struct Coal : World.Item, Fuel
+        {
+            public FuelInfo FuelInfo() => ItemCapabilities.FuelInfo(this);
+        }
         public readonly record struct Cod(bool Cooked) : World.Item;
         public readonly record struct Compass : World.Item;
         public readonly record struct Cookie : World.Item;
@@ -782,6 +806,14 @@ namespace Dragonfly
             public string MaterialColour() => "§n";
         }
         public readonly record struct CopperNugget : World.Item;
+        public readonly record struct Crossbow(Stack Item = default) : World.Item, MaxCounter, Durable, Fuel, Enchantable
+        {
+            public int MaxCount() => 1;
+            public DurabilityInfo DurabilityInfo() => new(464, static () => default);
+            public FuelInfo FuelInfo() => new(TimeSpan.FromTicks(150000000));
+            public int EnchantmentValue() => 1;
+        }
+
         public readonly record struct Diamond : World.Item, ArmourTrimMaterial
         {
             public string TrimMaterial() => "diamond";
@@ -882,7 +914,10 @@ namespace Dragonfly
             public World.Item WithTrim(ArmourTrim trim) => new Helmet(Tier, trim);
         }
 
-        public readonly record struct Hoe(ToolTier Tier) : World.Item;
+        public readonly record struct Hoe(ToolTier Tier) : World.Item, Fuel
+        {
+            public FuelInfo FuelInfo() => ItemCapabilities.FuelInfo(this);
+        }
         public readonly record struct HoneyBottle : World.Item;
         public readonly record struct Honeycomb : World.Item;
         public readonly record struct InkSac(bool Glowing) : World.Item;
@@ -965,7 +1000,10 @@ namespace Dragonfly
         public readonly record struct NetheriteScrap : World.Item;
         public readonly record struct Paper : World.Item;
         public readonly record struct PhantomMembrane : World.Item;
-        public readonly record struct Pickaxe(ToolTier Tier) : World.Item;
+        public readonly record struct Pickaxe(ToolTier Tier) : World.Item, Fuel
+        {
+            public FuelInfo FuelInfo() => ItemCapabilities.FuelInfo(this);
+        }
         public readonly record struct PoisonousPotato : World.Item;
         public readonly record struct PoppedChorusFruit : World.Item;
         public readonly record struct Porkchop(bool Cooked) : World.Item;
@@ -997,7 +1035,10 @@ namespace Dragonfly
         public readonly record struct Salmon(bool Cooked) : World.Item;
         public readonly record struct Scute : World.Item;
         public readonly record struct Shears : World.Item;
-        public readonly record struct Shovel(ToolTier Tier) : World.Item;
+        public readonly record struct Shovel(ToolTier Tier) : World.Item, Fuel
+        {
+            public FuelInfo FuelInfo() => ItemCapabilities.FuelInfo(this);
+        }
         public readonly record struct ShulkerShell : World.Item;
         public readonly record struct Slimeball : World.Item;
         public readonly record struct SmithingTemplate(SmithingTemplateType Template) : World.Item;
@@ -1005,10 +1046,16 @@ namespace Dragonfly
         public readonly record struct SpiderEye : World.Item;
         public readonly record struct SplashPotion(global::Dragonfly.Potion.Value Type) : World.Item;
         public readonly record struct Spyglass : World.Item;
-        public readonly record struct Stick : World.Item;
+        public readonly record struct Stick : World.Item, Fuel
+        {
+            public FuelInfo FuelInfo() => ItemCapabilities.FuelInfo(this);
+        }
         public readonly record struct Sugar : World.Item;
         public readonly record struct SuspiciousStew(StewType Type) : World.Item;
-        public readonly record struct Sword(ToolTier Tier) : World.Item;
+        public readonly record struct Sword(ToolTier Tier) : World.Item, Fuel
+        {
+            public FuelInfo FuelInfo() => ItemCapabilities.FuelInfo(this);
+        }
         public readonly record struct Totem : World.Item;
         public readonly record struct TropicalFish : World.Item;
         public readonly record struct TurtleShell : World.Item;
@@ -1541,6 +1588,8 @@ namespace Dragonfly
                     identifier = "minecraft:copper_ingot"; metadata = 0; return true;
                 case Item.CopperNugget _:
                     identifier = "minecraft:copper_nugget"; metadata = 0; return true;
+                case Item.Crossbow _:
+                    identifier = "minecraft:crossbow"; metadata = 0; return true;
                 case Item.Diamond _:
                     identifier = "minecraft:diamond"; metadata = 0; return true;
                 case Item.DiscFragment _:
@@ -2401,6 +2450,7 @@ namespace Dragonfly
             if (identifier == "minecraft:cookie" && metadata == 0) return new Item.Cookie();
             if (identifier == "minecraft:copper_ingot" && metadata == 0) return new Item.CopperIngot();
             if (identifier == "minecraft:copper_nugget" && metadata == 0) return new Item.CopperNugget();
+            if (identifier == "minecraft:crossbow" && metadata == 0) return new Item.Crossbow();
             if (identifier == "minecraft:diamond" && metadata == 0) return new Item.Diamond();
             if (identifier == "minecraft:disc_fragment_5" && metadata == 0) return new Item.DiscFragment();
             if (identifier == "minecraft:dragon_breath" && metadata == 0) return new Item.DragonBreath();
@@ -2873,6 +2923,7 @@ namespace Dragonfly
             Item.Chestplate value when value.Tier is Item.ArmourTierIron => 1,
             Item.Chestplate value when value.Tier is Item.ArmourTierDiamond => 1,
             Item.Chestplate value when value.Tier is Item.ArmourTierNetherite => 1,
+            Item.Crossbow _ => 1,
             Item.Egg _ => 16,
             Item.Elytra _ => 1,
             Item.EnchantedBook _ => 1,
@@ -3152,6 +3203,8 @@ namespace Dragonfly
                     durability = new(528, false, default); return true;
                 case Item.Chestplate value when value.Tier is Item.ArmourTierNetherite:
                     durability = new(593, false, default); return true;
+                case Item.Crossbow _:
+                    durability = new(464, false, default); return true;
                 case Item.Elytra _:
                     durability = new(433, true, default); return true;
                 case Item.FlintAndSteel _:
@@ -3287,6 +3340,53 @@ namespace Dragonfly
             Item.Sword value when value.Tier == Item.ToolTierDiamond => 8d,
             Item.Sword value when value.Tier == Item.ToolTierNetherite => 9d,
             _ => 1d,
+        };
+
+        internal static Item.FuelInfo FuelInfo(World.Item? item) => item switch
+        {
+            Item.Axe value when value.Tier == Item.ToolTierWood => new(TimeSpan.FromTicks(100000000), default),
+            Item.Axe value when value.Tier == Item.ToolTierGold => new(TimeSpan.FromTicks(0), default),
+            Item.Axe value when value.Tier == Item.ToolTierStone => new(TimeSpan.FromTicks(0), default),
+            Item.Axe value when value.Tier == Item.ToolTierCopper => new(TimeSpan.FromTicks(0), default),
+            Item.Axe value when value.Tier == Item.ToolTierIron => new(TimeSpan.FromTicks(0), default),
+            Item.Axe value when value.Tier == Item.ToolTierDiamond => new(TimeSpan.FromTicks(0), default),
+            Item.Axe value when value.Tier == Item.ToolTierNetherite => new(TimeSpan.FromTicks(0), default),
+            Item.BlazeRod _ => new(TimeSpan.FromTicks(1200000000), default),
+            Item.Bow _ => new(TimeSpan.FromTicks(100000000), default),
+            Item.Bowl _ => new(TimeSpan.FromTicks(100000000), default),
+            Item.Charcoal _ => new(TimeSpan.FromTicks(800000000), default),
+            Item.Coal _ => new(TimeSpan.FromTicks(800000000), default),
+            Item.Crossbow _ => new(TimeSpan.FromTicks(150000000), default),
+            Item.Hoe value when value.Tier == Item.ToolTierWood => new(TimeSpan.FromTicks(100000000), default),
+            Item.Hoe value when value.Tier == Item.ToolTierGold => new(TimeSpan.FromTicks(0), default),
+            Item.Hoe value when value.Tier == Item.ToolTierStone => new(TimeSpan.FromTicks(0), default),
+            Item.Hoe value when value.Tier == Item.ToolTierCopper => new(TimeSpan.FromTicks(0), default),
+            Item.Hoe value when value.Tier == Item.ToolTierIron => new(TimeSpan.FromTicks(0), default),
+            Item.Hoe value when value.Tier == Item.ToolTierDiamond => new(TimeSpan.FromTicks(0), default),
+            Item.Hoe value when value.Tier == Item.ToolTierNetherite => new(TimeSpan.FromTicks(0), default),
+            Item.Pickaxe value when value.Tier == Item.ToolTierWood => new(TimeSpan.FromTicks(100000000), default),
+            Item.Pickaxe value when value.Tier == Item.ToolTierGold => new(TimeSpan.FromTicks(0), default),
+            Item.Pickaxe value when value.Tier == Item.ToolTierStone => new(TimeSpan.FromTicks(0), default),
+            Item.Pickaxe value when value.Tier == Item.ToolTierCopper => new(TimeSpan.FromTicks(0), default),
+            Item.Pickaxe value when value.Tier == Item.ToolTierIron => new(TimeSpan.FromTicks(0), default),
+            Item.Pickaxe value when value.Tier == Item.ToolTierDiamond => new(TimeSpan.FromTicks(0), default),
+            Item.Pickaxe value when value.Tier == Item.ToolTierNetherite => new(TimeSpan.FromTicks(0), default),
+            Item.Shovel value when value.Tier == Item.ToolTierWood => new(TimeSpan.FromTicks(100000000), default),
+            Item.Shovel value when value.Tier == Item.ToolTierGold => new(TimeSpan.FromTicks(0), default),
+            Item.Shovel value when value.Tier == Item.ToolTierStone => new(TimeSpan.FromTicks(0), default),
+            Item.Shovel value when value.Tier == Item.ToolTierCopper => new(TimeSpan.FromTicks(0), default),
+            Item.Shovel value when value.Tier == Item.ToolTierIron => new(TimeSpan.FromTicks(0), default),
+            Item.Shovel value when value.Tier == Item.ToolTierDiamond => new(TimeSpan.FromTicks(0), default),
+            Item.Shovel value when value.Tier == Item.ToolTierNetherite => new(TimeSpan.FromTicks(0), default),
+            Item.Stick _ => new(TimeSpan.FromTicks(50000000), default),
+            Item.Sword value when value.Tier == Item.ToolTierWood => new(TimeSpan.FromTicks(100000000), default),
+            Item.Sword value when value.Tier == Item.ToolTierGold => new(TimeSpan.FromTicks(0), default),
+            Item.Sword value when value.Tier == Item.ToolTierStone => new(TimeSpan.FromTicks(0), default),
+            Item.Sword value when value.Tier == Item.ToolTierCopper => new(TimeSpan.FromTicks(0), default),
+            Item.Sword value when value.Tier == Item.ToolTierIron => new(TimeSpan.FromTicks(0), default),
+            Item.Sword value when value.Tier == Item.ToolTierDiamond => new(TimeSpan.FromTicks(0), default),
+            Item.Sword value when value.Tier == Item.ToolTierNetherite => new(TimeSpan.FromTicks(0), default),
+            _ => default,
         };
 
         internal static bool AllowsAnvilCost(World.Item? item) => item switch

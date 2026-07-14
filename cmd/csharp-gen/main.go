@@ -18,6 +18,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/bedrock-gophers/plugins/internal/host"
 	_ "github.com/df-mc/dragonfly/server/block"
@@ -151,6 +152,11 @@ type itemCapabilitySpec struct {
 	BrokenCount      int
 	AttackDamage     float64
 	AllowsAnvilCost  bool
+	Fuel             bool
+	FuelDuration     time.Duration
+	FuelIdentifier   string
+	FuelMetadata     int
+	FuelCount        int
 }
 
 type itemTypeSpec struct {
@@ -172,7 +178,16 @@ type itemSpec struct {
 	ToolTierFields []parameter
 	ValueTypes     []itemValueTypeSpec
 	Armour         armourSpec
+	Crossbow       crossbowSpec
 	AirIdentifier  string
+}
+
+type crossbowSpec struct {
+	Present          bool
+	MaxCount         int
+	MaxDurability    int
+	EnchantmentValue int
+	FuelDuration     time.Duration
 }
 
 type armourSpec struct {
@@ -1659,6 +1674,15 @@ func inspectItems(directory string) (itemSpec, error) {
 		if itemTypeByName(armourTypes, typeOf.Name()) != nil {
 			continue
 		}
+		if typeOf.Name() == "Crossbow" {
+			definition, crossbow, err := inspectCrossbowItem(typeOf, values, declaration, types, methods, liveTiers, valueTypes)
+			if err != nil {
+				return itemSpec{}, err
+			}
+			result.Crossbow = crossbow
+			result.Types = append(result.Types, definition)
+			continue
+		}
 		if typeOf.Name() == "BookAndQuill" || typeOf.Name() == "WrittenBook" {
 			if len(values) != 1 {
 				return itemSpec{}, fmt.Errorf("Dragonfly item.%s registry states changed: %d", typeOf.Name(), len(values))
@@ -1738,6 +1762,79 @@ func inspectItems(directory string) (itemSpec, error) {
 		return itemSpec{}, fmt.Errorf("no safely representable Dragonfly items found")
 	}
 	return result, nil
+}
+
+func inspectCrossbowItem(
+	typeOf reflect.Type,
+	values []world.Item,
+	declaration *ast.TypeSpec,
+	types map[string]*ast.TypeSpec,
+	methods map[string]map[string]*ast.FuncDecl,
+	toolTiers []dfitem.ToolTier,
+	valueTypes []itemValueTypeSpec,
+) (itemTypeSpec, crossbowSpec, error) {
+	if len(values) != 1 {
+		return itemTypeSpec{}, crossbowSpec{}, fmt.Errorf("Dragonfly item.Crossbow registry states changed: %d", len(values))
+	}
+	if fields := exportedItemFields(declaration); !reflect.DeepEqual(fields, []string{"Item Stack"}) {
+		return itemTypeSpec{}, crossbowSpec{}, fmt.Errorf("Dragonfly item.Crossbow fields changed: %v", fields)
+	}
+	for name, signature := range map[string]goSignature{
+		"MaxCount":         {Results: "int"},
+		"DurabilityInfo":   {Results: "DurabilityInfo"},
+		"FuelInfo":         {Results: "FuelInfo"},
+		"EnchantmentValue": {Results: "int"},
+		"Charge":           {Parameters: "Releaser,*world.Tx,*UseContext,time.Duration", Results: "bool"},
+		"ContinueCharge":   {Parameters: "Releaser,*world.Tx,*UseContext,time.Duration"},
+		"ReleaseCharge":    {Parameters: "Releaser,*world.Tx,*UseContext", Results: "bool"},
+		"CanCharge":        {Parameters: "Releaser,*world.Tx,*UseContext", Results: "bool"},
+		"EncodeItem":       {Results: "string,int16"},
+		"DecodeNBT":        {Parameters: "map[string]any", Results: "any"},
+		"EncodeNBT":        {Results: "map[string]any"},
+	} {
+		method := methods["Crossbow"][name]
+		if method == nil || !valueReceiver(method, "Crossbow") || rawParameterTypes(method.Type.Params) != signature.Parameters || rawResultTypes(method.Type.Results) != signature.Results {
+			return itemTypeSpec{}, crossbowSpec{}, fmt.Errorf("Dragonfly item.Crossbow.%s signature changed", name)
+		}
+	}
+	if err := validateItemInterface(types["Fuel"], "Fuel", []string{"FuelInfo()->FuelInfo"}); err != nil {
+		return itemTypeSpec{}, crossbowSpec{}, err
+	}
+	if err := validateItemInterface(types["Chargeable"], "Chargeable", []string{
+		"Charge(Releaser,*world.Tx,*UseContext,time.Duration)->bool",
+		"ContinueCharge(Releaser,*world.Tx,*UseContext,time.Duration)->",
+		"ReleaseCharge(Releaser,*world.Tx,*UseContext)->bool",
+		"CanCharge(Releaser,*world.Tx,*UseContext)->bool",
+	}); err != nil {
+		return itemTypeSpec{}, crossbowSpec{}, err
+	}
+	if fields := exportedItemFields(types["FuelInfo"]); !reflect.DeepEqual(fields, []string{"Duration time.Duration", "Residue Stack"}) {
+		return itemTypeSpec{}, crossbowSpec{}, fmt.Errorf("Dragonfly item.FuelInfo fields changed: %v", fields)
+	}
+	withResidue := methods["FuelInfo"]["WithResidue"]
+	if withResidue == nil || !valueReceiver(withResidue, "FuelInfo") || rawParameterTypes(withResidue.Type.Params) != "Stack" || rawResultTypes(withResidue.Type.Results) != "FuelInfo" {
+		return itemTypeSpec{}, crossbowSpec{}, fmt.Errorf("Dragonfly item.FuelInfo.WithResidue signature changed")
+	}
+	value, ok := values[0].(dfitem.Crossbow)
+	if !ok {
+		return itemTypeSpec{}, crossbowSpec{}, fmt.Errorf("Dragonfly registered Crossbow has type %T", values[0])
+	}
+	if _, ok := any(value).(dfitem.Chargeable); !ok {
+		return itemTypeSpec{}, crossbowSpec{}, fmt.Errorf("Dragonfly item.Crossbow no longer implements Chargeable")
+	}
+	state, err := inspectItemState(typeOf, value, nil, toolTiers, valueTypes)
+	if err != nil {
+		return itemTypeSpec{}, crossbowSpec{}, err
+	}
+	durability := value.DurabilityInfo()
+	fuel := value.FuelInfo()
+	if !durability.BrokenItem().Empty() || durability.Persistent || durability.AttackDurability != 0 || durability.BreakDurability != 0 || !fuel.Residue.Empty() {
+		return itemTypeSpec{}, crossbowSpec{}, fmt.Errorf("Dragonfly item.Crossbow capability shape changed")
+	}
+	return itemTypeSpec{Name: "Crossbow", NBT: true, States: []itemStateSpec{state}}, crossbowSpec{
+		Present: true, MaxCount: value.MaxCount(), MaxDurability: durability.MaxDurability,
+		EnchantmentValue: value.EnchantmentValue(), FuelDuration: fuel.Duration,
+	}, nil
 }
 
 func inspectArmourItems(
@@ -2701,6 +2798,17 @@ func inspectItemState(typeOf reflect.Type, value world.Item, fields []itemFieldS
 	_, repairable := value.(dfitem.Repairable)
 	_, enchantedBook := value.(dfitem.EnchantedBook)
 	capability.AllowsAnvilCost = repairable || enchantedBook
+	if fuel, ok := value.(dfitem.Fuel); ok {
+		info := fuel.FuelInfo()
+		capability.Fuel = true
+		capability.FuelDuration = info.Duration
+		capability.FuelCount = info.Residue.Count()
+		if residue := info.Residue.Item(); residue != nil {
+			residueIdentifier, residueMetadata := residue.EncodeItem()
+			capability.FuelIdentifier = residueIdentifier
+			capability.FuelMetadata = int(residueMetadata)
+		}
+	}
 	state := itemStateSpec{Identifier: identifier, Metadata: int(metadata), ToolTier: -1, ArmourTier: -1, Capability: capability}
 	reflected := reflect.ValueOf(value)
 	if reflected.Kind() == reflect.Pointer {
@@ -4304,7 +4412,7 @@ func generateItems(spec itemSpec) []byte {
 			continue
 		}
 		if definition.NBT {
-			generateNBTItemType(&output, definition.Name)
+			generateNBTItemType(&output, definition.Name, spec)
 			continue
 		}
 		if len(definition.Fields) == 0 {
@@ -4312,6 +4420,9 @@ func generateItems(spec itemSpec) []byte {
 				fmt.Fprintf(&output, "        public readonly record struct %s : World.Item, ArmourTrimMaterial\n        {\n", definition.Name)
 				fmt.Fprintf(&output, "            public string TrimMaterial() => %s;\n", strconv.Quote(material.Material))
 				fmt.Fprintf(&output, "            public string MaterialColour() => %s;\n        }\n", strconv.Quote(material.MaterialColour))
+			} else if itemTypeFuel(definition) {
+				fmt.Fprintf(&output, "        public readonly record struct %s : World.Item, Fuel\n        {\n", definition.Name)
+				output.WriteString("            public FuelInfo FuelInfo() => ItemCapabilities.FuelInfo(this);\n        }\n")
 			} else {
 				fmt.Fprintf(&output, "        public readonly record struct %s : World.Item;\n", definition.Name)
 			}
@@ -4328,7 +4439,12 @@ func generateItems(spec itemSpec) []byte {
 			}
 			parameters[index] = parameter{Name: field.Name, Type: typeName}
 		}
-		fmt.Fprintf(&output, "        public readonly record struct %s(%s) : World.Item;\n", definition.Name, formatParameters(parameters))
+		if itemTypeFuel(definition) {
+			fmt.Fprintf(&output, "        public readonly record struct %s(%s) : World.Item, Fuel\n        {\n", definition.Name, formatParameters(parameters))
+			output.WriteString("            public FuelInfo FuelInfo() => ItemCapabilities.FuelInfo(this);\n        }\n")
+		} else {
+			fmt.Fprintf(&output, "        public readonly record struct %s(%s) : World.Item;\n", definition.Name, formatParameters(parameters))
+		}
 	}
 	output.WriteString("    }\n\n")
 	for _, container := range []string{"Potion", "Sound"} {
@@ -4448,6 +4564,7 @@ func generateArmourTypes(output *bytes.Buffer, spec armourSpec) {
         public interface Durable { DurabilityInfo DurabilityInfo(); }
         public interface Repairable : Durable { bool RepairableBy(Stack stack); }
         public interface Smeltable { SmeltInfo SmeltInfo(); }
+        public interface Fuel { FuelInfo FuelInfo(); }
 
         public readonly record struct ArmourTrim(SmithingTemplateType Template, ArmourTrimMaterial? Material)
         {
@@ -4466,6 +4583,11 @@ func generateArmourTypes(output *bytes.Buffer, spec armourSpec) {
             double Experience = 0d,
             bool Food = false,
             bool Ores = false);
+
+        public readonly record struct FuelInfo(TimeSpan Duration = default, Stack Residue = default)
+        {
+            public FuelInfo WithResidue(Stack residue) => this with { Residue = residue };
+        }
 
 `)
 	for _, tier := range spec.Tiers {
@@ -4591,7 +4713,19 @@ func generateFireworkExplosionType(output *bytes.Buffer) {
 `)
 }
 
-func generateNBTItemType(output *bytes.Buffer, name string) {
+func generateNBTItemType(output *bytes.Buffer, name string, spec itemSpec) {
+	if name == "Crossbow" {
+		fmt.Fprintf(output, `        public readonly record struct Crossbow(Stack Item = default) : World.Item, MaxCounter, Durable, Fuel, Enchantable
+        {
+            public int MaxCount() => %d;
+            public DurabilityInfo DurabilityInfo() => new(%d, static () => default);
+            public FuelInfo FuelInfo() => new(TimeSpan.FromTicks(%d));
+            public int EnchantmentValue() => %d;
+        }
+
+`, spec.Crossbow.MaxCount, spec.Crossbow.MaxDurability, csharpDurationTicks(spec.Crossbow.FuelDuration), spec.Crossbow.EnchantmentValue)
+		return
+	}
 	if name == "Firework" {
 		output.WriteString(`        public readonly struct Firework : World.Item
         {
@@ -4751,6 +4885,22 @@ func generateItemCapabilities(output *bytes.Buffer, spec itemSpec) {
 		}
 	}
 	output.WriteString("            _ => 1d,\n        };\n\n")
+	output.WriteString("        internal static Item.FuelInfo FuelInfo(World.Item? item) => item switch\n        {\n")
+	for _, definition := range spec.Types {
+		for _, state := range definition.States {
+			capability := state.Capability
+			if !capability.Fuel {
+				continue
+			}
+			residue := "default"
+			if capability.FuelIdentifier != "" && capability.FuelCount > 0 {
+				residue = fmt.Sprintf("Item.NewStack(ItemCodec.Decode(%s, %d), %d)", strconv.Quote(capability.FuelIdentifier), capability.FuelMetadata, capability.FuelCount)
+			}
+			fmt.Fprintf(output, "            %s => new(TimeSpan.FromTicks(%d), %s),\n",
+				csharpItemPattern(definition, state, spec), csharpDurationTicks(capability.FuelDuration), residue)
+		}
+	}
+	output.WriteString("            _ => default,\n        };\n\n")
 	output.WriteString("        internal static bool AllowsAnvilCost(World.Item? item) => item switch\n        {\n")
 	for _, definition := range spec.Types {
 		for _, state := range definition.States {
@@ -4761,6 +4911,27 @@ func generateItemCapabilities(output *bytes.Buffer, spec itemSpec) {
 	}
 	output.WriteString("            _ => false,\n        };\n")
 	output.WriteString("    }\n")
+}
+
+func itemTypeFuel(definition itemTypeSpec) bool {
+	if len(definition.States) == 0 {
+		return false
+	}
+	fuel := definition.States[0].Capability.Fuel
+	for _, state := range definition.States[1:] {
+		if state.Capability.Fuel != fuel {
+			panic("item type has inconsistent Fuel implementation: " + definition.Name)
+		}
+	}
+	return fuel
+}
+
+func csharpDurationTicks(duration time.Duration) int64 {
+	const tick = 100 * time.Nanosecond
+	if duration%tick != 0 {
+		panic("item duration does not fit C# TimeSpan ticks")
+	}
+	return int64(duration / tick)
 }
 
 func csharpItemPattern(definition itemTypeSpec, state itemStateSpec, spec itemSpec) string {

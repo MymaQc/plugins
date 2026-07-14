@@ -142,6 +142,8 @@ public static partial class Item
         internal uint DamageValue => _damage;
         internal bool IsUnbreakable => _unbreakable;
         internal int AnvilCostValue => _anvilCost;
+        internal World.Item? RawItem => _item;
+        internal byte[] RawItemNbt => _itemNbt ?? [];
         internal byte[] ItemNbt => ItemNbtCodec.TryEncode(_item, out var encoded) ? encoded : _itemNbt ?? [];
         internal byte[] ValuesNbt => _valuesNbt ?? [];
         internal ItemEnchantment[] Enchantments => _enchantments ?? [];

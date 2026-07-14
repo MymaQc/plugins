@@ -597,6 +597,32 @@ public sealed class KitchenSink : Plugin
                     return;
                 }
 
+                var chargedRocket = Dragonfly.Item.NewStack(firework, 1)
+                    .WithCustomName("Charged rocket")
+                    .WithLore("Nested stack");
+                var crossbow = new Dragonfly.Item.Crossbow(chargedRocket);
+                var crossbowDurability = crossbow.DurabilityInfo();
+                var crossbowFuel = crossbow.FuelInfo();
+                if (crossbow.MaxCount() != 1 || crossbowDurability.MaxDurability != 464 ||
+                    crossbowDurability.BrokenItem is null || !crossbowDurability.BrokenItem().Empty() ||
+                    crossbowFuel.Duration != TimeSpan.FromSeconds(15) || !crossbowFuel.Residue.Empty() ||
+                    crossbow.EnchantmentValue() != 1)
+                {
+                    output.Error("Crossbow behavior failed.");
+                    return;
+                }
+                inventory.SetItem(0, Dragonfly.Item.NewStack(crossbow, 1));
+                if (inventory.Item(0).Item() is not Dragonfly.Item.Crossbow storedCrossbow ||
+                    storedCrossbow.Item.CustomName() != "Charged rocket" ||
+                    storedCrossbow.Item.Lore() is not ["Nested stack"] ||
+                    storedCrossbow.Item.Item() is not Dragonfly.Item.Firework storedRocket ||
+                    storedRocket.Duration != firework.Duration || storedRocket.Explosions.Length != 1 ||
+                    storedRocket.Explosions[0] != explosion)
+                {
+                    output.Error("Crossbow round-trip failed.");
+                    return;
+                }
+
                 var armourTrim = new Dragonfly.Item.ArmourTrim(
                     Dragonfly.Item.TemplateFlow(),
                     new Dragonfly.Item.RedstoneWire());
@@ -653,7 +679,7 @@ public sealed class KitchenSink : Plugin
                     held.Item() is Dragonfly.Item.Sword ? "true" : "false",
                     armour.Inventory().Size(),
                     addedEmpty,
-                    variants.Length + 32);
+                    variants.Length + 33);
             }
             finally
             {

@@ -2,6 +2,7 @@ package host
 
 import (
 	"math"
+	"reflect"
 
 	"github.com/bedrock-gophers/plugins/internal/native"
 	"github.com/df-mc/dragonfly/server/item"
@@ -11,7 +12,15 @@ import (
 	"github.com/sandertv/gophertunnel/minecraft/nbt"
 )
 
-const maxItemDataBytes = 16 << 20
+const (
+	maxItemDataBytes      = 16 << 20
+	maxNestedItemDepth    = 16
+	maxNestedItemEntries  = 256
+	maxNestedItemIDBytes  = 256
+	maxNestedItemText     = 4096
+	nestedItemVersion     = int32(1)
+	nestedItemVersionName = "bedrock_gophers_version"
+)
 
 func (p *Players) InventorySize(invocation native.InvocationID, id native.InventoryID) (uint32, bool) {
 	value, ok := readPlayer(p, invocation, id.Player, func(connected *player.Player) uint32 {
@@ -207,11 +216,18 @@ func playerInventory(connected *player.Player, kind native.InventoryKind) (*inve
 }
 
 func itemStackToNative(stack item.Stack) (value native.ItemStack, ok bool) {
+	return itemStackToNativeDepth(stack, 0)
+}
+
+func itemStackToNativeDepth(stack item.Stack, depth int) (value native.ItemStack, ok bool) {
 	defer func() {
 		if recover() != nil {
 			value, ok = native.ItemStack{}, false
 		}
 	}()
+	if depth > maxNestedItemDepth {
+		return native.ItemStack{}, false
+	}
 	if stack.Empty() {
 		return native.ItemStack{}, true
 	}
@@ -228,7 +244,12 @@ func itemStackToNative(stack item.Stack) (value native.ItemStack, ok bool) {
 	if maximum := stack.MaxDurability(); maximum >= 0 {
 		value.Damage = uint32(maximum - stack.Durability())
 	}
-	if itemNBT, ok := stack.Item().(world.NBTer); ok {
+	if crossbow, crossbowOK := stack.Item().(item.Crossbow); crossbowOK {
+		value.NBT, ok = marshalCrossbowNBT(crossbow, depth)
+		if !ok {
+			return native.ItemStack{}, false
+		}
+	} else if itemNBT, itemNBTOK := stack.Item().(world.NBTer); itemNBTOK {
 		value.NBT, ok = marshalItemNBT(itemNBT.EncodeNBT())
 		if !ok {
 			return native.ItemStack{}, false
@@ -251,11 +272,18 @@ func itemStackToNative(stack item.Stack) (value native.ItemStack, ok bool) {
 }
 
 func itemStackFromNative(value native.ItemStack) (stack item.Stack, ok bool) {
+	return itemStackFromNativeDepth(value, 0)
+}
+
+func itemStackFromNativeDepth(value native.ItemStack, depth int) (stack item.Stack, ok bool) {
 	defer func() {
 		if recover() != nil {
 			stack, ok = item.Stack{}, false
 		}
 	}()
+	if depth > maxNestedItemDepth {
+		return item.Stack{}, false
+	}
 	if value.Count == 0 {
 		return item.Stack{}, true
 	}
@@ -266,7 +294,21 @@ func itemStackFromNative(value native.ItemStack) (stack item.Stack, ok bool) {
 	if !ok {
 		return item.Stack{}, false
 	}
-	if len(value.NBT) != 0 {
+	if crossbow, crossbowOK := base.(item.Crossbow); crossbowOK {
+		if len(value.NBT) != 0 {
+			charged, found, valid := unmarshalCrossbowNBT(value.NBT)
+			if !valid {
+				return item.Stack{}, false
+			}
+			if found {
+				crossbow.Item, ok = itemStackFromNativeDepth(charged, depth+1)
+				if !ok {
+					return item.Stack{}, false
+				}
+			}
+		}
+		base = crossbow
+	} else if len(value.NBT) != 0 {
 		decoded, ok := unmarshalItemNBT(value.NBT)
 		if !ok {
 			return item.Stack{}, false
@@ -309,6 +351,196 @@ func itemStackFromNative(value native.ItemStack) (stack item.Stack, ok bool) {
 		stack = stack.WithForcedEnchantments(item.NewEnchantment(typeValue, int(enchantment.Level)))
 	}
 	return stack, true
+}
+
+func marshalCrossbowNBT(crossbow item.Crossbow, depth int) ([]byte, bool) {
+	if crossbow.Item.Empty() {
+		return nil, true
+	}
+	charged, ok := itemStackToNativeDepth(crossbow.Item, depth+1)
+	if !ok {
+		return nil, false
+	}
+	compound, ok := nestedItemCompound(charged)
+	if !ok {
+		return nil, false
+	}
+	return marshalItemNBT(map[string]any{"chargedItem": compound})
+}
+
+func unmarshalCrossbowNBT(data []byte) (native.ItemStack, bool, bool) {
+	root, ok := unmarshalItemNBT(data)
+	if !ok {
+		return native.ItemStack{}, false, false
+	}
+	charged, found := root["chargedItem"]
+	if !found {
+		return native.ItemStack{}, false, true
+	}
+	compound, ok := charged.(map[string]any)
+	if !ok {
+		return native.ItemStack{}, false, true
+	}
+	value, ok := nestedItemFromCompound(compound)
+	return value, ok, ok
+}
+
+func nestedItemCompound(value native.ItemStack) (map[string]any, bool) {
+	if !validNestedItemStack(value) || value.Count > math.MaxInt32 || value.Damage > math.MaxInt32 {
+		return nil, false
+	}
+	enchantments := make([]any, len(value.Enchantments))
+	for index, enchantment := range value.Enchantments {
+		if enchantment.ID > math.MaxInt32 || enchantment.Level > math.MaxInt32 {
+			return nil, false
+		}
+		enchantments[index] = map[string]any{"id": int32(enchantment.ID), "level": int32(enchantment.Level)}
+	}
+	return map[string]any{
+		nestedItemVersionName: nestedItemVersion,
+		"identifier":          value.Identifier,
+		"metadata":            value.Metadata,
+		"count":               int32(value.Count),
+		"damage":              int32(value.Damage),
+		"unbreakable":         boolByte(value.Unbreakable),
+		"anvilCost":           value.AnvilCost,
+		"customName":          value.CustomName,
+		"lore":                append([]string(nil), value.Lore...),
+		"itemNbt":             fixedByteArray(value.NBT),
+		"valuesNbt":           fixedByteArray(value.ValuesNBT),
+		"enchantments":        enchantments,
+	}, true
+}
+
+func nestedItemFromCompound(value map[string]any) (native.ItemStack, bool) {
+	version, versionOK := value[nestedItemVersionName].(int32)
+	identifier, identifierOK := value["identifier"].(string)
+	metadata, metadataOK := value["metadata"].(int32)
+	count, countOK := value["count"].(int32)
+	damage, damageOK := value["damage"].(int32)
+	unbreakable, unbreakableOK := value["unbreakable"].(uint8)
+	anvilCost, anvilCostOK := value["anvilCost"].(int32)
+	customName, customNameOK := value["customName"].(string)
+	if !versionOK || version != nestedItemVersion || !identifierOK || identifier == "" || !metadataOK ||
+		!countOK || count <= 0 || !damageOK || damage < 0 || !unbreakableOK || unbreakable > 1 ||
+		!anvilCostOK || !customNameOK {
+		return native.ItemStack{}, false
+	}
+	lore, ok := stringList(value["lore"])
+	if !ok {
+		return native.ItemStack{}, false
+	}
+	itemNBT, ok := byteArray(value["itemNbt"])
+	if !ok {
+		return native.ItemStack{}, false
+	}
+	valuesNBT, ok := byteArray(value["valuesNbt"])
+	if !ok {
+		return native.ItemStack{}, false
+	}
+	encodedEnchantments, ok := value["enchantments"].([]any)
+	if !ok || len(encodedEnchantments) > maxNestedItemEntries {
+		return native.ItemStack{}, false
+	}
+	enchantments := make([]native.ItemEnchantment, len(encodedEnchantments))
+	for index, encoded := range encodedEnchantments {
+		compound, ok := encoded.(map[string]any)
+		if !ok {
+			return native.ItemStack{}, false
+		}
+		id, idOK := compound["id"].(int32)
+		level, levelOK := compound["level"].(int32)
+		if !idOK || id < 0 || !levelOK || level <= 0 {
+			return native.ItemStack{}, false
+		}
+		enchantments[index] = native.ItemEnchantment{ID: uint32(id), Level: uint32(level)}
+	}
+	result := native.ItemStack{
+		Identifier: identifier, Metadata: metadata, Count: uint32(count), Damage: uint32(damage),
+		Unbreakable: unbreakable == 1, AnvilCost: anvilCost, CustomName: customName,
+		Lore: lore, NBT: itemNBT, ValuesNBT: valuesNBT, Enchantments: enchantments,
+	}
+	return result, validNestedItemStack(result)
+}
+
+func validNestedItemStack(value native.ItemStack) bool {
+	if value.Count == 0 || len(value.Identifier) == 0 || len(value.Identifier) > maxNestedItemIDBytes ||
+		len(value.CustomName) > maxNestedItemText || len(value.Lore) > maxNestedItemEntries ||
+		len(value.Enchantments) > maxNestedItemEntries || itemStackDataSize(value) > maxItemDataBytes {
+		return false
+	}
+	for _, line := range value.Lore {
+		if len(line) > maxNestedItemText {
+			return false
+		}
+	}
+	for _, enchantment := range value.Enchantments {
+		if enchantment.Level == 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func fixedByteArray(value []byte) any {
+	array := reflect.New(reflect.ArrayOf(len(value), reflect.TypeFor[byte]())).Elem()
+	reflect.Copy(array, reflect.ValueOf(value))
+	return array.Interface()
+}
+
+func boolByte(value bool) uint8 {
+	if value {
+		return 1
+	}
+	return 0
+}
+
+func stringList(value any) ([]string, bool) {
+	switch list := value.(type) {
+	case []string:
+		if len(list) > maxNestedItemEntries {
+			return nil, false
+		}
+		for _, entry := range list {
+			if len(entry) > maxNestedItemText {
+				return nil, false
+			}
+		}
+		return append([]string(nil), list...), true
+	case []any:
+		if len(list) > maxNestedItemEntries {
+			return nil, false
+		}
+		result := make([]string, len(list))
+		for index, entry := range list {
+			var ok bool
+			result[index], ok = entry.(string)
+			if !ok {
+				return nil, false
+			}
+			if len(result[index]) > maxNestedItemText {
+				return nil, false
+			}
+		}
+		return result, true
+	default:
+		return nil, false
+	}
+}
+
+func byteArray(value any) ([]byte, bool) {
+	if list, ok := value.([]any); ok && len(list) == 0 {
+		return []byte{}, true
+	}
+	reflected := reflect.ValueOf(value)
+	if !reflected.IsValid() || (reflected.Kind() != reflect.Array && reflected.Kind() != reflect.Slice) || reflected.Type().Elem().Kind() != reflect.Uint8 {
+		return nil, false
+	}
+	result := make([]byte, reflected.Len())
+	for index := range result {
+		result[index] = byte(reflected.Index(index).Uint())
+	}
+	return result, true
 }
 
 // ItemStackFromNative decodes a plugin item stack using Dragonfly registries.

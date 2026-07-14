@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestInspectItemsUsesASTAndRegistry(t *testing.T) {
@@ -18,8 +19,49 @@ func TestInspectItemsUsesASTAndRegistry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if spec.AirIdentifier != "minecraft:air" || len(spec.ToolTiers) != 7 || len(spec.ValueTypes) != 10 || len(spec.Types) != 130 {
+	if spec.AirIdentifier != "minecraft:air" || len(spec.ToolTiers) != 7 || len(spec.ValueTypes) != 10 || len(spec.Types) != 131 {
 		t.Fatalf("item spec has air=%q tiers=%d types=%d", spec.AirIdentifier, len(spec.ToolTiers), len(spec.Types))
+	}
+	if crossbow := spec.Crossbow; !crossbow.Present || crossbow.MaxCount != 1 || crossbow.MaxDurability != 464 ||
+		crossbow.EnchantmentValue != 1 || crossbow.FuelDuration != 15*time.Second {
+		t.Fatalf("crossbow spec = %#v", crossbow)
+	}
+	crossbow := itemTypeByName(spec.Types, "Crossbow")
+	if crossbow == nil || !crossbow.NBT || len(crossbow.States) != 1 || crossbow.States[0].Identifier != "minecraft:crossbow" ||
+		!crossbow.States[0].Capability.Fuel || crossbow.States[0].Capability.FuelDuration != 15*time.Second {
+		t.Fatalf("crossbow item type = %#v", crossbow)
+	}
+	fuelTypes, fuelStates := 0, 0
+	for _, definition := range spec.Types {
+		if itemTypeFuel(definition) {
+			fuelTypes++
+		}
+		for _, state := range definition.States {
+			if state.Capability.Fuel {
+				fuelStates++
+				if state.Capability.FuelIdentifier != "" || state.Capability.FuelMetadata != 0 || state.Capability.FuelCount != 0 {
+					t.Fatalf("generated fuel %s unexpectedly has residue: %#v", definition.Name, state.Capability)
+				}
+			}
+		}
+	}
+	if fuelTypes != 12 || fuelStates != 42 {
+		t.Fatalf("fuel spec has types=%d states=%d", fuelTypes, fuelStates)
+	}
+	for _, name := range []string{"Axe", "Hoe", "Pickaxe", "Shovel", "Sword"} {
+		definition := itemTypeByName(spec.Types, name)
+		if definition == nil || len(definition.States) != 7 {
+			t.Fatalf("fuel tool %s missing or incomplete", name)
+		}
+		for tier, state := range definition.States {
+			want := time.Duration(0)
+			if tier == 0 {
+				want = 10 * time.Second
+			}
+			if !state.Capability.Fuel || state.Capability.FuelDuration != want {
+				t.Fatalf("fuel tool %s tier %d = %#v, want duration %s", name, tier, state.Capability, want)
+			}
+		}
 	}
 	if len(spec.Armour.Tiers) != 7 || len(spec.Armour.Pieces) != 4 || len(spec.Armour.TrimMaterials) != 11 {
 		t.Fatalf("armour spec has tiers=%d pieces=%d trim_materials=%d", len(spec.Armour.Tiers), len(spec.Armour.Pieces), len(spec.Armour.TrimMaterials))
@@ -86,7 +128,16 @@ func TestInspectItemsUsesASTAndRegistry(t *testing.T) {
 		}
 	}
 	for _, value := range []string{
-		"public readonly record struct Sword(ToolTier Tier) : World.Item",
+		"public readonly record struct Sword(ToolTier Tier) : World.Item, Fuel",
+		"public readonly record struct Coal : World.Item, Fuel",
+		"public FuelInfo FuelInfo() => ItemCapabilities.FuelInfo(this)",
+		"public interface Fuel { FuelInfo FuelInfo(); }",
+		"public readonly record struct FuelInfo(TimeSpan Duration = default, Stack Residue = default)",
+		"public FuelInfo WithResidue(Stack residue) => this with { Residue = residue }",
+		"public readonly record struct Crossbow(Stack Item = default) : World.Item, MaxCounter, Durable, Fuel, Enchantable",
+		"public DurabilityInfo DurabilityInfo() => new(464, static () => default)",
+		"public FuelInfo FuelInfo() => new(TimeSpan.FromTicks(150000000))",
+		"public int EnchantmentValue() => 1",
 		"public readonly record struct Beef(bool Cooked) : World.Item",
 		"Item.ToolTierDiamond",
 		`identifier = "minecraft:diamond_sword"; metadata = 0`,
@@ -150,6 +201,10 @@ func TestInspectItemsUsesASTAndRegistry(t *testing.T) {
 		"Item.Snowball _ => 16",
 		"durability = new(1561, false, default); return true",
 		"Item.Sword value when value.Tier == Item.ToolTierDiamond => 8d",
+		"Item.Sword value when value.Tier == Item.ToolTierWood => new(TimeSpan.FromTicks(100000000), default)",
+		"Item.Sword value when value.Tier == Item.ToolTierDiamond => new(TimeSpan.FromTicks(0), default)",
+		"Item.BlazeRod _ => new(TimeSpan.FromTicks(1200000000), default)",
+		"Item.Crossbow _ => new(TimeSpan.FromTicks(150000000), default)",
 		"Item.EnchantedBook _ => true",
 		"private sealed record EncodedItem",
 	} {

@@ -64,7 +64,7 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    a null response preserves Dragonfly's close signal. `Element` and `MenuElement` retain their
    public JSON-marshalling contract too.
 6. Items. The current item slice generates `World.Item`, `Item.ToolTier`, all seven tool-tier
-   values, five tiered tools, and 130 concrete item structs. Typed finite stateful families now
+   values, five tiered tools, and 131 concrete item structs. Typed finite stateful families now
    include colours, potions and tipped arrows, banner patterns, smithing templates, suspicious stews,
    pottery sherds, goat horns, and music discs. Dependency factories and encoded states are
    derived from Dragonfly's Go AST and live registries rather than a handwritten schema. Their
@@ -81,6 +81,11 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    materials include the indirectly discovered `RedstoneWire` item. Piece methods retain
    Dragonfly's defence, toughness, knockback-resistance, enchantment, durability, repair,
    smelting, and trim behavior. The private NBT transport preserves leather dye and trim state.
+   Generated `Crossbow(Stack Item)` mirrors Dragonfly's charged-projectile field and its max-count,
+   durability, fuel, and enchantment behavior. Its bounded private recursive stack transport
+   preserves typed item NBT, plugin values, and enchantments without exposing disk NBT or another
+   public stack model. `Fuel` and `FuelInfo` are live-derived for every fuel implementation in this
+   slice, including the zero-duration states of tiered tool types.
    Dragonfly's live item registry supplies the private identifier/metadata and capability codecs.
    `Item.Stack` exposes `NewStack`, count/growth/max-count, durability/damage/unbreakable,
    attack damage, custom names, lore, anvil cost, comparison/equality, and stack merging.
@@ -92,7 +97,7 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    with one host read. Bounded open/read/close item snapshots preserve damage, unbreakable state, anvil cost, custom
    names, lore, item NBT, plugin values, and enchantments internally. Unknown registered stateful
    NBT-backed items decode to a private opaque item and round-trip losslessly. Bucket content,
-   charged crossbows, enchantments and values, `WithItem`,
+   public enchantment/value mutation, `WithItem`,
    ender chests, custom items, and item events remain next; no public identifier fallback is added.
 7. Entities, remaining sounds, and remaining world/block methods.
 8. Convert practice-core and expand parity tests against Dragonfly.
@@ -122,7 +127,8 @@ book and firework item families through player inventory before restoring all ch
 state. Its firework coverage also exercises typed explosion shapes, colours, fades, twinkle,
 trail, off-hand support, and randomised duration. Its armour coverage checks tier, defence,
 durability, repair, smelting, trim-material, and private dyed/trim NBT behavior, then round-trips
-all 28 tier-and-piece combinations.
+all 28 tier-and-piece combinations. It also constructs a charged typed crossbow, checks its pure
+capabilities, and round-trips the full nested firework stack.
 `/kitchen form` exercises reflected menu, custom, and modal forms, every built-in element,
 submitted values, closers, and nested sends. `/kitchen raw-form` exercises the open `Form.Value`
 contract plus public element/menu-element JSON marshalling.

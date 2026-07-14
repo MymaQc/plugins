@@ -94,7 +94,28 @@ func cloneNativeItem(value ItemStack) ItemStack {
 }
 
 func TestCSharpTypedItemInventoryFlow(t *testing.T) {
-	previous := ItemStack{Identifier: "minecraft:apple", Count: 3}
+	var largeValues [70 << 10]byte
+	largeValues[0], largeValues[len(largeValues)-1] = 0x2a, 0x7f
+	previousNBT, err := nbt.MarshalEncoding(map[string]any{
+		"chargedItem": map[string]any{
+			"bedrock_gophers_version": int32(1),
+			"identifier":              "minecraft:arrow",
+			"metadata":                int32(0),
+			"count":                   int32(1),
+			"damage":                  int32(0),
+			"unbreakable":             uint8(0),
+			"anvilCost":               int32(0),
+			"customName":              "Go charged arrow",
+			"lore":                    []string{"Go transport"},
+			"itemNbt":                 [3]byte{10, 0, 0},
+			"valuesNbt":               largeValues,
+			"enchantments":            []any{},
+		},
+	}, nbt.LittleEndian)
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous := ItemStack{Identifier: "minecraft:crossbow", Count: 1, NBT: previousNBT}
 	mainHand := ItemStack{
 		Identifier: "minecraft:shield", Count: 1, Damage: 4, Unbreakable: true,
 		CustomName: "Opaque main", Lore: []string{"preserve"}, NBT: []byte{10, 0, 0},
@@ -129,14 +150,25 @@ func TestCSharpTypedItemInventoryFlow(t *testing.T) {
 			Overload: uint64(overload), Arguments: []string{"item"},
 			OnlinePlayers: []CommandPlayer{{Player: player, Name: "ItemTester"}},
 		})
-		if err != nil || output.Failed || output.Message != "item=Sword, tier=diamond, count=1, held=true, armour_slots=4, added_empty=0, variants=43" {
+		if err != nil || output.Failed || output.Message != "item=Sword, tier=diamond, count=1, held=true, armour_slots=4, added_empty=0, variants=44" {
 			t.Fatalf("iteration %d: output=%#v error=%v", iteration, output, err)
 		}
 	}
-	if !reflect.DeepEqual(host.inventory, previous) || !reflect.DeepEqual(host.held, [2]ItemStack{mainHand, offHand}) {
+	if !reflect.DeepEqual(host.held, [2]ItemStack{mainHand, offHand}) {
 		t.Fatalf("command did not restore items: inventory=%#v held=%#v", host.inventory, host.held)
 	}
-	if len(host.sets) != 3150 || len(host.heldSets) != 140 {
+	restoredPreviousNBT, ok := decodeTestItemNBT(host.inventory.NBT)
+	restoredPrevious, restoredOK := restoredPreviousNBT["chargedItem"].(map[string]any)
+	restoredValues := reflect.ValueOf(restoredPrevious["valuesNbt"])
+	valuesOK := restoredOK && restoredValues.IsValid() &&
+		(restoredValues.Kind() == reflect.Array || restoredValues.Kind() == reflect.Slice) &&
+		restoredValues.Len() == len(largeValues) && restoredValues.Index(0).Uint() == 0x2a &&
+		restoredValues.Index(restoredValues.Len()-1).Uint() == 0x7f
+	if host.inventory.Identifier != "minecraft:crossbow" || host.inventory.Count != 1 || !ok || !restoredOK ||
+		restoredPrevious["identifier"] != "minecraft:arrow" || restoredPrevious["customName"] != "Go charged arrow" || !valuesOK {
+		t.Fatalf("Go-produced crossbow did not survive C# restore: stack=%#v nbt=%#v", host.inventory, restoredPreviousNBT)
+	}
+	if len(host.sets) != 3220 || len(host.heldSets) != 140 {
 		t.Fatalf("item writes=%d held writes=%d", len(host.sets), len(host.heldSets))
 	}
 	if len(host.armourSets) != 70 || len(host.adds) != 70 || host.adds[0].Identifier != "" || host.adds[0].Count != 0 {
@@ -212,19 +244,28 @@ func TestCSharpTypedItemInventoryFlow(t *testing.T) {
 		starNBT["customColor"] != int32(-15295332) {
 		t.Fatalf("typed firework star transport=%#v nbt=%#v", star, starNBT)
 	}
-	armourIndex := 16
+	crossbow := host.sets[16]
+	crossbowNBT, ok := decodeTestItemNBT(crossbow.NBT)
+	charged, chargedOK := crossbowNBT["chargedItem"].(map[string]any)
+	if !ok || crossbow.Identifier != "minecraft:crossbow" || crossbow.Metadata != 0 || crossbow.Count != 1 ||
+		!chargedOK || charged["bedrock_gophers_version"] != int32(1) ||
+		charged["identifier"] != "minecraft:firework_rocket" || charged["metadata"] != int32(0) ||
+		charged["count"] != int32(1) || charged["customName"] != "Charged rocket" {
+		t.Fatalf("typed crossbow transport=%#v nbt=%#v", crossbow, crossbowNBT)
+	}
+	armourIndex := 17
 	for _, tier := range []string{"leather", "copper", "golden", "chainmail", "iron", "diamond", "netherite"} {
 		for _, piece := range []string{"helmet", "chestplate", "leggings", "boots"} {
 			got := host.sets[armourIndex]
 			wantIdentifier := "minecraft:" + tier + "_" + piece
 			if got.Identifier != wantIdentifier || got.Metadata != 0 || got.Count != 1 {
-				t.Fatalf("typed armour %d=%#v, want identifier %q", armourIndex-16, got, wantIdentifier)
+				t.Fatalf("typed armour %d=%#v, want identifier %q", armourIndex-17, got, wantIdentifier)
 			}
 			armourNBT, ok := decodeTestItemNBT(got.NBT)
 			if !ok {
 				t.Fatalf("typed armour %s NBT invalid: %x", wantIdentifier, got.NBT)
 			}
-			if armourIndex == 16 {
+			if armourIndex == 17 {
 				trim, trimOK := armourNBT["Trim"].(map[string]any)
 				if armourNBT["customColor"] != int32(-16711165) || !trimOK ||
 					trim["Material"] != "redstone" || trim["Pattern"] != "flow" {

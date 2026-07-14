@@ -279,7 +279,7 @@ internal static class Nbt
 
         private void WriteByteArray(byte[] values)
         {
-            ValidateCollectionLength(values.Length);
+            if (values.Length > MaxBytes) throw new InvalidDataException("NBT byte array is too large");
             WriteInt32(values.Length);
             Write(values);
         }
@@ -434,7 +434,9 @@ internal static class Nbt
 
         private byte[] ReadByteArray()
         {
-            var length = ReadLength();
+            var length = ReadInt32();
+            if (length is < 0 or > MaxBytes)
+                throw new InvalidDataException("Invalid NBT byte array length");
             return Read(length).ToArray();
         }
 

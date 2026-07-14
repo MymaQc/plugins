@@ -4,8 +4,11 @@ namespace Dragonfly;
 
 internal static class ItemNbtCodec
 {
-    internal static bool TryEncode(World.Item? item, out byte[] data)
+    internal static bool TryEncode(World.Item? item, out byte[] data) => TryEncode(item, 0, out data);
+
+    internal static bool TryEncode(World.Item? item, int depth, out byte[] data)
     {
+        if (depth > CrossbowStackNbt.MaxDepth) throw new InvalidDataException("nested item stack is too deep");
         switch (item)
         {
             case Item.Helmet armour:
@@ -32,14 +35,21 @@ internal static class ItemNbtCodec
             case Item.WrittenBook book:
                 data = EncodeWrittenBook(book);
                 return true;
+            case Item.Crossbow crossbow:
+                data = CrossbowStackNbt.Encode(crossbow.Item, depth + 1);
+                return true;
             default:
                 data = [];
                 return false;
         }
     }
 
-    internal static World.Item Decode(World.Item item, ReadOnlySpan<byte> data, out bool consumed)
+    internal static World.Item Decode(World.Item item, ReadOnlySpan<byte> data, out bool consumed) =>
+        Decode(item, data, 0, out consumed);
+
+    internal static World.Item Decode(World.Item item, ReadOnlySpan<byte> data, int depth, out bool consumed)
     {
+        if (depth > CrossbowStackNbt.MaxDepth) throw new InvalidDataException("nested item stack is too deep");
         switch (item)
         {
             case Item.Helmet armour:
@@ -70,6 +80,9 @@ internal static class ItemNbtCodec
             case Item.WrittenBook book:
                 consumed = true;
                 return DecodeWrittenBook(book, data);
+            case Item.Crossbow:
+                consumed = true;
+                return new Item.Crossbow(CrossbowStackNbt.Decode(data, depth + 1));
             default:
                 consumed = false;
                 return item;
