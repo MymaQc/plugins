@@ -195,14 +195,17 @@ func TestCSharpVanillaGameModeCommand(t *testing.T) {
 
 func TestCSharpPlayerStateMethods(t *testing.T) {
 	host := &recordingHost{rejectStateWrites: true, stateValues: map[PlayerStateKind]PlayerStateValue{
-		PlayerStateFood:               {Integer: 10},
-		PlayerStateHealth:             {Number: 16},
-		PlayerStateMaxHealth:          {Number: 20},
-		PlayerStateExperienceLevel:    {Integer: 3},
-		PlayerStateExperienceProgress: {Number: 0.25},
-		PlayerStateScale:              {Number: 1},
-		PlayerStateInvisible:          {},
-		PlayerStateImmobile:           {},
+		PlayerStateFood:                {Integer: 10},
+		PlayerStateHealth:              {Number: 16},
+		PlayerStateMaxHealth:           {Number: 20},
+		PlayerStateExperienceLevel:     {Integer: 3},
+		PlayerStateExperienceProgress:  {Number: 0.25},
+		PlayerStateScale:               {Number: 1},
+		PlayerStateInvisible:           {},
+		PlayerStateImmobile:            {},
+		PlayerStateSpeed:               {Number: 0.1},
+		PlayerStateFlightSpeed:         {Number: 0.05},
+		PlayerStateVerticalFlightSpeed: {Number: 1},
 	}}
 	pluginRuntime := openCSharpRuntimeWithHost(t, host)
 	commands, err := pluginRuntime.Commands()
@@ -227,7 +230,7 @@ func TestCSharpPlayerStateMethods(t *testing.T) {
 		Overload: overload, Arguments: []string{"state"},
 		OnlinePlayers: []CommandPlayer{{Player: player, Name: "Danick"}},
 	})
-	if err != nil || output.Failed || output.Message != "food=10, health=16/20, experience=3:0.25, scale=1, invisible=false, immobile=false" {
+	if err != nil || output.Failed || output.Message != "food=10, health=16/20, experience=3:0.25, scale=1, invisible=false, immobile=false, speed=0.1/0.05/1" {
 		t.Fatalf("state output=%#v error=%v", output, err)
 	}
 	wantReads := []PlayerStateKind{
@@ -239,6 +242,9 @@ func TestCSharpPlayerStateMethods(t *testing.T) {
 		PlayerStateScale,
 		PlayerStateInvisible,
 		PlayerStateImmobile,
+		PlayerStateSpeed,
+		PlayerStateFlightSpeed,
+		PlayerStateVerticalFlightSpeed,
 	}
 	if !slices.Equal(host.reads, wantReads) {
 		t.Fatalf("state reads=%v, want %v", host.reads, wantReads)
@@ -251,6 +257,9 @@ func TestCSharpPlayerStateMethods(t *testing.T) {
 		PlayerStateScale,
 		PlayerStateInvisible,
 		PlayerStateImmobile,
+		PlayerStateSpeed,
+		PlayerStateFlightSpeed,
+		PlayerStateVerticalFlightSpeed,
 	}
 	if !slices.Equal(host.states, wantWrites) {
 		t.Fatalf("state writes=%v, want %v", host.states, wantWrites)

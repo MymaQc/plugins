@@ -172,6 +172,9 @@ public static class Abi
     public const uint PlayerStateScale = 8;
     public const uint PlayerStateInvisible = 9;
     public const uint PlayerStateImmobile = 10;
+    public const uint PlayerStateSpeed = 11;
+    public const uint PlayerStateFlightSpeed = 12;
+    public const uint PlayerStateVerticalFlightSpeed = 13;
     public const uint InventoryMain = 0;
     public const uint InventoryArmour = 1;
     public const uint InventoryOffhand = 2;

@@ -329,8 +329,9 @@ scalars, blocks, instruments, discs, items, liquids, stages, and horns.
 game mode.
 `/kitchen world` exercises world dimension, time-cycle stop/start, sleep duration, default game
 mode, tick range, registered/custom difficulty, and restores observable state after transport.
-`/kitchen state` exercises all 17 generated food, health, experience-level/progress, scale,
-visibility, and mobility methods without changing the final player state.
+`/kitchen state` exercises the generated food, health, experience-level/progress, scale,
+visibility, mobility, walking-speed, flight-speed, and vertical-flight-speed methods without
+changing the final player state.
 `/kitchen item` exercises stack count, durability, unbreakable, attack damage, anvil cost,
 values, `WithItem`, `String`, semantic NBT comparison, and merging, then round-trips all eleven
 finite stateful item families plus both typed book and firework item families through player

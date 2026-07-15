@@ -93,8 +93,10 @@ func TestPlayerTransportPreservesExplicitIDs(t *testing.T) {
 		t.Fatal("generated player transport still names removed abi-gen")
 	}
 	for _, expected := range []string{
-		"PlayerStateGameMode           PlayerStateKind = 0",
-		"PlayerStateFood               PlayerStateKind = 3",
+		"PlayerStateGameMode            PlayerStateKind = 0",
+		"PlayerStateFood                PlayerStateKind = 3",
+		"PlayerStateSpeed               PlayerStateKind = 11",
+		"PlayerStateVerticalFlightSpeed PlayerStateKind = 13",
 		"EffectSlowFalling    EffectType = 27",
 		"EffectDarkness       EffectType = 30",
 		"PlayerTextTip          PlayerTextKind = 1",

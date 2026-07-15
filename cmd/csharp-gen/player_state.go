@@ -28,6 +28,12 @@ var selectedPlayerStateMethods = []string{
 	"Immobile",
 	"SetImmobile",
 	"SetMobile",
+	"Speed",
+	"SetSpeed",
+	"FlightSpeed",
+	"SetFlightSpeed",
+	"VerticalFlightSpeed",
+	"SetVerticalFlightSpeed",
 }
 
 type playerStateMethod struct {
@@ -48,25 +54,31 @@ func inspectPlayerStateMethods(path string) ([]playerStateMethod, error) {
 		}
 	}
 	want := map[string]goSignature{
-		"Food":                  {Results: "int"},
-		"SetFood":               {Parameters: "int"},
-		"Health":                {Results: "float64"},
-		"MaxHealth":             {Results: "float64"},
-		"SetMaxHealth":          {Parameters: "float64"},
-		"Heal":                  {Parameters: "float64, world.HealingSource", Results: "float64"},
-		"Hurt":                  {Parameters: "float64, world.DamageSource", Results: "float64, bool"},
-		"ExperienceLevel":       {Results: "int"},
-		"SetExperienceLevel":    {Parameters: "int"},
-		"ExperienceProgress":    {Results: "float64"},
-		"SetExperienceProgress": {Parameters: "float64"},
-		"Scale":                 {Results: "float64"},
-		"SetScale":              {Parameters: "float64"},
-		"Invisible":             {Results: "bool"},
-		"SetInvisible":          {},
-		"SetVisible":            {},
-		"Immobile":              {Results: "bool"},
-		"SetImmobile":           {},
-		"SetMobile":             {},
+		"Food":                   {Results: "int"},
+		"SetFood":                {Parameters: "int"},
+		"Health":                 {Results: "float64"},
+		"MaxHealth":              {Results: "float64"},
+		"SetMaxHealth":           {Parameters: "float64"},
+		"Heal":                   {Parameters: "float64, world.HealingSource", Results: "float64"},
+		"Hurt":                   {Parameters: "float64, world.DamageSource", Results: "float64, bool"},
+		"ExperienceLevel":        {Results: "int"},
+		"SetExperienceLevel":     {Parameters: "int"},
+		"ExperienceProgress":     {Results: "float64"},
+		"SetExperienceProgress":  {Parameters: "float64"},
+		"Scale":                  {Results: "float64"},
+		"SetScale":               {Parameters: "float64"},
+		"Invisible":              {Results: "bool"},
+		"SetInvisible":           {},
+		"SetVisible":             {},
+		"Immobile":               {Results: "bool"},
+		"SetImmobile":            {},
+		"SetMobile":              {},
+		"Speed":                  {Results: "float64"},
+		"SetSpeed":               {Parameters: "float64"},
+		"FlightSpeed":            {Results: "float64"},
+		"SetFlightSpeed":         {Parameters: "float64"},
+		"VerticalFlightSpeed":    {Results: "float64"},
+		"SetVerticalFlightSpeed": {Parameters: "float64"},
 	}
 	for _, name := range selectedPlayerStateMethods {
 		function := found[name]
@@ -160,6 +172,18 @@ func generatePlayerStateMethods(methods []playerStateMethod) []byte {
 			output.WriteString("    public void SetImmobile() => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateImmobile, new PlayerStateValue { Integer = 1 });\n")
 		case "SetMobile":
 			output.WriteString("    public void SetMobile() => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateImmobile, default);\n")
+		case "Speed":
+			output.WriteString("    public double Speed() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateSpeed).Number;\n")
+		case "SetSpeed":
+			fmt.Fprintf(&output, "    public void SetSpeed(double %s) => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateSpeed, new PlayerStateValue { Number = %s });\n", parameter, parameter)
+		case "FlightSpeed":
+			output.WriteString("    public double FlightSpeed() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateFlightSpeed).Number;\n")
+		case "SetFlightSpeed":
+			fmt.Fprintf(&output, "    public void SetFlightSpeed(double %s) => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateFlightSpeed, new PlayerStateValue { Number = %s });\n", parameter, parameter)
+		case "VerticalFlightSpeed":
+			output.WriteString("    public double VerticalFlightSpeed() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateVerticalFlightSpeed).Number;\n")
+		case "SetVerticalFlightSpeed":
+			fmt.Fprintf(&output, "    public void SetVerticalFlightSpeed(double %s) => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateVerticalFlightSpeed, new PlayerStateValue { Number = %s });\n", parameter, parameter)
 		default:
 			panic("unsupported player state method: " + method.Name)
 		}

@@ -317,6 +317,9 @@ func TestPlayersReadsAndChangesState(t *testing.T) {
 			{native.PlayerStateScale, native.PlayerStateValue{Number: 1.5}},
 			{native.PlayerStateInvisible, native.PlayerStateValue{Integer: 1}},
 			{native.PlayerStateImmobile, native.PlayerStateValue{Integer: 1}},
+			{native.PlayerStateSpeed, native.PlayerStateValue{Number: 0.2}},
+			{native.PlayerStateFlightSpeed, native.PlayerStateValue{Number: 0.1}},
+			{native.PlayerStateVerticalFlightSpeed, native.PlayerStateValue{Number: 1.5}},
 		}
 		for _, change := range changes {
 			if !players.SetPlayerState(invocation, id, change.kind, change.value) {
@@ -347,8 +350,11 @@ func TestPlayersReadsAndChangesState(t *testing.T) {
 		scale, _ := players.PlayerState(invocation, id, native.PlayerStateScale)
 		invisible, _ := players.PlayerState(invocation, id, native.PlayerStateInvisible)
 		immobile, _ := players.PlayerState(invocation, id, native.PlayerStateImmobile)
-		if gameMode.Integer != creativeDescriptor || food.Integer != 12 || maxHealth.Number != 40 || health.Number != 19 || level.Integer != 12 || math.Abs(progress.Number-0.5) > 0.02 || scale.Number != 1.5 || invisible.Integer != 1 || immobile.Integer != 1 {
-			t.Fatalf("game mode=%+v food=%+v max=%+v health=%+v level=%+v progress=%+v scale=%+v invisible=%+v immobile=%+v", gameMode, food, maxHealth, health, level, progress, scale, invisible, immobile)
+		speed, _ := players.PlayerState(invocation, id, native.PlayerStateSpeed)
+		flightSpeed, _ := players.PlayerState(invocation, id, native.PlayerStateFlightSpeed)
+		verticalFlightSpeed, _ := players.PlayerState(invocation, id, native.PlayerStateVerticalFlightSpeed)
+		if gameMode.Integer != creativeDescriptor || food.Integer != 12 || maxHealth.Number != 40 || health.Number != 19 || level.Integer != 12 || math.Abs(progress.Number-0.5) > 0.02 || scale.Number != 1.5 || invisible.Integer != 1 || immobile.Integer != 1 || speed.Number != 0.2 || flightSpeed.Number != 0.1 || verticalFlightSpeed.Number != 1.5 {
+			t.Fatalf("game mode=%+v food=%+v max=%+v health=%+v level=%+v progress=%+v scale=%+v invisible=%+v immobile=%+v speed=%+v flight=%+v vertical=%+v", gameMode, food, maxHealth, health, level, progress, scale, invisible, immobile, speed, flightSpeed, verticalFlightSpeed)
 		}
 		if !players.SendPlayerText(invocation, id, native.PlayerTextNameTag, "C# Player") || player.NameTag() != "C# Player" {
 			t.Fatalf("name tag = %q", player.NameTag())

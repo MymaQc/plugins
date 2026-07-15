@@ -32,12 +32,16 @@ var playerStateTransportIDs = []transportNameID{
 	{Name: "Scale", ID: 8},
 	{Name: "Invisible", ID: 9},
 	{Name: "Immobile", ID: 10},
+	{Name: "Speed", ID: 11},
+	{Name: "FlightSpeed", ID: 12},
+	{Name: "VerticalFlightSpeed", ID: 13},
 }
 
 var playerStateTransportASTMethods = []string{
 	"Food", "SetFood", "Health", "MaxHealth", "SetMaxHealth", "Heal", "Hurt",
 	"ExperienceLevel", "SetExperienceLevel", "ExperienceProgress", "SetExperienceProgress",
 	"Scale", "SetScale", "Invisible", "SetInvisible", "SetVisible", "Immobile", "SetImmobile", "SetMobile",
+	"Speed", "SetSpeed", "FlightSpeed", "SetFlightSpeed", "VerticalFlightSpeed", "SetVerticalFlightSpeed",
 }
 
 var playerTextTransportIDs = []transportNameID{
@@ -182,7 +186,7 @@ func generateNativePlayerTransport(spec playerTransportSpec) ([]byte, error) {
 	output.WriteString("// Code generated from Dragonfly Go AST and live registries by csharp-gen. DO NOT EDIT.\n\npackage native\n\nimport \"time\"\n\n")
 	output.WriteString("type PlayerStateKind uint32\n\nconst (\n")
 	for _, entry := range playerStateTransportIDs {
-		fmt.Fprintf(&output, "\t%-29s PlayerStateKind = %d\n", "PlayerState"+entry.Name, entry.ID)
+		fmt.Fprintf(&output, "\t%-30s PlayerStateKind = %d\n", "PlayerState"+entry.Name, entry.ID)
 	}
 	output.WriteString(`)
 
@@ -320,6 +324,12 @@ func setPlayerState(connected *player.Player, kind native.PlayerStateKind, value
 		} else {
 			connected.SetMobile()
 		}
+	case native.PlayerStateSpeed:
+		connected.SetSpeed(value.Number)
+	case native.PlayerStateFlightSpeed:
+		connected.SetFlightSpeed(value.Number)
+	case native.PlayerStateVerticalFlightSpeed:
+		connected.SetVerticalFlightSpeed(value.Number)
 	default:
 		return false
 	}
@@ -353,6 +363,12 @@ func readPlayerState(connected *player.Player, kind native.PlayerStateKind) (nat
 			return native.PlayerStateValue{Integer: 1}, true
 		}
 		return native.PlayerStateValue{}, true
+	case native.PlayerStateSpeed:
+		return native.PlayerStateValue{Number: connected.Speed()}, true
+	case native.PlayerStateFlightSpeed:
+		return native.PlayerStateValue{Number: connected.FlightSpeed()}, true
+	case native.PlayerStateVerticalFlightSpeed:
+		return native.PlayerStateValue{Number: connected.VerticalFlightSpeed()}, true
 	default:
 		return native.PlayerStateValue{}, false
 	}

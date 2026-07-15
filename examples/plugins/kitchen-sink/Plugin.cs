@@ -1132,6 +1132,9 @@ public sealed class KitchenSink : Plugin
             var scale = player.Scale();
             var invisible = player.Invisible();
             var immobile = player.Immobile();
+            var speed = player.Speed();
+            var flightSpeed = player.FlightSpeed();
+            var verticalFlightSpeed = player.VerticalFlightSpeed();
 
             player.SetFood(food);
             player.SetMaxHealth(maxHealth);
@@ -1142,9 +1145,12 @@ public sealed class KitchenSink : Plugin
             else player.SetVisible();
             if (immobile) player.SetImmobile();
             else player.SetMobile();
+            player.SetSpeed(speed);
+            player.SetFlightSpeed(flightSpeed);
+            player.SetVerticalFlightSpeed(verticalFlightSpeed);
 
             output.Printf(
-                "food={0}, health={1}/{2}, experience={3}:{4}, scale={5}, invisible={6}, immobile={7}",
+                "food={0}, health={1}/{2}, experience={3}:{4}, scale={5}, invisible={6}, immobile={7}, speed={8}/{9}/{10}",
                 food,
                 health,
                 maxHealth,
@@ -1152,7 +1158,10 @@ public sealed class KitchenSink : Plugin
                 experienceProgress,
                 scale,
                 invisible ? "true" : "false",
-                immobile ? "true" : "false");
+                immobile ? "true" : "false",
+                speed,
+                flightSpeed,
+                verticalFlightSpeed);
         }
     }
 

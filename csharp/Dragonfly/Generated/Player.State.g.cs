@@ -34,4 +34,10 @@ public sealed partial class Player
     public bool Immobile() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateImmobile).Integer != 0;
     public void SetImmobile() => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateImmobile, new PlayerStateValue { Integer = 1 });
     public void SetMobile() => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateImmobile, default);
+    public double Speed() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateSpeed).Number;
+    public void SetSpeed(double speed) => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateSpeed, new PlayerStateValue { Number = speed });
+    public double FlightSpeed() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateFlightSpeed).Number;
+    public void SetFlightSpeed(double flightSpeed) => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateFlightSpeed, new PlayerStateValue { Number = flightSpeed });
+    public double VerticalFlightSpeed() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateVerticalFlightSpeed).Number;
+    public void SetVerticalFlightSpeed(double flightSpeed) => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateVerticalFlightSpeed, new PlayerStateValue { Number = flightSpeed });
 }

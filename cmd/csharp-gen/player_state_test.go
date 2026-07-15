@@ -39,6 +39,12 @@ func TestPlayerStateMethodsFollowDragonflyAST(t *testing.T) {
 		"bool Immobile()",
 		"void SetImmobile()",
 		"void SetMobile()",
+		"double Speed()",
+		"void SetSpeed(double speed)",
+		"double FlightSpeed()",
+		"void SetFlightSpeed(double flightSpeed)",
+		"double VerticalFlightSpeed()",
+		"void SetVerticalFlightSpeed(double flightSpeed)",
 	} {
 		if !strings.Contains(generated, expected) {
 			t.Fatalf("generated player state methods missing %q", expected)

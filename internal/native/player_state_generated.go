@@ -7,15 +7,18 @@ import "time"
 type PlayerStateKind uint32
 
 const (
-	PlayerStateGameMode           PlayerStateKind = 0
-	PlayerStateFood               PlayerStateKind = 3
-	PlayerStateMaxHealth          PlayerStateKind = 4
-	PlayerStateHealth             PlayerStateKind = 5
-	PlayerStateExperienceLevel    PlayerStateKind = 6
-	PlayerStateExperienceProgress PlayerStateKind = 7
-	PlayerStateScale              PlayerStateKind = 8
-	PlayerStateInvisible          PlayerStateKind = 9
-	PlayerStateImmobile           PlayerStateKind = 10
+	PlayerStateGameMode            PlayerStateKind = 0
+	PlayerStateFood                PlayerStateKind = 3
+	PlayerStateMaxHealth           PlayerStateKind = 4
+	PlayerStateHealth              PlayerStateKind = 5
+	PlayerStateExperienceLevel     PlayerStateKind = 6
+	PlayerStateExperienceProgress  PlayerStateKind = 7
+	PlayerStateScale               PlayerStateKind = 8
+	PlayerStateInvisible           PlayerStateKind = 9
+	PlayerStateImmobile            PlayerStateKind = 10
+	PlayerStateSpeed               PlayerStateKind = 11
+	PlayerStateFlightSpeed         PlayerStateKind = 12
+	PlayerStateVerticalFlightSpeed PlayerStateKind = 13
 )
 
 type PlayerStateValue struct {

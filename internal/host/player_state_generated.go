@@ -74,6 +74,12 @@ func setPlayerState(connected *player.Player, kind native.PlayerStateKind, value
 		} else {
 			connected.SetMobile()
 		}
+	case native.PlayerStateSpeed:
+		connected.SetSpeed(value.Number)
+	case native.PlayerStateFlightSpeed:
+		connected.SetFlightSpeed(value.Number)
+	case native.PlayerStateVerticalFlightSpeed:
+		connected.SetVerticalFlightSpeed(value.Number)
 	default:
 		return false
 	}
@@ -107,6 +113,12 @@ func readPlayerState(connected *player.Player, kind native.PlayerStateKind) (nat
 			return native.PlayerStateValue{Integer: 1}, true
 		}
 		return native.PlayerStateValue{}, true
+	case native.PlayerStateSpeed:
+		return native.PlayerStateValue{Number: connected.Speed()}, true
+	case native.PlayerStateFlightSpeed:
+		return native.PlayerStateValue{Number: connected.FlightSpeed()}, true
+	case native.PlayerStateVerticalFlightSpeed:
+		return native.PlayerStateValue{Number: connected.VerticalFlightSpeed()}, true
 	default:
 		return native.PlayerStateValue{}, false
 	}
