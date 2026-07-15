@@ -320,6 +320,8 @@ func TestPlayersReadsAndChangesState(t *testing.T) {
 			{native.PlayerStateSpeed, native.PlayerStateValue{Number: 0.2}},
 			{native.PlayerStateFlightSpeed, native.PlayerStateValue{Number: 0.1}},
 			{native.PlayerStateVerticalFlightSpeed, native.PlayerStateValue{Number: 1.5}},
+			{native.PlayerStateFallDistance, native.PlayerStateValue{}},
+			{native.PlayerStateAbsorption, native.PlayerStateValue{Number: 5}},
 		}
 		for _, change := range changes {
 			if !players.SetPlayerState(invocation, id, change.kind, change.value) {
@@ -353,8 +355,15 @@ func TestPlayersReadsAndChangesState(t *testing.T) {
 		speed, _ := players.PlayerState(invocation, id, native.PlayerStateSpeed)
 		flightSpeed, _ := players.PlayerState(invocation, id, native.PlayerStateFlightSpeed)
 		verticalFlightSpeed, _ := players.PlayerState(invocation, id, native.PlayerStateVerticalFlightSpeed)
-		if gameMode.Integer != creativeDescriptor || food.Integer != 12 || maxHealth.Number != 40 || health.Number != 19 || level.Integer != 12 || math.Abs(progress.Number-0.5) > 0.02 || scale.Number != 1.5 || invisible.Integer != 1 || immobile.Integer != 1 || speed.Number != 0.2 || flightSpeed.Number != 0.1 || verticalFlightSpeed.Number != 1.5 {
-			t.Fatalf("game mode=%+v food=%+v max=%+v health=%+v level=%+v progress=%+v scale=%+v invisible=%+v immobile=%+v speed=%+v flight=%+v vertical=%+v", gameMode, food, maxHealth, health, level, progress, scale, invisible, immobile, speed, flightSpeed, verticalFlightSpeed)
+		fallDistance, fallDistanceOK := players.PlayerState(invocation, id, native.PlayerStateFallDistance)
+		absorption, absorptionOK := players.PlayerState(invocation, id, native.PlayerStateAbsorption)
+		dead, deadOK := players.PlayerState(invocation, id, native.PlayerStateDead)
+		onGround, onGroundOK := players.PlayerState(invocation, id, native.PlayerStateOnGround)
+		eyeHeight, eyeHeightOK := players.PlayerState(invocation, id, native.PlayerStateEyeHeight)
+		torsoHeight, torsoHeightOK := players.PlayerState(invocation, id, native.PlayerStateTorsoHeight)
+		breathing, breathingOK := players.PlayerState(invocation, id, native.PlayerStateBreathing)
+		if gameMode.Integer != creativeDescriptor || food.Integer != 12 || maxHealth.Number != 40 || health.Number != 23 || level.Integer != 12 || math.Abs(progress.Number-0.5) > 0.02 || scale.Number != 1.5 || invisible.Integer != 1 || immobile.Integer != 1 || speed.Number != 0.2 || flightSpeed.Number != 0.1 || verticalFlightSpeed.Number != 1.5 || fallDistance.Number != 0 || absorption.Number != 1 || dead.Integer != 0 || (onGround.Integer != 0 && onGround.Integer != 1) || eyeHeight.Number != 1.62 || torsoHeight.Number != 1.52 || (breathing.Integer != 0 && breathing.Integer != 1) || !fallDistanceOK || !absorptionOK || !deadOK || !onGroundOK || !eyeHeightOK || !torsoHeightOK || !breathingOK {
+			t.Fatalf("state mismatch: game=%+v food=%+v max=%+v health=%+v level=%+v progress=%+v scale=%+v invisible=%+v immobile=%+v speed=%+v flight=%+v vertical=%+v fall=%+v absorption=%+v dead=%+v ground=%+v eye=%+v torso=%+v breathing=%+v", gameMode, food, maxHealth, health, level, progress, scale, invisible, immobile, speed, flightSpeed, verticalFlightSpeed, fallDistance, absorption, dead, onGround, eyeHeight, torsoHeight, breathing)
 		}
 		if !players.SendPlayerText(invocation, id, native.PlayerTextNameTag, "C# Player") || player.NameTag() != "C# Player" {
 			t.Fatalf("name tag = %q", player.NameTag())

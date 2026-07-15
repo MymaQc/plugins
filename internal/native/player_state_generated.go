@@ -19,6 +19,13 @@ const (
 	PlayerStateSpeed               PlayerStateKind = 11
 	PlayerStateFlightSpeed         PlayerStateKind = 12
 	PlayerStateVerticalFlightSpeed PlayerStateKind = 13
+	PlayerStateFallDistance        PlayerStateKind = 14
+	PlayerStateAbsorption          PlayerStateKind = 15
+	PlayerStateDead                PlayerStateKind = 16
+	PlayerStateOnGround            PlayerStateKind = 17
+	PlayerStateEyeHeight           PlayerStateKind = 18
+	PlayerStateTorsoHeight         PlayerStateKind = 19
+	PlayerStateBreathing           PlayerStateKind = 20
 )
 
 type PlayerStateValue struct {

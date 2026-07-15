@@ -1135,6 +1135,13 @@ public sealed class KitchenSink : Plugin
             var speed = player.Speed();
             var flightSpeed = player.FlightSpeed();
             var verticalFlightSpeed = player.VerticalFlightSpeed();
+            var fallDistance = player.FallDistance();
+            var absorption = player.Absorption();
+            var dead = player.Dead();
+            var onGround = player.OnGround();
+            var eyeHeight = player.EyeHeight();
+            var torsoHeight = player.TorsoHeight();
+            var breathing = player.Breathing();
 
             player.SetFood(food);
             player.SetMaxHealth(maxHealth);
@@ -1148,9 +1155,11 @@ public sealed class KitchenSink : Plugin
             player.SetSpeed(speed);
             player.SetFlightSpeed(flightSpeed);
             player.SetVerticalFlightSpeed(verticalFlightSpeed);
+            player.ResetFallDistance();
+            player.SetAbsorption(absorption);
 
             output.Printf(
-                "food={0}, health={1}/{2}, experience={3}:{4}, scale={5}, invisible={6}, immobile={7}, speed={8}/{9}/{10}",
+                "food={0}, health={1}/{2}, experience={3}:{4}, scale={5}, invisible={6}, immobile={7}, speed={8}/{9}/{10}, physical={11}/{12}/{13}/{14}/{15}/{16}/{17}",
                 food,
                 health,
                 maxHealth,
@@ -1161,7 +1170,14 @@ public sealed class KitchenSink : Plugin
                 immobile ? "true" : "false",
                 speed,
                 flightSpeed,
-                verticalFlightSpeed);
+                verticalFlightSpeed,
+                fallDistance,
+                absorption,
+                dead ? "true" : "false",
+                onGround ? "true" : "false",
+                eyeHeight,
+                torsoHeight,
+                breathing ? "true" : "false");
         }
     }
 

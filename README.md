@@ -86,7 +86,8 @@ player-text, player-state, game-mode, effect, form, item, and player-inventory s
 from Dragonfly's Go AST. Generated player state parity currently includes `Food`/`SetFood`,
 `Health`, `MaxHealth`/`SetMaxHealth`, level and progress experience accessors, scale accessors,
 visibility toggles, mobility toggles, direct `Heal`, and Dragonfly's walking, flight, and
-vertical-flight speed getters and setters. `World.New()` creates a writable in-memory world.
+vertical-flight speed getters and setters. Physical-state parity covers absorption, fall distance,
+death, ground contact, body heights, and breathing. `World.New()` creates a writable in-memory world.
 `World.Config.New()` accepts Dragonfly's dimension and runtime settings, and an
 `MCDB.Config().Open(...)` provider creates a writable, saveable world below the configured worlds
 directory. `World.BlockByName` resolves dynamic names and typed state properties through

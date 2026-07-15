@@ -206,6 +206,13 @@ func TestCSharpPlayerStateMethods(t *testing.T) {
 		PlayerStateSpeed:               {Number: 0.1},
 		PlayerStateFlightSpeed:         {Number: 0.05},
 		PlayerStateVerticalFlightSpeed: {Number: 1},
+		PlayerStateFallDistance:        {Number: 2.5},
+		PlayerStateAbsorption:          {Number: 4},
+		PlayerStateDead:                {},
+		PlayerStateOnGround:            {Integer: 1},
+		PlayerStateEyeHeight:           {Number: 1.62},
+		PlayerStateTorsoHeight:         {Number: 1.52},
+		PlayerStateBreathing:           {Integer: 1},
 	}}
 	pluginRuntime := openCSharpRuntimeWithHost(t, host)
 	commands, err := pluginRuntime.Commands()
@@ -230,7 +237,7 @@ func TestCSharpPlayerStateMethods(t *testing.T) {
 		Overload: overload, Arguments: []string{"state"},
 		OnlinePlayers: []CommandPlayer{{Player: player, Name: "Danick"}},
 	})
-	if err != nil || output.Failed || output.Message != "food=10, health=16/20, experience=3:0.25, scale=1, invisible=false, immobile=false, speed=0.1/0.05/1" {
+	if err != nil || output.Failed || output.Message != "food=10, health=16/20, experience=3:0.25, scale=1, invisible=false, immobile=false, speed=0.1/0.05/1, physical=2.5/4/false/true/1.62/1.52/true" {
 		t.Fatalf("state output=%#v error=%v", output, err)
 	}
 	wantReads := []PlayerStateKind{
@@ -245,6 +252,13 @@ func TestCSharpPlayerStateMethods(t *testing.T) {
 		PlayerStateSpeed,
 		PlayerStateFlightSpeed,
 		PlayerStateVerticalFlightSpeed,
+		PlayerStateFallDistance,
+		PlayerStateAbsorption,
+		PlayerStateDead,
+		PlayerStateOnGround,
+		PlayerStateEyeHeight,
+		PlayerStateTorsoHeight,
+		PlayerStateBreathing,
 	}
 	if !slices.Equal(host.reads, wantReads) {
 		t.Fatalf("state reads=%v, want %v", host.reads, wantReads)
@@ -260,6 +274,8 @@ func TestCSharpPlayerStateMethods(t *testing.T) {
 		PlayerStateSpeed,
 		PlayerStateFlightSpeed,
 		PlayerStateVerticalFlightSpeed,
+		PlayerStateFallDistance,
+		PlayerStateAbsorption,
 	}
 	if !slices.Equal(host.states, wantWrites) {
 		t.Fatalf("state writes=%v, want %v", host.states, wantWrites)

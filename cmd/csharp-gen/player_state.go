@@ -34,6 +34,15 @@ var selectedPlayerStateMethods = []string{
 	"SetFlightSpeed",
 	"VerticalFlightSpeed",
 	"SetVerticalFlightSpeed",
+	"ResetFallDistance",
+	"FallDistance",
+	"SetAbsorption",
+	"Absorption",
+	"Dead",
+	"OnGround",
+	"EyeHeight",
+	"TorsoHeight",
+	"Breathing",
 }
 
 type playerStateMethod struct {
@@ -79,6 +88,15 @@ func inspectPlayerStateMethods(path string) ([]playerStateMethod, error) {
 		"SetFlightSpeed":         {Parameters: "float64"},
 		"VerticalFlightSpeed":    {Results: "float64"},
 		"SetVerticalFlightSpeed": {Parameters: "float64"},
+		"ResetFallDistance":      {},
+		"FallDistance":           {Results: "float64"},
+		"SetAbsorption":          {Parameters: "float64"},
+		"Absorption":             {Results: "float64"},
+		"Dead":                   {Results: "bool"},
+		"OnGround":               {Results: "bool"},
+		"EyeHeight":              {Results: "float64"},
+		"TorsoHeight":            {Results: "float64"},
+		"Breathing":              {Results: "bool"},
 	}
 	for _, name := range selectedPlayerStateMethods {
 		function := found[name]
@@ -184,6 +202,24 @@ func generatePlayerStateMethods(methods []playerStateMethod) []byte {
 			output.WriteString("    public double VerticalFlightSpeed() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateVerticalFlightSpeed).Number;\n")
 		case "SetVerticalFlightSpeed":
 			fmt.Fprintf(&output, "    public void SetVerticalFlightSpeed(double %s) => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateVerticalFlightSpeed, new PlayerStateValue { Number = %s });\n", parameter, parameter)
+		case "ResetFallDistance":
+			output.WriteString("    public void ResetFallDistance() => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateFallDistance, default);\n")
+		case "FallDistance":
+			output.WriteString("    public double FallDistance() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateFallDistance).Number;\n")
+		case "SetAbsorption":
+			fmt.Fprintf(&output, "    public void SetAbsorption(double %s) => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateAbsorption, new PlayerStateValue { Number = %s });\n", parameter, parameter)
+		case "Absorption":
+			output.WriteString("    public double Absorption() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateAbsorption).Number;\n")
+		case "Dead":
+			output.WriteString("    public bool Dead() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateDead).Integer != 0;\n")
+		case "OnGround":
+			output.WriteString("    public bool OnGround() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateOnGround).Integer != 0;\n")
+		case "EyeHeight":
+			output.WriteString("    public double EyeHeight() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateEyeHeight).Number;\n")
+		case "TorsoHeight":
+			output.WriteString("    public double TorsoHeight() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateTorsoHeight).Number;\n")
+		case "Breathing":
+			output.WriteString("    public bool Breathing() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateBreathing).Integer != 0;\n")
 		default:
 			panic("unsupported player state method: " + method.Name)
 		}

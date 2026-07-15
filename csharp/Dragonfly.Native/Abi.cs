@@ -175,6 +175,13 @@ public static class Abi
     public const uint PlayerStateSpeed = 11;
     public const uint PlayerStateFlightSpeed = 12;
     public const uint PlayerStateVerticalFlightSpeed = 13;
+    public const uint PlayerStateFallDistance = 14;
+    public const uint PlayerStateAbsorption = 15;
+    public const uint PlayerStateDead = 16;
+    public const uint PlayerStateOnGround = 17;
+    public const uint PlayerStateEyeHeight = 18;
+    public const uint PlayerStateTorsoHeight = 19;
+    public const uint PlayerStateBreathing = 20;
     public const uint InventoryMain = 0;
     public const uint InventoryArmour = 1;
     public const uint InventoryOffhand = 2;

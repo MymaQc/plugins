@@ -331,7 +331,8 @@ game mode.
 mode, tick range, registered/custom difficulty, and restores observable state after transport.
 `/kitchen state` exercises the generated food, health, experience-level/progress, scale,
 visibility, mobility, walking-speed, flight-speed, and vertical-flight-speed methods without
-changing the final player state.
+changing the restorable player state. It also reads absorption, fall distance, death, ground
+contact, body heights, and breathing, then exercises Dragonfly's fall-distance reset.
 `/kitchen item` exercises stack count, durability, unbreakable, attack damage, anvil cost,
 values, `WithItem`, `String`, semantic NBT comparison, and merging, then round-trips all eleven
 finite stateful item families plus both typed book and firework item families through player

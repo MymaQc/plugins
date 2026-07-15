@@ -40,4 +40,13 @@ public sealed partial class Player
     public void SetFlightSpeed(double flightSpeed) => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateFlightSpeed, new PlayerStateValue { Number = flightSpeed });
     public double VerticalFlightSpeed() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateVerticalFlightSpeed).Number;
     public void SetVerticalFlightSpeed(double flightSpeed) => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateVerticalFlightSpeed, new PlayerStateValue { Number = flightSpeed });
+    public void ResetFallDistance() => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateFallDistance, default);
+    public double FallDistance() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateFallDistance).Number;
+    public void SetAbsorption(double health) => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateAbsorption, new PlayerStateValue { Number = health });
+    public double Absorption() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateAbsorption).Number;
+    public bool Dead() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateDead).Integer != 0;
+    public bool OnGround() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateOnGround).Integer != 0;
+    public double EyeHeight() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateEyeHeight).Number;
+    public double TorsoHeight() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateTorsoHeight).Number;
+    public bool Breathing() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateBreathing).Integer != 0;
 }

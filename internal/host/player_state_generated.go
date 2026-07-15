@@ -80,6 +80,10 @@ func setPlayerState(connected *player.Player, kind native.PlayerStateKind, value
 		connected.SetFlightSpeed(value.Number)
 	case native.PlayerStateVerticalFlightSpeed:
 		connected.SetVerticalFlightSpeed(value.Number)
+	case native.PlayerStateFallDistance:
+		connected.ResetFallDistance()
+	case native.PlayerStateAbsorption:
+		connected.SetAbsorption(value.Number)
 	default:
 		return false
 	}
@@ -119,7 +123,28 @@ func readPlayerState(connected *player.Player, kind native.PlayerStateKind) (nat
 		return native.PlayerStateValue{Number: connected.FlightSpeed()}, true
 	case native.PlayerStateVerticalFlightSpeed:
 		return native.PlayerStateValue{Number: connected.VerticalFlightSpeed()}, true
+	case native.PlayerStateFallDistance:
+		return native.PlayerStateValue{Number: connected.FallDistance()}, true
+	case native.PlayerStateAbsorption:
+		return native.PlayerStateValue{Number: connected.Absorption()}, true
+	case native.PlayerStateDead:
+		return native.PlayerStateValue{Integer: boolInteger(connected.Dead())}, true
+	case native.PlayerStateOnGround:
+		return native.PlayerStateValue{Integer: boolInteger(connected.OnGround())}, true
+	case native.PlayerStateEyeHeight:
+		return native.PlayerStateValue{Number: connected.EyeHeight()}, true
+	case native.PlayerStateTorsoHeight:
+		return native.PlayerStateValue{Number: connected.TorsoHeight()}, true
+	case native.PlayerStateBreathing:
+		return native.PlayerStateValue{Integer: boolInteger(connected.Breathing())}, true
 	default:
 		return native.PlayerStateValue{}, false
 	}
+}
+
+func boolInteger(value bool) int64 {
+	if value {
+		return 1
+	}
+	return 0
 }
