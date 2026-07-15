@@ -322,6 +322,12 @@ func TestPlayersReadsAndChangesState(t *testing.T) {
 			{native.PlayerStateVerticalFlightSpeed, native.PlayerStateValue{Number: 1.5}},
 			{native.PlayerStateFallDistance, native.PlayerStateValue{}},
 			{native.PlayerStateAbsorption, native.PlayerStateValue{Number: 5}},
+			{native.PlayerStateSprinting, native.PlayerStateValue{}},
+			{native.PlayerStateSneaking, native.PlayerStateValue{}},
+			{native.PlayerStateSwimming, native.PlayerStateValue{}},
+			{native.PlayerStateCrawling, native.PlayerStateValue{}},
+			{native.PlayerStateGliding, native.PlayerStateValue{}},
+			{native.PlayerStateFlying, native.PlayerStateValue{}},
 		}
 		for _, change := range changes {
 			if !players.SetPlayerState(invocation, id, change.kind, change.value) {
@@ -364,6 +370,15 @@ func TestPlayersReadsAndChangesState(t *testing.T) {
 		breathing, breathingOK := players.PlayerState(invocation, id, native.PlayerStateBreathing)
 		if gameMode.Integer != creativeDescriptor || food.Integer != 12 || maxHealth.Number != 40 || health.Number != 23 || level.Integer != 12 || math.Abs(progress.Number-0.5) > 0.02 || scale.Number != 1.5 || invisible.Integer != 1 || immobile.Integer != 1 || speed.Number != 0.2 || flightSpeed.Number != 0.1 || verticalFlightSpeed.Number != 1.5 || fallDistance.Number != 0 || absorption.Number != 1 || dead.Integer != 0 || (onGround.Integer != 0 && onGround.Integer != 1) || eyeHeight.Number != 1.62 || torsoHeight.Number != 1.52 || (breathing.Integer != 0 && breathing.Integer != 1) || !fallDistanceOK || !absorptionOK || !deadOK || !onGroundOK || !eyeHeightOK || !torsoHeightOK || !breathingOK {
 			t.Fatalf("state mismatch: game=%+v food=%+v max=%+v health=%+v level=%+v progress=%+v scale=%+v invisible=%+v immobile=%+v speed=%+v flight=%+v vertical=%+v fall=%+v absorption=%+v dead=%+v ground=%+v eye=%+v torso=%+v breathing=%+v", gameMode, food, maxHealth, health, level, progress, scale, invisible, immobile, speed, flightSpeed, verticalFlightSpeed, fallDistance, absorption, dead, onGround, eyeHeight, torsoHeight, breathing)
+		}
+		for _, kind := range []native.PlayerStateKind{
+			native.PlayerStateSprinting, native.PlayerStateSneaking, native.PlayerStateSwimming,
+			native.PlayerStateCrawling, native.PlayerStateGliding, native.PlayerStateFlying,
+		} {
+			value, ok := players.PlayerState(invocation, id, kind)
+			if !ok || value.Integer != 0 {
+				t.Fatalf("activity state %d = %+v, %v", kind, value, ok)
+			}
 		}
 		if !players.SendPlayerText(invocation, id, native.PlayerTextNameTag, "C# Player") || player.NameTag() != "C# Player" {
 			t.Fatalf("name tag = %q", player.NameTag())
@@ -441,6 +456,9 @@ func TestPlayersReadsAndChangesState(t *testing.T) {
 		}
 		if !players.SetPlayerState(invocation, id, native.PlayerStateMaxHealth, native.PlayerStateValue{Number: -5}) {
 			t.Fatal("negative max-health change failed")
+		}
+		if players.SetPlayerState(invocation, id, native.PlayerStateSprinting, native.PlayerStateValue{Integer: 2}) {
+			t.Fatal("invalid sprinting state accepted")
 		}
 		clampedMaxHealth, _ := players.PlayerState(invocation, id, native.PlayerStateMaxHealth)
 		if clampedMaxHealth.Number != 1 {

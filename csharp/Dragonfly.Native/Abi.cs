@@ -182,6 +182,12 @@ public static class Abi
     public const uint PlayerStateEyeHeight = 18;
     public const uint PlayerStateTorsoHeight = 19;
     public const uint PlayerStateBreathing = 20;
+    public const uint PlayerStateSprinting = 21;
+    public const uint PlayerStateSneaking = 22;
+    public const uint PlayerStateSwimming = 23;
+    public const uint PlayerStateCrawling = 24;
+    public const uint PlayerStateGliding = 25;
+    public const uint PlayerStateFlying = 26;
     public const uint InventoryMain = 0;
     public const uint InventoryArmour = 1;
     public const uint InventoryOffhand = 2;

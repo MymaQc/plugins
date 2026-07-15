@@ -43,6 +43,24 @@ var selectedPlayerStateMethods = []string{
 	"EyeHeight",
 	"TorsoHeight",
 	"Breathing",
+	"StartSprinting",
+	"StopSprinting",
+	"Sprinting",
+	"StartSneaking",
+	"StopSneaking",
+	"Sneaking",
+	"StartSwimming",
+	"StopSwimming",
+	"Swimming",
+	"StartCrawling",
+	"StopCrawling",
+	"Crawling",
+	"StartGliding",
+	"StopGliding",
+	"Gliding",
+	"StartFlying",
+	"StopFlying",
+	"Flying",
 }
 
 type playerStateMethod struct {
@@ -97,6 +115,24 @@ func inspectPlayerStateMethods(path string) ([]playerStateMethod, error) {
 		"EyeHeight":              {Results: "float64"},
 		"TorsoHeight":            {Results: "float64"},
 		"Breathing":              {Results: "bool"},
+		"StartSprinting":         {},
+		"StopSprinting":          {},
+		"Sprinting":              {Results: "bool"},
+		"StartSneaking":          {},
+		"StopSneaking":           {},
+		"Sneaking":               {Results: "bool"},
+		"StartSwimming":          {},
+		"StopSwimming":           {},
+		"Swimming":               {Results: "bool"},
+		"StartCrawling":          {},
+		"StopCrawling":           {},
+		"Crawling":               {Results: "bool"},
+		"StartGliding":           {},
+		"StopGliding":            {},
+		"Gliding":                {Results: "bool"},
+		"StartFlying":            {},
+		"StopFlying":             {},
+		"Flying":                 {Results: "bool"},
 	}
 	for _, name := range selectedPlayerStateMethods {
 		function := found[name]
@@ -220,6 +256,42 @@ func generatePlayerStateMethods(methods []playerStateMethod) []byte {
 			output.WriteString("    public double TorsoHeight() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateTorsoHeight).Number;\n")
 		case "Breathing":
 			output.WriteString("    public bool Breathing() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateBreathing).Integer != 0;\n")
+		case "StartSprinting":
+			output.WriteString("    public void StartSprinting() => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateSprinting, new PlayerStateValue { Integer = 1 });\n")
+		case "StopSprinting":
+			output.WriteString("    public void StopSprinting() => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateSprinting, default);\n")
+		case "Sprinting":
+			output.WriteString("    public bool Sprinting() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateSprinting).Integer != 0;\n")
+		case "StartSneaking":
+			output.WriteString("    public void StartSneaking() => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateSneaking, new PlayerStateValue { Integer = 1 });\n")
+		case "StopSneaking":
+			output.WriteString("    public void StopSneaking() => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateSneaking, default);\n")
+		case "Sneaking":
+			output.WriteString("    public bool Sneaking() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateSneaking).Integer != 0;\n")
+		case "StartSwimming":
+			output.WriteString("    public void StartSwimming() => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateSwimming, new PlayerStateValue { Integer = 1 });\n")
+		case "StopSwimming":
+			output.WriteString("    public void StopSwimming() => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateSwimming, default);\n")
+		case "Swimming":
+			output.WriteString("    public bool Swimming() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateSwimming).Integer != 0;\n")
+		case "StartCrawling":
+			output.WriteString("    public void StartCrawling() => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateCrawling, new PlayerStateValue { Integer = 1 });\n")
+		case "StopCrawling":
+			output.WriteString("    public void StopCrawling() => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateCrawling, default);\n")
+		case "Crawling":
+			output.WriteString("    public bool Crawling() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateCrawling).Integer != 0;\n")
+		case "StartGliding":
+			output.WriteString("    public void StartGliding() => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateGliding, new PlayerStateValue { Integer = 1 });\n")
+		case "StopGliding":
+			output.WriteString("    public void StopGliding() => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateGliding, default);\n")
+		case "Gliding":
+			output.WriteString("    public bool Gliding() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateGliding).Integer != 0;\n")
+		case "StartFlying":
+			output.WriteString("    public void StartFlying() => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateFlying, new PlayerStateValue { Integer = 1 });\n")
+		case "StopFlying":
+			output.WriteString("    public void StopFlying() => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateFlying, default);\n")
+		case "Flying":
+			output.WriteString("    public bool Flying() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateFlying).Integer != 0;\n")
 		default:
 			panic("unsupported player state method: " + method.Name)
 		}

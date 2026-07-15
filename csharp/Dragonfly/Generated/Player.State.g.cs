@@ -49,4 +49,22 @@ public sealed partial class Player
     public double EyeHeight() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateEyeHeight).Number;
     public double TorsoHeight() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateTorsoHeight).Number;
     public bool Breathing() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateBreathing).Integer != 0;
+    public void StartSprinting() => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateSprinting, new PlayerStateValue { Integer = 1 });
+    public void StopSprinting() => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateSprinting, default);
+    public bool Sprinting() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateSprinting).Integer != 0;
+    public void StartSneaking() => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateSneaking, new PlayerStateValue { Integer = 1 });
+    public void StopSneaking() => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateSneaking, default);
+    public bool Sneaking() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateSneaking).Integer != 0;
+    public void StartSwimming() => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateSwimming, new PlayerStateValue { Integer = 1 });
+    public void StopSwimming() => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateSwimming, default);
+    public bool Swimming() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateSwimming).Integer != 0;
+    public void StartCrawling() => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateCrawling, new PlayerStateValue { Integer = 1 });
+    public void StopCrawling() => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateCrawling, default);
+    public bool Crawling() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateCrawling).Integer != 0;
+    public void StartGliding() => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateGliding, new PlayerStateValue { Integer = 1 });
+    public void StopGliding() => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateGliding, default);
+    public bool Gliding() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateGliding).Integer != 0;
+    public void StartFlying() => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateFlying, new PlayerStateValue { Integer = 1 });
+    public void StopFlying() => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateFlying, default);
+    public bool Flying() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateFlying).Integer != 0;
 }

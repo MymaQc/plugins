@@ -98,6 +98,7 @@ func TestPlayerTransportPreservesExplicitIDs(t *testing.T) {
 		"PlayerStateSpeed               PlayerStateKind = 11",
 		"PlayerStateVerticalFlightSpeed PlayerStateKind = 13",
 		"PlayerStateBreathing           PlayerStateKind = 20",
+		"PlayerStateFlying              PlayerStateKind = 26",
 		"EffectSlowFalling    EffectType = 27",
 		"EffectDarkness       EffectType = 30",
 		"PlayerTextTip          PlayerTextKind = 1",

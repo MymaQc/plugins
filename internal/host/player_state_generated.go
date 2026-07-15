@@ -84,6 +84,30 @@ func setPlayerState(connected *player.Player, kind native.PlayerStateKind, value
 		connected.ResetFallDistance()
 	case native.PlayerStateAbsorption:
 		connected.SetAbsorption(value.Number)
+	case native.PlayerStateSprinting:
+		if !setPlayerActivity(value.Integer, connected.StartSprinting, connected.StopSprinting) {
+			return false
+		}
+	case native.PlayerStateSneaking:
+		if !setPlayerActivity(value.Integer, connected.StartSneaking, connected.StopSneaking) {
+			return false
+		}
+	case native.PlayerStateSwimming:
+		if !setPlayerActivity(value.Integer, connected.StartSwimming, connected.StopSwimming) {
+			return false
+		}
+	case native.PlayerStateCrawling:
+		if !setPlayerActivity(value.Integer, connected.StartCrawling, connected.StopCrawling) {
+			return false
+		}
+	case native.PlayerStateGliding:
+		if !setPlayerActivity(value.Integer, connected.StartGliding, connected.StopGliding) {
+			return false
+		}
+	case native.PlayerStateFlying:
+		if !setPlayerActivity(value.Integer, connected.StartFlying, connected.StopFlying) {
+			return false
+		}
 	default:
 		return false
 	}
@@ -137,6 +161,18 @@ func readPlayerState(connected *player.Player, kind native.PlayerStateKind) (nat
 		return native.PlayerStateValue{Number: connected.TorsoHeight()}, true
 	case native.PlayerStateBreathing:
 		return native.PlayerStateValue{Integer: boolInteger(connected.Breathing())}, true
+	case native.PlayerStateSprinting:
+		return native.PlayerStateValue{Integer: boolInteger(connected.Sprinting())}, true
+	case native.PlayerStateSneaking:
+		return native.PlayerStateValue{Integer: boolInteger(connected.Sneaking())}, true
+	case native.PlayerStateSwimming:
+		return native.PlayerStateValue{Integer: boolInteger(connected.Swimming())}, true
+	case native.PlayerStateCrawling:
+		return native.PlayerStateValue{Integer: boolInteger(connected.Crawling())}, true
+	case native.PlayerStateGliding:
+		return native.PlayerStateValue{Integer: boolInteger(connected.Gliding())}, true
+	case native.PlayerStateFlying:
+		return native.PlayerStateValue{Integer: boolInteger(connected.Flying())}, true
 	default:
 		return native.PlayerStateValue{}, false
 	}
@@ -147,4 +183,16 @@ func boolInteger(value bool) int64 {
 		return 1
 	}
 	return 0
+}
+
+func setPlayerActivity(value int64, start, stop func()) bool {
+	if value != 0 && value != 1 {
+		return false
+	}
+	if value == 1 {
+		start()
+	} else {
+		stop()
+	}
+	return true
 }

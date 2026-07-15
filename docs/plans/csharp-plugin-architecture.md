@@ -335,6 +335,7 @@ mode, tick range, registered/custom difficulty, and restores observable state af
 visibility, mobility, walking-speed, flight-speed, and vertical-flight-speed methods without
 changing the restorable player state. It also reads absorption, fall distance, death, ground
 contact, body heights, and breathing, then exercises Dragonfly's fall-distance reset.
+It also exercises exact sprinting, sneaking, swimming, crawling, gliding, and flying state methods.
 `/kitchen item` exercises stack count, durability, unbreakable, attack damage, anvil cost,
 values, `WithItem`, `String`, semantic NBT comparison, and merging, then round-trips all eleven
 finite stateful item families plus both typed book and firework item families through player

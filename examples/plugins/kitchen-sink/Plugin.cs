@@ -1145,6 +1145,12 @@ public sealed class KitchenSink : Plugin
             var eyeHeight = player.EyeHeight();
             var torsoHeight = player.TorsoHeight();
             var breathing = player.Breathing();
+            var sprinting = player.Sprinting();
+            var sneaking = player.Sneaking();
+            var swimming = player.Swimming();
+            var crawling = player.Crawling();
+            var gliding = player.Gliding();
+            var flying = player.Flying();
 
             player.SetFood(food);
             player.SetMaxHealth(maxHealth);
@@ -1160,9 +1166,15 @@ public sealed class KitchenSink : Plugin
             player.SetVerticalFlightSpeed(verticalFlightSpeed);
             player.ResetFallDistance();
             player.SetAbsorption(absorption);
+            if (sprinting) player.StartSprinting(); else player.StopSprinting();
+            if (sneaking) player.StartSneaking(); else player.StopSneaking();
+            if (swimming) player.StartSwimming(); else player.StopSwimming();
+            if (crawling) player.StartCrawling(); else player.StopCrawling();
+            if (gliding) player.StartGliding(); else player.StopGliding();
+            if (flying) player.StartFlying(); else player.StopFlying();
 
             output.Printf(
-                "food={0}, health={1}/{2}, experience={3}:{4}, scale={5}, invisible={6}, immobile={7}, speed={8}/{9}/{10}, physical={11}/{12}/{13}/{14}/{15}/{16}/{17}",
+                "food={0}, health={1}/{2}, experience={3}:{4}, scale={5}, invisible={6}, immobile={7}, speed={8}/{9}/{10}, physical={11}/{12}/{13}/{14}/{15}/{16}/{17}, activity={18}/{19}/{20}/{21}/{22}/{23}",
                 food,
                 health,
                 maxHealth,
@@ -1180,7 +1192,13 @@ public sealed class KitchenSink : Plugin
                 onGround ? "true" : "false",
                 eyeHeight,
                 torsoHeight,
-                breathing ? "true" : "false");
+                breathing ? "true" : "false",
+                sprinting ? "true" : "false",
+                sneaking ? "true" : "false",
+                swimming ? "true" : "false",
+                crawling ? "true" : "false",
+                gliding ? "true" : "false",
+                flying ? "true" : "false");
         }
     }
 
