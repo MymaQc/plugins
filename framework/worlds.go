@@ -746,7 +746,7 @@ func (m *WorldManager) ServerWorld(dimension native.WorldDimension) (native.Worl
 // CreateWorld constructs and owns a Dragonfly world.Config. A Nop provider is
 // in-memory; an MCDB provider persists below the configured world root.
 func (m *WorldManager) CreateWorld(value native.WorldConfig) (native.WorldID, bool) {
-	dimension, ok := worldSpecDimension(WorldDimension(value.Dimension))
+	dimension, ok := pluginWorldDimension(value)
 	if !ok || value.Provider > native.WorldProviderMCDB {
 		return 0, false
 	}
@@ -826,6 +826,25 @@ func (m *WorldManager) CreateWorld(value native.WorldConfig) (native.WorldID, bo
 	}
 	reserved = false
 	return id, true
+}
+
+type customDimension struct{ value native.CustomWorldDimension }
+
+func (d customDimension) Range() cube.Range {
+	return cube.Range{int(d.value.Range.Min), int(d.value.Range.Max)}
+}
+func (d customDimension) WaterEvaporates() bool { return d.value.WaterEvaporates }
+func (d customDimension) LavaSpreadDuration() time.Duration {
+	return d.value.LavaSpreadDuration
+}
+func (d customDimension) WeatherCycle() bool { return d.value.WeatherCycle }
+func (d customDimension) TimeCycle() bool    { return d.value.TimeCycle }
+
+func pluginWorldDimension(value native.WorldConfig) (world.Dimension, bool) {
+	if value.CustomDimension != nil {
+		return customDimension{value: *value.CustomDimension}, true
+	}
+	return worldSpecDimension(WorldDimension(value.Dimension))
 }
 
 func constructWorld(config world.Config) (created *world.World, err error) {
@@ -1138,13 +1157,11 @@ func (m *WorldManager) WorldRange(invocation native.InvocationID, id native.Worl
 	if entry.closed {
 		return native.BlockRange{}, false
 	}
-	return readManagedWorld(m, invocation, entry, func(tx *world.Tx) (native.BlockRange, bool) {
-		value := tx.Range()
-		if value.Min() < math.MinInt32 || value.Min() > math.MaxInt32 || value.Max() < math.MinInt32 || value.Max() > math.MaxInt32 {
-			return native.BlockRange{}, false
-		}
-		return native.BlockRange{Min: int32(value.Min()), Max: int32(value.Max())}, true
-	})
+	value := entry.world.Range()
+	if value.Min() < math.MinInt32 || value.Min() > math.MaxInt32 || value.Max() < math.MinInt32 || value.Max() > math.MaxInt32 {
+		return native.BlockRange{}, false
+	}
+	return native.BlockRange{Min: int32(value.Min()), Max: int32(value.Max())}, true
 }
 
 func (m *WorldManager) WorldHighestLightBlocker(invocation native.InvocationID, id native.WorldID, x, z int32) (int32, bool) {

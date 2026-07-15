@@ -285,6 +285,10 @@ func TestPlayersReadItemUseAndSleepingState(t *testing.T) {
 		if position, sleeping, ok := players.PlayerSleeping(invocation, id); !ok || sleeping || position != (native.BlockPos{}) {
 			t.Fatalf("sleeping = %+v/%v ok=%v", position, sleeping, ok)
 		}
+		if position, dimension, found, ok := players.PlayerDeathPosition(invocation, id); !ok || found ||
+			position != (native.Vec3{}) || dimension != (native.WorldDimensionView{}) {
+			t.Fatalf("death position = %+v/%+v/%v ok=%v", position, dimension, found, ok)
+		}
 	})
 }
 

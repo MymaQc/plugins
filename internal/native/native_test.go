@@ -152,36 +152,39 @@ func TestValidEntityTypeDefinition(t *testing.T) {
 
 type recordingHost struct {
 	noopHost
-	player            PlayerID
-	textPlayers       []PlayerID
-	texts             []string
-	kinds             []PlayerTextKind
-	title             PlayerTitle
-	scoreboard        PlayerScoreboard
-	scoreboardRemoved bool
-	transforms        []PlayerTransformKind
-	vectors           []Vec3
-	yaws              []float64
-	pitches           []float64
-	knockBackSources  []Vec3
-	knockBackForces   []float64
-	knockBackHeights  []float64
-	usingItem         bool
-	sleepingPosition  BlockPos
-	sleeping          bool
-	states            []PlayerStateKind
-	values            []PlayerStateValue
-	state             PlayerStateValue
-	stateValues       map[PlayerStateKind]PlayerStateValue
-	rejectStateWrites bool
-	reads             []PlayerStateKind
-	actions           []PlayerActionKind
-	actionValues      []PlayerStateValue
-	actionResults     map[PlayerActionKind]PlayerStateValue
-	playerStrings     map[PlayerStringKind]string
-	stringReads       []PlayerStringKind
-	toasts            [][2]string
-	cooldowns         []struct {
+	player             PlayerID
+	textPlayers        []PlayerID
+	texts              []string
+	kinds              []PlayerTextKind
+	title              PlayerTitle
+	scoreboard         PlayerScoreboard
+	scoreboardRemoved  bool
+	transforms         []PlayerTransformKind
+	vectors            []Vec3
+	yaws               []float64
+	pitches            []float64
+	knockBackSources   []Vec3
+	knockBackForces    []float64
+	knockBackHeights   []float64
+	usingItem          bool
+	sleepingPosition   BlockPos
+	sleeping           bool
+	deathPosition      Vec3
+	deathDimension     WorldDimensionView
+	deathPositionFound bool
+	states             []PlayerStateKind
+	values             []PlayerStateValue
+	state              PlayerStateValue
+	stateValues        map[PlayerStateKind]PlayerStateValue
+	rejectStateWrites  bool
+	reads              []PlayerStateKind
+	actions            []PlayerActionKind
+	actionValues       []PlayerStateValue
+	actionResults      map[PlayerActionKind]PlayerStateValue
+	playerStrings      map[PlayerStringKind]string
+	stringReads        []PlayerStringKind
+	toasts             [][2]string
+	cooldowns          []struct {
 		Operation  PlayerCooldownOperation
 		Identifier string
 		Metadata   int32
@@ -248,7 +251,7 @@ type recordingHost struct {
 	worldSpawn         BlockPos
 	worldPlayer        [16]byte
 	worldPlayerSpawn   BlockPos
-	worldDimension     WorldDimension
+	worldDimension     WorldDimensionView
 	worldTimeCycle     bool
 	worldSleepDuration time.Duration
 	worldDefaultMode   int64
@@ -326,6 +329,10 @@ func (h *recordingHost) PlayerUsingItem(InvocationID, PlayerID) (bool, bool) {
 
 func (h *recordingHost) PlayerSleeping(InvocationID, PlayerID) (BlockPos, bool, bool) {
 	return h.sleepingPosition, h.sleeping, true
+}
+
+func (h *recordingHost) PlayerDeathPosition(InvocationID, PlayerID) (Vec3, WorldDimensionView, bool, bool) {
+	return h.deathPosition, h.deathDimension, h.deathPositionFound, true
 }
 
 func (h *recordingHost) TransferPlayer(invocation InvocationID, player PlayerID, world WorldID, position Vec3) bool {
@@ -596,7 +603,7 @@ func (h *recordingHost) WorldPlayerSpawn(_ InvocationID, id WorldID, player [16]
 	return h.worldPlayerSpawn, id == h.worldID && player == h.worldPlayer
 }
 
-func (h *recordingHost) WorldDimension(_ InvocationID, id WorldID) (WorldDimension, bool) {
+func (h *recordingHost) WorldDimension(_ InvocationID, id WorldID) (WorldDimensionView, bool) {
 	return h.worldDimension, id == h.worldID
 }
 

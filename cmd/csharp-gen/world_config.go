@@ -54,13 +54,71 @@ func inspectWorldConfig(configPath, worldPath, dimensionPath, providerPath, mcdb
 	if err := inspectPackageFunction(worldPath, "New", goSignature{Results: "*World"}); err != nil {
 		return err
 	}
-	if err := inspectWorldNamedTypes(dimensionPath, "Dimension", []string{"Overworld", "Nether", "End"}); err != nil {
+	if err := inspectWorldDimension(dimensionPath); err != nil {
 		return err
 	}
 	if err := inspectWorldNamedTypes(providerPath, "Provider", nil); err != nil {
 		return err
 	}
 	return inspectMethod(mcdbPath, "Config", "Open", goSignature{Parameters: "string", Results: "*DB, error"})
+}
+
+func inspectWorldDimension(path string) error {
+	file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+	if err != nil {
+		return err
+	}
+	want := map[string]string{
+		"Range":              "func() cube.Range",
+		"WaterEvaporates":    "func() bool",
+		"LavaSpreadDuration": "func() time.Duration",
+		"WeatherCycle":       "func() bool",
+		"TimeCycle":          "func() bool",
+	}
+	var found map[string]string
+	variables := map[string]bool{}
+	for _, declaration := range file.Decls {
+		general, ok := declaration.(*ast.GenDecl)
+		if !ok {
+			continue
+		}
+		for _, raw := range general.Specs {
+			switch spec := raw.(type) {
+			case *ast.TypeSpec:
+				if spec.Name.Name != "Dimension" {
+					continue
+				}
+				iface, ok := spec.Type.(*ast.InterfaceType)
+				if !ok {
+					return fmt.Errorf("Dragonfly world.Dimension is no longer an interface")
+				}
+				found = map[string]string{}
+				for _, field := range iface.Methods.List {
+					if len(field.Names) == 1 {
+						found[field.Names[0].Name] = formatGoExpression(field.Type)
+					}
+				}
+			case *ast.ValueSpec:
+				for _, name := range spec.Names {
+					variables[name.Name] = true
+				}
+			}
+		}
+	}
+	if found == nil {
+		return fmt.Errorf("Dragonfly world.Dimension is missing")
+	}
+	for name, signature := range want {
+		if found[name] != signature {
+			return fmt.Errorf("Dragonfly world.Dimension.%s changed from %s to %s", name, signature, found[name])
+		}
+	}
+	for _, name := range []string{"Overworld", "Nether", "End"} {
+		if !variables[name] {
+			return fmt.Errorf("Dragonfly world.%s is missing", name)
+		}
+	}
+	return nil
 }
 
 func inspectPackageFunction(path, name string, signature goSignature) error {
@@ -134,11 +192,30 @@ func generateWorldConfig() []byte {
 	output.WriteString("// Code generated from Dragonfly world.Config, Dimension, Provider, and mcdb.Config Go AST. DO NOT EDIT.\n")
 	output.WriteString("#nullable enable\nusing System;\n\nnamespace Dragonfly;\n\n")
 	output.WriteString("public sealed partial class World\n{\n")
-	output.WriteString("    public abstract record Dimension\n    {\n        private protected Dimension() { }\n    }\n\n")
-	output.WriteString("    internal sealed record BuiltinDimension(uint Id) : Dimension;\n")
-	output.WriteString("    public static Dimension Overworld { get; } = new BuiltinDimension(0);\n")
-	output.WriteString("    public static Dimension Nether { get; } = new BuiltinDimension(1);\n")
-	output.WriteString("    public static Dimension End { get; } = new BuiltinDimension(2);\n\n")
+	output.WriteString("    public interface Dimension\n    {\n")
+	output.WriteString("        Cube.Range Range();\n")
+	output.WriteString("        bool WaterEvaporates();\n")
+	output.WriteString("        TimeSpan LavaSpreadDuration();\n")
+	output.WriteString("        bool WeatherCycle();\n")
+	output.WriteString("        bool TimeCycle();\n")
+	output.WriteString("    }\n\n")
+	output.WriteString("    internal sealed record BuiltinDimension(uint Id, Cube.Range BuildRange, bool EvaporatesWater, TimeSpan LavaDuration, bool HasWeatherCycle, bool HasTimeCycle) : Dimension\n    {\n")
+	output.WriteString("        public Cube.Range Range() => BuildRange;\n")
+	output.WriteString("        public bool WaterEvaporates() => EvaporatesWater;\n")
+	output.WriteString("        public TimeSpan LavaSpreadDuration() => LavaDuration;\n")
+	output.WriteString("        public bool WeatherCycle() => HasWeatherCycle;\n")
+	output.WriteString("        public bool TimeCycle() => HasTimeCycle;\n")
+	output.WriteString("    }\n\n")
+	output.WriteString("    internal sealed record TransportDimension(Cube.Range BuildRange, bool EvaporatesWater, TimeSpan LavaDuration, bool HasWeatherCycle, bool HasTimeCycle) : Dimension\n    {\n")
+	output.WriteString("        public Cube.Range Range() => BuildRange;\n")
+	output.WriteString("        public bool WaterEvaporates() => EvaporatesWater;\n")
+	output.WriteString("        public TimeSpan LavaSpreadDuration() => LavaDuration;\n")
+	output.WriteString("        public bool WeatherCycle() => HasWeatherCycle;\n")
+	output.WriteString("        public bool TimeCycle() => HasTimeCycle;\n")
+	output.WriteString("    }\n\n")
+	output.WriteString("    public static Dimension Overworld { get; } = new BuiltinDimension(0, new Cube.Range(-64, 319), false, TimeSpan.FromMilliseconds(1500), true, true);\n")
+	output.WriteString("    public static Dimension Nether { get; } = new BuiltinDimension(1, new Cube.Range(0, 127), true, TimeSpan.FromMilliseconds(250), false, false);\n")
+	output.WriteString("    public static Dimension End { get; } = new BuiltinDimension(2, new Cube.Range(0, 255), false, TimeSpan.FromMilliseconds(1500), false, false);\n\n")
 	output.WriteString("    public abstract record Provider\n    {\n        private protected Provider() { }\n    }\n\n")
 	output.WriteString("    public sealed record NopProvider : Provider;\n\n")
 	output.WriteString("    public sealed record Config\n    {\n")

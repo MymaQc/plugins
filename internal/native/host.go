@@ -149,6 +149,19 @@ const (
 	WorldDimensionEnd
 )
 
+type CustomWorldDimension struct {
+	Range              BlockRange
+	WaterEvaporates    bool
+	LavaSpreadDuration time.Duration
+	WeatherCycle       bool
+	TimeCycle          bool
+}
+
+type WorldDimensionView struct {
+	ID     WorldDimension
+	Custom *CustomWorldDimension
+}
+
 type DifficultyView struct {
 	ID                    uint32
 	Builtin               bool
@@ -166,6 +179,7 @@ const (
 
 type WorldConfig struct {
 	Dimension           WorldDimension
+	CustomDimension     *CustomWorldDimension
 	Provider            WorldProviderKind
 	ProviderPath        string
 	ReadOnly            bool
@@ -435,6 +449,7 @@ type Host interface {
 	FinalPlayerDamage(InvocationID, PlayerID, float64, DamageSource) (float64, bool)
 	PlayerUsingItem(InvocationID, PlayerID) (bool, bool)
 	PlayerSleeping(InvocationID, PlayerID) (BlockPos, bool, bool)
+	PlayerDeathPosition(InvocationID, PlayerID) (Vec3, WorldDimensionView, bool, bool)
 	ChangePlayerEffect(InvocationID, PlayerID, PlayerEffectOperation, PlayerEffect) bool
 	PlayerEffects(InvocationID, PlayerID) ([]PlayerEffect, bool)
 	ClearPlayerEffects(InvocationID, PlayerID) bool
@@ -484,7 +499,7 @@ type Host interface {
 	SetWorldSpawn(InvocationID, WorldID, BlockPos) bool
 	WorldPlayerSpawn(InvocationID, WorldID, [16]byte) (BlockPos, bool)
 	SetWorldPlayerSpawn(InvocationID, WorldID, [16]byte, BlockPos) bool
-	WorldDimension(InvocationID, WorldID) (WorldDimension, bool)
+	WorldDimension(InvocationID, WorldID) (WorldDimensionView, bool)
 	WorldTimeCycle(InvocationID, WorldID) (bool, bool)
 	SetWorldTimeCycle(InvocationID, WorldID, bool) bool
 	SetWorldRequiredSleepDuration(InvocationID, WorldID, time.Duration) bool
@@ -573,6 +588,9 @@ func (noopHost) FinalPlayerDamage(InvocationID, PlayerID, float64, DamageSource)
 func (noopHost) PlayerUsingItem(InvocationID, PlayerID) (bool, bool) { return false, false }
 func (noopHost) PlayerSleeping(InvocationID, PlayerID) (BlockPos, bool, bool) {
 	return BlockPos{}, false, false
+}
+func (noopHost) PlayerDeathPosition(InvocationID, PlayerID) (Vec3, WorldDimensionView, bool, bool) {
+	return Vec3{}, WorldDimensionView{}, false, false
 }
 func (noopHost) ChangePlayerEffect(InvocationID, PlayerID, PlayerEffectOperation, PlayerEffect) bool {
 	return false
@@ -667,8 +685,8 @@ func (noopHost) WorldPlayerSpawn(InvocationID, WorldID, [16]byte) (BlockPos, boo
 func (noopHost) SetWorldPlayerSpawn(InvocationID, WorldID, [16]byte, BlockPos) bool {
 	return false
 }
-func (noopHost) WorldDimension(InvocationID, WorldID) (WorldDimension, bool) {
-	return 0, false
+func (noopHost) WorldDimension(InvocationID, WorldID) (WorldDimensionView, bool) {
+	return WorldDimensionView{}, false
 }
 func (noopHost) WorldTimeCycle(InvocationID, WorldID) (bool, bool)  { return false, false }
 func (noopHost) SetWorldTimeCycle(InvocationID, WorldID, bool) bool { return false }

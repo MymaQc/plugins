@@ -195,10 +195,16 @@ func TestCSharpVanillaGameModeCommand(t *testing.T) {
 
 func TestCSharpPlayerStateMethods(t *testing.T) {
 	host := &recordingHost{
-		rejectStateWrites: true,
-		usingItem:         true,
-		sleeping:          true,
-		sleepingPosition:  BlockPos{X: 4, Y: 65, Z: -2},
+		rejectStateWrites:  true,
+		usingItem:          true,
+		sleeping:           true,
+		sleepingPosition:   BlockPos{X: 4, Y: 65, Z: -2},
+		deathPosition:      Vec3{X: 9, Y: 70, Z: -3},
+		deathPositionFound: true,
+		deathDimension: WorldDimensionView{Custom: &CustomWorldDimension{
+			Range: BlockRange{Min: -16, Max: 255}, WaterEvaporates: true,
+			LavaSpreadDuration: 500 * time.Millisecond, TimeCycle: true,
+		}},
 		stateValues: map[PlayerStateKind]PlayerStateValue{
 			PlayerStateFood:                 {Integer: 10},
 			PlayerStateHealth:               {Number: 16},
@@ -258,7 +264,7 @@ func TestCSharpPlayerStateMethods(t *testing.T) {
 		Overload: overload, Arguments: []string{"state"},
 		OnlinePlayers: []CommandPlayer{{Player: player, Name: "Danick"}},
 	})
-	if err != nil || output.Failed || output.Message != "food=10, health=16/20, experience=3:0.25, scale=1, invisible=false, immobile=false, speed=0.1/0.05/1, physical=2.5/4/false/true/1.62/1.52/true, activity=true/false/true/false/true/false, fire=true/2, air=10/15, xp=27/42/true/0/true, using=true, sleeping=4,65,-2/true" {
+	if err != nil || output.Failed || output.Message != "food=10, health=16/20, experience=3:0.25, scale=1, invisible=false, immobile=false, speed=0.1/0.05/1, physical=2.5/4/false/true/1.62/1.52/true, activity=true/false/true/false/true/false, fire=true/2, air=10/15, xp=27/42/true/0/true, using=true, sleeping=4,65,-2/true, death=9,70,-3/true/true" {
 		t.Fatalf("state output=%#v error=%v", output, err)
 	}
 	wantReads := []PlayerStateKind{
@@ -1370,23 +1376,25 @@ func TestCSharpReflectedCommands(t *testing.T) {
 	configuredWorld.Overload = 23
 	configuredWorld.Arguments = []string{"world"}
 	output, err = pluginRuntime.HandleCommand(kitchen.Index, configuredWorld)
-	if err != nil || output.Failed || output.Message != "memory=World, persistent=kitchen:arena, spawn=8,70,-4, range=-64..319, highest_light_blocker=70, time=6000, overworld=true, cycle=true, difficulty=true, player_spawn=true" {
+	if err != nil || output.Failed || output.Message != "memory=World, persistent=kitchen:arena, spawn=8,70,-4, range=-64..319, highest_light_blocker=70, time=6000, overworld=true, cycle=true, difficulty=true, player_spawn=true, custom=true" {
 		t.Fatalf("configured world output=%#v error=%v", output, err)
 	}
-	if len(host.worldConfigs) != 2 || host.worldConfigs[0] != (WorldConfig{
-		Dimension: WorldDimensionOverworld,
-		Provider:  WorldProviderNop,
-	}) || host.worldConfigs[1] != (WorldConfig{
+	wantCustomDimension := CustomWorldDimension{
+		Range: BlockRange{Min: -32, Max: 191}, WaterEvaporates: true,
+		LavaSpreadDuration: 750 * time.Millisecond, TimeCycle: true,
+	}
+	if len(host.worldConfigs) != 2 || host.worldConfigs[0].CustomDimension == nil ||
+		*host.worldConfigs[0].CustomDimension != wantCustomDimension ||
+		host.worldConfigs[0].Provider != WorldProviderNop || host.worldConfigs[1] != (WorldConfig{
 		Dimension:       WorldDimensionOverworld,
 		Provider:        WorldProviderMCDB,
 		ProviderPath:    "kitchen/arena",
 		SaveInterval:    10 * time.Minute,
 		RandomTickSpeed: -1,
 	}) || !host.worldSaved ||
-		host.worldSpawn != (BlockPos{X: 8, Y: 70, Z: -4}) || host.transferInvocation != 42 ||
+		host.worldSpawn != (BlockPos{X: 8, Y: 70, Z: -4}) || host.transferInvocation != 0 ||
 		host.worldPlayer != player.UUID || host.worldPlayerSpawn != (BlockPos{X: 8, Y: 70, Z: -4}) ||
-		host.transferPlayer != player || host.transferWorld != 91 ||
-		host.transferPosition != (Vec3{X: 8.5, Y: 70, Z: -3.5}) ||
+		host.transferPlayer != (PlayerID{}) || host.transferWorld != 0 || host.transferPosition != (Vec3{}) ||
 		host.worldRangeCalls != 1 || host.worldRangeInvocation != 42 || host.worldRangeWorld != 91 ||
 		host.highestLightBlockerCall != (csharpWorldQueryCall{invocation: 42, world: 91, x: 8, z: -4}) ||
 		host.worldTime != 6000 || !host.worldTimeCycle || host.worldSleepDuration != time.Second ||
@@ -1406,11 +1414,11 @@ func TestCSharpReflectedCommands(t *testing.T) {
 	secondWorld.Invocation = 43
 	output, err = pluginRuntime.HandleCommand(kitchen.Index, secondWorld)
 	if err != nil || output.Failed || output.Message !=
-		"memory=World, persistent="+longWorldName+", spawn=8,70,-4, range=-64..319, highest_light_blocker=70, time=6000, overworld=true, cycle=true, difficulty=true, player_spawn=true" {
+		"memory=World, persistent="+longWorldName+", spawn=8,70,-4, range=-64..319, highest_light_blocker=70, time=6000, overworld=true, cycle=true, difficulty=true, player_spawn=true, custom=true" {
 		t.Fatalf("long world name output=%#v error=%v", output, err)
 	}
-	if host.worldRangeInvocation != 43 || host.highestLightBlockerCall.invocation != 43 || host.transferInvocation != 43 {
-		t.Fatalf("cached world invocation: range=%d highest=%d transfer=%d, want 43",
+	if host.worldRangeInvocation != 43 || host.highestLightBlockerCall.invocation != 43 || host.transferInvocation != 0 {
+		t.Fatalf("cached world invocation: range=%d highest=%d transfer=%d, want 43/43/0",
 			host.worldRangeInvocation, host.highestLightBlockerCall.invocation, host.transferInvocation)
 	}
 	host.worldName = "kitchen:arena"
@@ -1430,7 +1438,7 @@ func TestCSharpReflectedCommands(t *testing.T) {
 	if err != nil || output.Failed || output.Message != "world=kitchen:arena, entities=2, nearby=2, players=1" {
 		t.Fatalf("entity iteration output=%#v error=%v", output, err)
 	}
-	if host.currentWorldCalls != 4 || host.currentWorldInvocation != 42 ||
+	if host.currentWorldCalls != 6 || host.currentWorldInvocation != 42 ||
 		host.entityIteratorOpenCalls != 3 || host.entityIteratorNextCalls != 8 ||
 		host.entityIteratorCloseCalls != 3 || host.entityIteratorInvocation != 42 ||
 		host.entityIteratorWorld != 91 || host.entityIteratorClosed != 12 ||

@@ -28,8 +28,8 @@ func TestWorldManagerExactStateMethods(t *testing.T) {
 		t.Fatal("created world is not registered")
 	}
 
-	if dimension, ok := manager.WorldDimension(0, id); !ok || dimension != native.WorldDimensionNether {
-		t.Fatalf("WorldDimension() = %d, %v", dimension, ok)
+	if dimension, ok := manager.WorldDimension(0, id); !ok || dimension.ID != native.WorldDimensionNether || dimension.Custom != nil {
+		t.Fatalf("WorldDimension() = %+v, %v", dimension, ok)
 	}
 	if !manager.SetWorldTimeCycle(0, id, false) || created.TimeCycle() {
 		t.Fatal("StopTime equivalent failed")

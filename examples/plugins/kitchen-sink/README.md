@@ -38,7 +38,8 @@ Runnable parity showcase. Its single plugin class demonstrates:
 - in-memory `World.New()`, writable MCDB-backed `World.Config.New()`, owner scheduling,
   AST-generated world name/dimension/range/height/time/time-cycle/spawn/sleep/game-mode/tick-range/
   difficulty/save methods, custom world game mode and difficulty transport, and safe cross-world
-  player movement in `/kitchen world`;
+  player movement in `/kitchen world`; the command is repeatable after entering its arena and only
+  performs chunk-backed height reads while it owns that arena's transaction;
 - generated typed items (including finite stateful families, NBT-backed books, typed fireworks,
   seven armour tiers, four armour pieces, and 11 trim materials), firework explosions and shapes,
   armour defence/durability/repair/smelting behavior, all 28 armour round-trips, private dyed/trim

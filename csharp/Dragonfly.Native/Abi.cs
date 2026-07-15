@@ -5,7 +5,7 @@ namespace Dragonfly.Native;
 public static partial class Abi
 {
     public const uint PluginVersion = 11;
-    public const uint HostVersion = 56;
+    public const uint HostVersion = 57;
     public const int Ok = 0;
     public const int Error = 1;
     public const uint PlayerCooldownHas = 0;
@@ -510,7 +510,7 @@ public unsafe struct HostApi
     public delegate* unmanaged[Cdecl]<ulong, ulong, ulong, byte*, int> WorldTaskCancel;
     public delegate* unmanaged[Cdecl]<ulong, ulong, uint, PacketFieldValue*, int> PacketFieldGet;
     public delegate* unmanaged[Cdecl]<ulong, ulong, uint, PacketFieldValue*, int> PacketFieldSet;
-    public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, uint*, int> WorldDimensionGet;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, DimensionView*, int> WorldDimensionGet;
     public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, byte*, int> WorldTimeCycleGet;
     public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, byte, int> WorldTimeCycleSet;
     public delegate* unmanaged[Cdecl]<ulong, ulong, WorldId, long, int> WorldRequiredSleepDurationSet;
@@ -529,6 +529,7 @@ public unsafe struct HostApi
     public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, double, DamageSourceView*, double*, int> PlayerFinalDamage;
     public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, byte*, int> PlayerUsingItem;
     public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, BlockPos*, byte*, int> PlayerSleeping;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, Vec3*, DimensionView*, byte*, int> PlayerDeathPosition;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -769,6 +770,20 @@ public unsafe struct WorldConfigV1
     public long ChunkUnloadIntervalNanoseconds;
     public int RandomTickSpeed;
     public uint Reserved;
+    public DimensionView DimensionView;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct DimensionView
+{
+    public uint Id;
+    public byte Custom;
+    public byte WaterEvaporates;
+    public byte WeatherCycle;
+    public byte TimeCycle;
+    public int RangeMin;
+    public int RangeMax;
+    public long LavaSpreadNanoseconds;
 }
 
 [StructLayout(LayoutKind.Sequential)]

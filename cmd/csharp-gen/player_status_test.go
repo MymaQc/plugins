@@ -23,6 +23,7 @@ func TestPlayerStatusMatchesPinnedDragonfly(t *testing.T) {
 	for _, expected := range []string{
 		"bool UsingItem()",
 		"(Cube.Pos Position, bool Sleeping) Sleeping()",
+		"(Vector3 Position, World.Dimension? Dimension, bool Found) DeathPosition()",
 	} {
 		if !strings.Contains(generated, expected) {
 			t.Fatalf("generated player status missing %q:\n%s", expected, generated)

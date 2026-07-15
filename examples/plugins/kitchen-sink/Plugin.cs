@@ -625,6 +625,15 @@ public sealed class KitchenSink : Plugin
     {
         public Cmd.SubCommand World;
 
+        private sealed record KitchenDimension : Dragonfly.World.Dimension
+        {
+            public Cube.Range Range() => new(-32, 191);
+            public bool WaterEvaporates() => true;
+            public TimeSpan LavaSpreadDuration() => TimeSpan.FromMilliseconds(750);
+            public bool WeatherCycle() => false;
+            public bool TimeCycle() => true;
+        }
+
         public void Run(Cmd.Source source, Cmd.Output output, World.Tx? tx)
         {
             if (source is not Player player)
@@ -632,7 +641,8 @@ public sealed class KitchenSink : Plugin
                 output.Error("This command can only be used by a player.");
                 return;
             }
-            var memory = plugin._memoryWorld ??= Dragonfly.World.New();
+            var customDimension = new KitchenDimension();
+            var memory = plugin._memoryWorld ??= new Dragonfly.World.Config { Dim = customDimension }.New();
             _ = memory.Do(worldTx =>
                 worldTx.SetBlock(new Cube.Pos(0, 0, 0), new Block.Stone()));
             var arena = plugin._persistentWorld ??= new Dragonfly.World.Config
@@ -641,9 +651,14 @@ public sealed class KitchenSink : Plugin
                 SaveInterval = TimeSpan.FromMinutes(10),
                 RandomTickSpeed = -1,
             }.New();
+            var current = tx?.World();
+            var inArena = arena.Equals(current);
             var spawn = arena.Spawn();
             var range = arena.Range();
-            var highestLightBlocker = arena.HighestLightBlocker(spawn.X(), spawn.Z());
+            // Height reads require the world's live transaction. A command may
+            // inspect an arena before moving its source there, so only perform
+            // this transaction-bound read when the source is already inside.
+            var highestLightBlocker = inArena ? arena.HighestLightBlocker(spawn.X(), spawn.Z()) : -1;
             var time = arena.Time();
             var dimension = arena.Dimension();
             var timeCycle = arena.TimeCycle();
@@ -663,17 +678,21 @@ public sealed class KitchenSink : Plugin
             var customDifficulty = arena.Difficulty();
             arena.SetDifficulty(difficulty);
             arena.Save();
-            player.ChangeWorld(arena, spawn.Vec3Middle());
+            if (!inArena) player.ChangeWorld(arena, spawn.Vec3Middle());
             output.Printf(
                 "memory={0}, persistent={1}, spawn={2},{3},{4}, range={5}..{6}, " +
-                "highest_light_blocker={7}, time={8}, overworld={9}, cycle={10}, difficulty={11}, player_spawn={12}",
+                "highest_light_blocker={7}, time={8}, overworld={9}, cycle={10}, difficulty={11}, player_spawn={12}, custom={13}",
                 memory.Name(), arena.Name(), spawn.X(), spawn.Y(), spawn.Z(),
                 range.Min(), range.Max(), highestLightBlocker, time,
                 dimension.Equals(Dragonfly.World.Overworld) ? "true" : "false",
                 arena.TimeCycle() == timeCycle ? "true" : "false",
                 customDifficulty.FoodRegenerates() && customDifficulty.StarvationHealthLimit() == 7.5 &&
                     customDifficulty.FireSpreadIncrease() == -4 ? "true" : "false",
-                playerSpawn.Equals(spawn) ? "true" : "false");
+                playerSpawn.Equals(spawn) ? "true" : "false",
+                customDimension.Range().Equals(new Cube.Range(-32, 191)) &&
+                    customDimension.WaterEvaporates() && !customDimension.WeatherCycle() &&
+                    customDimension.TimeCycle() && customDimension.LavaSpreadDuration() == TimeSpan.FromMilliseconds(750)
+                    ? "true" : "false");
         }
     }
 
@@ -1243,6 +1262,11 @@ public sealed class KitchenSink : Plugin
             var canCollectExperience = player.CanCollectExperience();
             var usingItem = player.UsingItem();
             var (sleepPosition, sleeping) = player.Sleeping();
+            var (deathPosition, deathDimension, deathFound) = player.DeathPosition();
+            var customDeathDimension = deathDimension is not null &&
+                deathDimension.Range().Equals(new Cube.Range(-16, 255)) &&
+                deathDimension.WaterEvaporates() && !deathDimension.WeatherCycle() &&
+                deathDimension.TimeCycle() && deathDimension.LavaSpreadDuration() == TimeSpan.FromMilliseconds(500);
 
             player.SetFood(food);
             player.SetMaxHealth(maxHealth);
@@ -1276,7 +1300,7 @@ public sealed class KitchenSink : Plugin
             var collectedExperience = player.CollectExperience(0);
 
             output.Printf(
-                "food={0}, health={1}/{2}, experience={3}:{4}, scale={5}, invisible={6}, immobile={7}, speed={8}/{9}/{10}, physical={11}/{12}/{13}/{14}/{15}/{16}/{17}, activity={18}/{19}/{20}/{21}/{22}/{23}, fire={24}/{25}, air={26}/{27}, xp={28}/{29}/{30}/{31}/{32}, using={33}, sleeping={34},{35},{36}/{37}",
+                "food={0}, health={1}/{2}, experience={3}:{4}, scale={5}, invisible={6}, immobile={7}, speed={8}/{9}/{10}, physical={11}/{12}/{13}/{14}/{15}/{16}/{17}, activity={18}/{19}/{20}/{21}/{22}/{23}, fire={24}/{25}, air={26}/{27}, xp={28}/{29}/{30}/{31}/{32}, using={33}, sleeping={34},{35},{36}/{37}, death={38},{39},{40}/{41}/{42}",
                 food,
                 health,
                 maxHealth,
@@ -1314,7 +1338,12 @@ public sealed class KitchenSink : Plugin
                 sleepPosition.X(),
                 sleepPosition.Y(),
                 sleepPosition.Z(),
-                sleeping ? "true" : "false");
+                sleeping ? "true" : "false",
+                deathPosition.X,
+                deathPosition.Y,
+                deathPosition.Z,
+                deathFound ? "true" : "false",
+                customDeathDimension ? "true" : "false");
         }
     }
 

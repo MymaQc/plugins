@@ -69,26 +69,17 @@ func registeredDifficultyID(value world.Difficulty) (id int, ok bool) {
 	return world.DifficultyID(value)
 }
 
-func (m *WorldManager) WorldDimension(invocation native.InvocationID, id native.WorldID) (native.WorldDimension, bool) {
+func (m *WorldManager) WorldDimension(invocation native.InvocationID, id native.WorldID) (native.WorldDimensionView, bool) {
 	entry, ok := m.entryForInvocation(invocation, id)
 	if !ok {
-		return 0, false
+		return native.WorldDimensionView{}, false
 	}
 	entry.lifecycle.RLock()
 	defer entry.lifecycle.RUnlock()
 	if entry.closed {
-		return 0, false
+		return native.WorldDimensionView{}, false
 	}
-	switch entry.world.Dimension() {
-	case world.Overworld:
-		return native.WorldDimensionOverworld, true
-	case world.Nether:
-		return native.WorldDimensionNether, true
-	case world.End:
-		return native.WorldDimensionEnd, true
-	default:
-		return 0, false
-	}
+	return host.WorldDimensionView(entry.world.Dimension())
 }
 
 func (m *WorldManager) WorldTimeCycle(invocation native.InvocationID, id native.WorldID) (bool, bool) {

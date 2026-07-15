@@ -9,8 +9,8 @@ extern "C" {
 #endif
 
 #define DF_ABI_VERSION 11u
-// Host version 56 adds exact item-use and sleeping state reads.
-#define DF_HOST_ABI_VERSION 56u
+// Host version 57 adds custom world dimensions and player death positions.
+#define DF_HOST_ABI_VERSION 57u
 #define DF_STATUS_OK 0
 #define DF_STATUS_ERROR 1
 
@@ -77,7 +77,8 @@ typedef void (*DfItemStackViewsDropFn)(void *context);
 #define DF_WORLD_DIMENSION_END 2u
 #define DF_WORLD_PROVIDER_NOP 0u
 #define DF_WORLD_PROVIDER_MCDB 1u
-typedef struct { uint32_t struct_size; uint32_t dimension; uint32_t provider_kind; uint32_t read_only; DfStringView provider_path; int64_t save_interval_nanoseconds; int64_t chunk_unload_interval_nanoseconds; int32_t random_tick_speed; uint32_t reserved; } DfWorldConfigV1;
+typedef struct { uint32_t id; uint8_t custom; uint8_t water_evaporates; uint8_t weather_cycle; uint8_t time_cycle; int32_t range_min; int32_t range_max; int64_t lava_spread_nanoseconds; } DfDimensionView;
+typedef struct { uint32_t struct_size; uint32_t dimension; uint32_t provider_kind; uint32_t read_only; DfStringView provider_path; int64_t save_interval_nanoseconds; int64_t chunk_unload_interval_nanoseconds; int32_t random_tick_speed; uint32_t reserved; DfDimensionView dimension_view; } DfWorldConfigV1;
 typedef struct { uint32_t id; uint8_t builtin; uint8_t food_regenerates; uint16_t reserved; double starvation_health_limit; int32_t fire_spread_increase; uint32_t reserved2; } DfDifficultyView;
 typedef struct { DfStringBuffer identifier; DfStringBuffer properties_nbt; } DfBlockData;
 typedef struct { DfStringView identifier; DfStringView properties_nbt; } DfBlockView;
@@ -375,6 +376,7 @@ typedef DfStatus (*DfHostPlayerHurtFn)(uint64_t context, DfInvocationId invocati
 typedef DfStatus (*DfHostPlayerFinalDamageFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, double damage, const DfDamageSourceView *source, double *result);
 typedef DfStatus (*DfHostPlayerUsingItemFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint8_t *using_item);
 typedef DfStatus (*DfHostPlayerSleepingFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfBlockPos *position, uint8_t *sleeping);
+typedef DfStatus (*DfHostPlayerDeathPositionFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfVec3 *position, DfDimensionView *dimension, uint8_t *found);
 typedef DfStatus (*DfHostPlayerEffectFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t operation, DfEffectView effect);
 typedef DfStatus (*DfHostPlayerEffectsFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfEffectBuffer *output);
 typedef DfStatus (*DfHostPlayerEffectsClearFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player);
@@ -430,7 +432,7 @@ typedef DfStatus (*DfHostWorldSpawnGetFn)(uint64_t context, DfInvocationId invoc
 typedef DfStatus (*DfHostWorldSpawnSetFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, DfBlockPos position);
 typedef DfStatus (*DfHostWorldPlayerSpawnGetFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, DfUuid player, DfBlockPos *position);
 typedef DfStatus (*DfHostWorldPlayerSpawnSetFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, DfUuid player, DfBlockPos position);
-typedef DfStatus (*DfHostWorldDimensionGetFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, uint32_t *dimension);
+typedef DfStatus (*DfHostWorldDimensionGetFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, DfDimensionView *dimension);
 typedef DfStatus (*DfHostWorldBoolGetFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, uint8_t *value);
 typedef DfStatus (*DfHostWorldBoolSetFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, uint8_t value);
 typedef DfStatus (*DfHostWorldDurationSetFn)(uint64_t context, DfInvocationId invocation, DfWorldId world, int64_t duration_nanoseconds);
@@ -643,6 +645,7 @@ typedef struct {
     DfHostPlayerFinalDamageFn player_final_damage;
     DfHostPlayerUsingItemFn player_using_item;
     DfHostPlayerSleepingFn player_sleeping;
+    DfHostPlayerDeathPositionFn player_death_position;
 } DfHostApiV27;
 #define DF_COMMAND_PARAMETER_SUBCOMMAND 1u
 #define DF_COMMAND_PARAMETER_ENUM 2u

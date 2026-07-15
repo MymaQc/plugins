@@ -9,8 +9,9 @@ import (
 )
 
 type playerStatusSpec struct {
-	UsingItem bool
-	Sleeping  bool
+	UsingItem     bool
+	Sleeping      bool
+	DeathPosition bool
 }
 
 func inspectPlayerStatus(path string) (playerStatusSpec, error) {
@@ -19,8 +20,9 @@ func inspectPlayerStatus(path string) (playerStatusSpec, error) {
 		return playerStatusSpec{}, err
 	}
 	want := map[string]goSignature{
-		"UsingItem": {Results: "bool"},
-		"Sleeping":  {Results: "cube.Pos, bool"},
+		"UsingItem":     {Results: "bool"},
+		"Sleeping":      {Results: "cube.Pos, bool"},
+		"DeathPosition": {Results: "mgl64.Vec3, world.Dimension, bool"},
 	}
 	found := map[string]bool{}
 	for _, declaration := range file.Decls {
@@ -42,18 +44,22 @@ func inspectPlayerStatus(path string) (playerStatusSpec, error) {
 			return playerStatusSpec{}, fmt.Errorf("Dragonfly player.Player has no %s method", name)
 		}
 	}
-	return playerStatusSpec{UsingItem: true, Sleeping: true}, nil
+	return playerStatusSpec{UsingItem: true, Sleeping: true, DeathPosition: true}, nil
 }
 
 func generatePlayerStatus(spec playerStatusSpec) []byte {
 	var output bytes.Buffer
 	output.WriteString("// Code generated from Dragonfly server/player/player.go Go AST. DO NOT EDIT.\n")
+	output.WriteString("#nullable enable\n")
 	output.WriteString("namespace Dragonfly;\n\npublic sealed partial class Player\n{\n")
 	if spec.UsingItem {
 		output.WriteString("    public bool UsingItem() => PluginBridge.Host.PlayerUsingItem(_invocation, Id);\n")
 	}
 	if spec.Sleeping {
 		output.WriteString("    public (Cube.Pos Position, bool Sleeping) Sleeping() => PluginBridge.Host.PlayerSleeping(_invocation, Id);\n")
+	}
+	if spec.DeathPosition {
+		output.WriteString("    public (Vector3 Position, World.Dimension? Dimension, bool Found) DeathPosition() => PluginBridge.Host.PlayerDeathPosition(_invocation, Id);\n")
 	}
 	output.WriteString("}\n")
 	return output.Bytes()

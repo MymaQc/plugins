@@ -28,6 +28,10 @@ func TestPinnedDragonflyWorldConfigUsesGoAST(t *testing.T) {
 	for _, expected := range []string{
 		"sealed record Config",
 		"Dimension? Dim",
+		"interface Dimension",
+		"Cube.Range Range()",
+		"bool WaterEvaporates()",
+		"TimeSpan LavaSpreadDuration()",
 		"Provider? Provider",
 		"TimeSpan SaveInterval",
 		"World New()",

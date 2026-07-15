@@ -542,16 +542,32 @@ func uuidValue(value C.DfUuid) [16]byte {
 }
 
 //export bg_go_world_dimension_get
-func bg_go_world_dimension_get(context C.uint64_t, invocation C.DfInvocationId, world C.DfWorldId, output *C.uint32_t) C.DfStatus {
+func bg_go_world_dimension_get(context C.uint64_t, invocation C.DfInvocationId, world C.DfWorldId, output *C.DfDimensionView) C.DfStatus {
 	host, ok := resolveHost(uint64(context))
 	if !ok || output == nil {
 		return C.DF_STATUS_ERROR
 	}
 	dimension, ok := host.WorldDimension(InvocationID(invocation), WorldID(world.value))
-	if !ok || dimension > WorldDimensionEnd {
+	if !ok {
 		return C.DF_STATUS_ERROR
 	}
-	*output = C.uint32_t(dimension)
+	*output = C.DfDimensionView{id: C.uint32_t(dimension.ID)}
+	if dimension.Custom != nil {
+		output.custom = 1
+		output.range_min, output.range_max = C.int32_t(dimension.Custom.Range.Min), C.int32_t(dimension.Custom.Range.Max)
+		output.lava_spread_nanoseconds = C.int64_t(dimension.Custom.LavaSpreadDuration)
+		if dimension.Custom.WaterEvaporates {
+			output.water_evaporates = 1
+		}
+		if dimension.Custom.WeatherCycle {
+			output.weather_cycle = 1
+		}
+		if dimension.Custom.TimeCycle {
+			output.time_cycle = 1
+		}
+	} else if dimension.ID > WorldDimensionEnd {
+		return C.DF_STATUS_ERROR
+	}
 	return C.DF_STATUS_OK
 }
 

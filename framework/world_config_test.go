@@ -40,6 +40,33 @@ func TestWorldConfigCreatesOwnedInMemoryWorld(t *testing.T) {
 	}
 }
 
+func TestWorldConfigCreatesCustomDimension(t *testing.T) {
+	manager := newWorldManager("", nil, host.NewPlayers())
+	core := world.Config{Synchronous: true}.New()
+	t.Cleanup(func() { _ = core.Close() })
+	if err := manager.RegisterCore(OverworldID, core); err != nil {
+		t.Fatal(err)
+	}
+	custom := &native.CustomWorldDimension{
+		Range: native.BlockRange{Min: -32, Max: 191}, WaterEvaporates: true,
+		LavaSpreadDuration: 750 * time.Millisecond, TimeCycle: true,
+	}
+	id, ok := manager.CreateWorld(native.WorldConfig{CustomDimension: custom})
+	if !ok {
+		t.Fatal("CreateWorld rejected a custom dimension")
+	}
+	created, ok := manager.WorldByHandle(id)
+	if !ok || created.Range() != (cube.Range{-32, 191}) || !created.Dimension().WaterEvaporates() ||
+		created.Dimension().LavaSpreadDuration() != 750*time.Millisecond ||
+		created.Dimension().WeatherCycle() || !created.Dimension().TimeCycle() {
+		t.Fatalf("custom world = %v, %v", created, ok)
+	}
+	view, ok := manager.WorldDimension(0, id)
+	if !ok || view.Custom == nil || *view.Custom != *custom {
+		t.Fatalf("custom dimension view = %+v, %v", view, ok)
+	}
+}
+
 func TestWorldConfigAnonymousNameCannotReplaceNamedWorld(t *testing.T) {
 	manager := newWorldManager("", nil, host.NewPlayers())
 	core := world.Config{Synchronous: true}.New()

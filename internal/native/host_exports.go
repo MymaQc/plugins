@@ -409,6 +409,46 @@ func bg_go_player_sleeping(context C.uint64_t, invocation C.DfInvocationId, play
 	return C.DF_STATUS_OK
 }
 
+//export bg_go_player_death_position
+func bg_go_player_death_position(context C.uint64_t, invocation C.DfInvocationId, player C.DfPlayerId, position *C.DfVec3, dimension *C.DfDimensionView, found *C.uint8_t) C.DfStatus {
+	if position == nil || dimension == nil || found == nil {
+		return C.DF_STATUS_ERROR
+	}
+	*position, *dimension, *found = C.DfVec3{}, C.DfDimensionView{}, 0
+	host, ok := resolveHost(uint64(context))
+	if !ok {
+		return C.DF_STATUS_ERROR
+	}
+	value, dimensionValue, exists, ok := host.PlayerDeathPosition(InvocationID(invocation), playerID(player))
+	if !ok {
+		return C.DF_STATUS_ERROR
+	}
+	if !exists {
+		return C.DF_STATUS_OK
+	}
+	position.x, position.y, position.z = C.double(value.X), C.double(value.Y), C.double(value.Z)
+	dimension.id = C.uint32_t(dimensionValue.ID)
+	if dimensionValue.Custom != nil {
+		dimension.custom = 1
+		dimension.range_min = C.int32_t(dimensionValue.Custom.Range.Min)
+		dimension.range_max = C.int32_t(dimensionValue.Custom.Range.Max)
+		dimension.lava_spread_nanoseconds = C.int64_t(dimensionValue.Custom.LavaSpreadDuration)
+		if dimensionValue.Custom.WaterEvaporates {
+			dimension.water_evaporates = 1
+		}
+		if dimensionValue.Custom.WeatherCycle {
+			dimension.weather_cycle = 1
+		}
+		if dimensionValue.Custom.TimeCycle {
+			dimension.time_cycle = 1
+		}
+	} else if dimensionValue.ID > WorldDimensionEnd {
+		return C.DF_STATUS_ERROR
+	}
+	*found = 1
+	return C.DF_STATUS_OK
+}
+
 func copyHealingSourceView(view *C.DfHealingSourceView) (HealingSource, bool) {
 	if view == nil || uint32(view.kind) > uint32(HealingSourceRegeneration) || view.data > 1 {
 		return HealingSource{}, false

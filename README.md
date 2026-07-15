@@ -114,6 +114,9 @@ exposing raw transport data. Their AST-generated `Name`, `Range`, `HighestLightB
 `SetTime`, `Spawn`, `SetSpawn`, `PlayerSpawn`, `SetPlayerSpawn`, `Save`, and `Close` methods use the
 same `World` type as handler callbacks. `Player.ChangeWorld` is the deliberately named host
 extension for safe cross-world movement; Dragonfly's `Transfer` still means another server.
+`World.Dimension` is the exact implementable Dragonfly interface; custom ranges, liquid behavior,
+lava spread duration, weather cycle, and time cycle cross world creation and live reads.
+`Player.DeathPosition()` preserves both registered and custom dimensions.
 `World.GameMode` includes Dragonfly's four registered values and exact `GameModeByID`/`GameModeID`
 lookups. `Player.SetGameMode` accepts custom implementations just like Dragonfly, and
 `Player.GameMode` returns their capabilities without exposing the transport descriptor.

@@ -621,6 +621,27 @@ func (p *Players) PlayerSleeping(invocation native.InvocationID, id native.Playe
 	return value.position, value.sleeping, ok
 }
 
+func (p *Players) PlayerDeathPosition(invocation native.InvocationID, id native.PlayerID) (native.Vec3, native.WorldDimensionView, bool, bool) {
+	type result struct {
+		position  native.Vec3
+		dimension native.WorldDimensionView
+		found     bool
+		valid     bool
+	}
+	value, ok := readPlayer(p, invocation, id, func(connected *player.Player) result {
+		position, dimension, found := connected.DeathPosition()
+		if !found {
+			return result{valid: true}
+		}
+		view, valid := WorldDimensionView(dimension)
+		return result{
+			position:  native.Vec3{X: position.X(), Y: position.Y(), Z: position.Z()},
+			dimension: view, found: true, valid: valid,
+		}
+	})
+	return value.position, value.dimension, value.found, ok && value.valid
+}
+
 func (p *Players) PlayerState(invocation native.InvocationID, id native.PlayerID, kind native.PlayerStateKind) (native.PlayerStateValue, bool) {
 	value, ok := readPlayer(p, invocation, id, func(connected *player.Player) struct {
 		value native.PlayerStateValue

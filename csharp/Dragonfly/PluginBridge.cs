@@ -643,6 +643,23 @@ internal static unsafe class PluginBridge
             return (new Cube.Pos(position.X, position.Y, position.Z), sleeping != 0);
         }
 
+        internal static (Vector3 Position, World.Dimension? Dimension, bool Found) PlayerDeathPosition(
+            ulong invocation,
+            PlayerId player)
+        {
+            var api = Api;
+            if (api is null || api->PlayerDeathPosition == null) return default;
+            Vec3 position;
+            DimensionView dimension;
+            byte found;
+            if (api->PlayerDeathPosition(api->Context, invocation, player, &position, &dimension, &found) != Abi.Ok ||
+                found > 1)
+                return default;
+            if (found == 0) return default;
+            var decoded = DecodeWorldDimension(dimension);
+            return decoded is null ? default : (new Vector3(position.X, position.Y, position.Z), decoded, true);
+        }
+
         internal static void CloseEntity(ulong invocation, EntityId entity)
         {
             var api = Api;
@@ -855,12 +872,30 @@ internal static unsafe class PluginBridge
             var api = Api;
             if (api is null || api->WorldNew == null)
                 throw new InvalidOperationException("world creation is unavailable");
-            var dimension = config.Dim switch
+            var dimension = config.Dim ?? World.Overworld;
+            uint dimensionId = 0;
+            DimensionView dimensionView = default;
+            if (dimension is World.BuiltinDimension builtin && builtin.Id <= Abi.WorldDimensionEnd)
             {
-                null => 0u,
-                World.BuiltinDimension value when value.Id <= 2 => value.Id,
-                _ => throw new ArgumentException("dimension is not registered", nameof(config)),
-            };
+                dimensionId = builtin.Id;
+            }
+            else
+            {
+                var range = dimension.Range();
+                dimensionView = new DimensionView
+                {
+                    Custom = 1,
+                    WaterEvaporates = dimension.WaterEvaporates() ? (byte)1 : (byte)0,
+                    WeatherCycle = dimension.WeatherCycle() ? (byte)1 : (byte)0,
+                    TimeCycle = dimension.TimeCycle() ? (byte)1 : (byte)0,
+                    RangeMin = range.Min(),
+                    RangeMax = range.Max(),
+                    LavaSpreadNanoseconds = DurationNanoseconds(
+                        dimension.LavaSpreadDuration(),
+                        nameof(config)),
+                };
+            }
+            dimensionView.Id = dimensionId;
             uint providerKind;
             byte[] providerPath;
             switch (config.Provider)
@@ -881,7 +916,8 @@ internal static unsafe class PluginBridge
             var view = new WorldConfigV1
             {
                 StructSize = (uint)sizeof(WorldConfigV1),
-                Dimension = dimension,
+                Dimension = dimensionId,
+                DimensionView = dimensionView,
                 ProviderKind = providerKind,
                 ReadOnly = config.ReadOnly ? 1u : 0u,
                 SaveIntervalNanoseconds = DurationNanoseconds(config.SaveInterval, nameof(config.SaveInterval)),
@@ -2072,16 +2108,33 @@ internal static unsafe class PluginBridge
         {
             var api = Api;
             if (api is null || api->WorldDimensionGet == null) return World.Overworld;
-            uint value;
+            DimensionView value;
             if (api->WorldDimensionGet(api->Context, invocation, world, &value) != Abi.Ok)
                 return World.Overworld;
-            return value switch
+            return DecodeWorldDimension(value) ?? World.Overworld;
+        }
+
+        private static World.Dimension? DecodeWorldDimension(DimensionView value)
+        {
+            if (value.Custom == 0)
             {
-                Abi.WorldDimensionOverworld => World.Overworld,
-                Abi.WorldDimensionNether => World.Nether,
-                Abi.WorldDimensionEnd => World.End,
-                _ => World.Overworld,
-            };
+                return value.Id switch
+                {
+                    Abi.WorldDimensionOverworld => World.Overworld,
+                    Abi.WorldDimensionNether => World.Nether,
+                    Abi.WorldDimensionEnd => World.End,
+                    _ => null,
+                };
+            }
+            if (value.Custom != 1 || value.Id != 0 || value.WaterEvaporates > 1 ||
+                value.WeatherCycle > 1 || value.TimeCycle > 1)
+                return null;
+            return new World.TransportDimension(
+                new Cube.Range(value.RangeMin, value.RangeMax),
+                value.WaterEvaporates != 0,
+                PlayerDuration(value.LavaSpreadNanoseconds),
+                value.WeatherCycle != 0,
+                value.TimeCycle != 0);
         }
 
         internal static bool WorldTimeCycle(ulong invocation, WorldId world)

@@ -267,8 +267,8 @@ _Static_assert(DF_PLAYER_COOLDOWN_HAS == 0u, "player cooldown has operation chan
 _Static_assert(DF_PLAYER_COOLDOWN_SET == 1u, "player cooldown set operation changed");
 _Static_assert(sizeof(DfDifficultyView) == 24, "DfDifficultyView ABI layout changed");
 _Static_assert(offsetof(DfDifficultyView, starvation_health_limit) == 8, "DfDifficultyView.starvation_health_limit ABI offset changed");
-_Static_assert(sizeof(DfHostApiV27) == 1024, "DfHostApiV27 ABI layout changed");
-_Static_assert(DF_HOST_ABI_VERSION == 56u, "host ABI version changed without bridge review");
+_Static_assert(sizeof(DfHostApiV27) == 1032, "DfHostApiV27 ABI layout changed");
+_Static_assert(DF_HOST_ABI_VERSION == 57u, "host ABI version changed without bridge review");
 _Static_assert(offsetof(DfHostApiV27, player_skin_open) == 80, "DfHostApiV27.player_skin_open ABI offset changed");
 _Static_assert(offsetof(DfHostApiV27, player_skin_set) == 112, "DfHostApiV27.player_skin_set ABI offset changed");
 _Static_assert(offsetof(DfHostApiV27, inventory_size) == 120, "DfHostApiV27.inventory_size ABI offset changed");
@@ -308,11 +308,15 @@ _Static_assert(offsetof(DfHostApiV27, player_knock_back) == 992, "DfHostApiV27.p
 _Static_assert(offsetof(DfHostApiV27, player_final_damage) == 1000, "DfHostApiV27.player_final_damage ABI offset changed");
 _Static_assert(offsetof(DfHostApiV27, player_using_item) == 1008, "DfHostApiV27.player_using_item ABI offset changed");
 _Static_assert(offsetof(DfHostApiV27, player_sleeping) == 1016, "DfHostApiV27.player_sleeping ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, player_death_position) == 1024, "DfHostApiV27.player_death_position ABI offset changed");
 _Static_assert(sizeof(DfEntityNewView) == 152, "DfEntityNewView ABI layout changed");
 _Static_assert(sizeof(DfBBox) == 48, "DfBBox ABI layout changed");
 _Static_assert(offsetof(DfBBox, min) == 0, "DfBBox.min ABI offset changed");
 _Static_assert(offsetof(DfBBox, max) == 24, "DfBBox.max ABI offset changed");
-_Static_assert(sizeof(DfWorldConfigV1) == 56, "DfWorldConfigV1 ABI layout changed");
+_Static_assert(sizeof(DfDimensionView) == 24, "DfDimensionView ABI layout changed");
+_Static_assert(offsetof(DfDimensionView, lava_spread_nanoseconds) == 16, "DfDimensionView.lava_spread_nanoseconds ABI offset changed");
+_Static_assert(sizeof(DfWorldConfigV1) == 80, "DfWorldConfigV1 ABI layout changed");
+_Static_assert(offsetof(DfWorldConfigV1, dimension_view) == 56, "DfWorldConfigV1.dimension_view ABI offset changed");
 _Static_assert(offsetof(DfHostApiV27, player_hurt) == 392, "DfHostApiV27.player_hurt ABI offset changed");
 _Static_assert(offsetof(DfHostApiV27, skin_snapshot_info) == 400, "DfHostApiV27.skin_snapshot_info ABI offset changed");
 _Static_assert(offsetof(DfHostApiV27, skin_snapshot_set) == 408, "DfHostApiV27.skin_snapshot_set ABI offset changed");
@@ -379,6 +383,7 @@ extern DfStatus bg_go_player_knock_back(uint64_t context, DfInvocationId invocat
 extern DfStatus bg_go_player_final_damage(uint64_t context, DfInvocationId invocation, DfPlayerId player, double damage, const DfDamageSourceView *source, double *result);
 extern DfStatus bg_go_player_using_item(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint8_t *using_item);
 extern DfStatus bg_go_player_sleeping(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfBlockPos *position, uint8_t *sleeping);
+extern DfStatus bg_go_player_death_position(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfVec3 *position, DfDimensionView *dimension, uint8_t *found);
 extern DfStatus bg_go_player_heal(uint64_t context, DfInvocationId invocation, DfPlayerId player, double health, const DfHealingSourceView *source, DfPlayerHealResult *result);
 extern DfStatus bg_go_player_hurt(uint64_t context, DfInvocationId invocation, DfPlayerId player, double damage, const DfDamageSourceView *source, DfPlayerHurtResult *result);
 extern DfStatus bg_go_player_effect(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t operation, DfEffectView effect);
@@ -437,7 +442,7 @@ extern DfStatus bg_go_world_spawn_get(uint64_t context, DfInvocationId invocatio
 extern DfStatus bg_go_world_spawn_set(uint64_t context, DfInvocationId invocation, DfWorldId world, DfBlockPos position);
 extern DfStatus bg_go_world_player_spawn_get(uint64_t context, DfInvocationId invocation, DfWorldId world, DfUuid player, DfBlockPos *position);
 extern DfStatus bg_go_world_player_spawn_set(uint64_t context, DfInvocationId invocation, DfWorldId world, DfUuid player, DfBlockPos position);
-extern DfStatus bg_go_world_dimension_get(uint64_t context, DfInvocationId invocation, DfWorldId world, uint32_t *dimension);
+extern DfStatus bg_go_world_dimension_get(uint64_t context, DfInvocationId invocation, DfWorldId world, DfDimensionView *dimension);
 extern DfStatus bg_go_world_time_cycle_get(uint64_t context, DfInvocationId invocation, DfWorldId world, uint8_t *value);
 extern DfStatus bg_go_world_time_cycle_set(uint64_t context, DfInvocationId invocation, DfWorldId world, uint8_t value);
 extern DfStatus bg_go_world_required_sleep_duration_set(uint64_t context, DfInvocationId invocation, DfWorldId world, int64_t duration_nanoseconds);
@@ -553,6 +558,10 @@ static DfStatus host_player_sleeping(uint64_t context, DfInvocationId invocation
     return bg_go_player_sleeping(context, invocation, player, position, sleeping);
 }
 
+static DfStatus host_player_death_position(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfVec3 *position, DfDimensionView *dimension, uint8_t *found) {
+    return bg_go_player_death_position(context, invocation, player, position, dimension, found);
+}
+
 static DfStatus host_player_heal(uint64_t context, DfInvocationId invocation, DfPlayerId player, double health, const DfHealingSourceView *source, DfPlayerHealResult *result) {
     return bg_go_player_heal(context, invocation, player, health, source, result);
 }
@@ -654,7 +663,7 @@ static DfStatus host_world_spawn_get(uint64_t context, DfInvocationId invocation
 static DfStatus host_world_spawn_set(uint64_t context, DfInvocationId invocation, DfWorldId world, DfBlockPos position) { return bg_go_world_spawn_set(context, invocation, world, position); }
 static DfStatus host_world_player_spawn_get(uint64_t context, DfInvocationId invocation, DfWorldId world, DfUuid player, DfBlockPos *position) { return bg_go_world_player_spawn_get(context, invocation, world, player, position); }
 static DfStatus host_world_player_spawn_set(uint64_t context, DfInvocationId invocation, DfWorldId world, DfUuid player, DfBlockPos position) { return bg_go_world_player_spawn_set(context, invocation, world, player, position); }
-static DfStatus host_world_dimension_get(uint64_t context, DfInvocationId invocation, DfWorldId world, uint32_t *dimension) { return bg_go_world_dimension_get(context, invocation, world, dimension); }
+static DfStatus host_world_dimension_get(uint64_t context, DfInvocationId invocation, DfWorldId world, DfDimensionView *dimension) { return bg_go_world_dimension_get(context, invocation, world, dimension); }
 static DfStatus host_world_time_cycle_get(uint64_t context, DfInvocationId invocation, DfWorldId world, uint8_t *value) { return bg_go_world_time_cycle_get(context, invocation, world, value); }
 static DfStatus host_world_time_cycle_set(uint64_t context, DfInvocationId invocation, DfWorldId world, uint8_t value) { return bg_go_world_time_cycle_set(context, invocation, world, value); }
 static DfStatus host_world_required_sleep_duration_set(uint64_t context, DfInvocationId invocation, DfWorldId world, int64_t duration_nanoseconds) { return bg_go_world_required_sleep_duration_set(context, invocation, world, duration_nanoseconds); }
@@ -968,6 +977,7 @@ DfStatus bg_runtime_open(
         .player_final_damage = host_player_final_damage,
         .player_using_item = host_player_using_item,
         .player_sleeping = host_player_sleeping,
+        .player_death_position = host_player_death_position,
     };
     DfRuntimeConfig config = {
         .plugin_directory = {

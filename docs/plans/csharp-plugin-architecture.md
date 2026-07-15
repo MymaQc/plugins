@@ -234,7 +234,11 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    code. `World.Name()` remains Dragonfly's display name.
    Cached `World` values resolve lifecycle calls through the active command, event, form, or
    scheduled-callback invocation. Reusing a world from its own transaction therefore stays on the
-   owning `World.Tx` instead of synchronously waiting on that same owner.
+   owning `World.Tx` instead of synchronously waiting on that same owner. Immutable configuration
+   reads such as `World.Range()` do not acquire a transaction and remain safe across worlds;
+   chunk-backed reads such as `HighestLightBlocker()` require the matching live transaction and
+   must be scheduled with `World.Do` when called from another world. Redundant same-world
+   `Player.ChangeWorld` calls should be skipped rather than re-entering player teleport handlers.
    ABI 43 adds the AST-pinned package-level
    `World.BlockByName(string, Dictionary<string, object?>?)` surface. Its private property codec
    preserves Dragonfly's exact `bool`, `uint8`, `int32`, and `string` state types, and the host
@@ -260,9 +264,10 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    Host ABI 54 appends exact AST-generated `Player.KnockBack` transport. Host ABI 55 appends
    `Player.FinalDamageFrom`, preserving Dragonfly's live armour, enchantment, and resistance
    calculation instead of duplicating it in C#.
-   Host ABI 56 appends exact AST-generated `Player.UsingItem` and `Sleeping` reads. `DeathPosition`
-   remains absent until custom `World.Dimension` values can cross the API without being collapsed
-   to one of Dragonfly's three registered dimensions.
+   Host ABI 56 appends exact AST-generated `Player.UsingItem` and `Sleeping` reads. Host ABI 57
+   ports Dragonfly's implementable `World.Dimension` interface, transports custom dimension
+   capabilities through world creation and live reads, and adds exact `Player.DeathPosition`
+   without collapsing custom dimensions to a registered built-in.
    The AST-generated `Scoreboard` class mirrors Dragonfly's mutable name, write, set/remove,
    padding, line-copy, and descending-order behavior. `Player.SendScoreboard` activates the
    existing private transport with raw lines so the Go host applies padding and ordering once.
