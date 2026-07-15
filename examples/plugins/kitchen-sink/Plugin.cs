@@ -477,6 +477,13 @@ public sealed class KitchenSink : Plugin
             player.SwingArm();
             player.UseItem();
             player.Wake();
+            var position = new Cube.Pos(0, -1000, 0);
+            player.BreakBlock(position);
+            player.ContinueBreaking(Cube.Face.Up);
+            player.PickBlock(position);
+            player.Sleep(position);
+            player.StartBreaking(position, Cube.Face.North);
+            player.UseItemOnBlock(position, Cube.Face.Up, new Vector3(0.5, 0.5, 0.5));
             output.Print("Player actions invoked.");
         }
     }

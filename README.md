@@ -105,6 +105,9 @@ calculation without mutating player health.
 Presentation parity includes instant-respawn and coordinate toggles, sleeping indicators,
 dialogue/boss-bar/scoreboard removal, live name/score tags, and toasts, using the exact Dragonfly
 `Player` method names.
+Block-interaction parity includes AST-generated `BreakBlock`, `ContinueBreaking`, `PickBlock`,
+`Sleep`, `StartBreaking`, and `UseItemOnBlock`, with typed `Cube.Pos`, `Cube.Face`, and `Vector3`
+arguments passed to Dragonfly inside the active player transaction.
 `World.New()` creates a writable in-memory world.
 `World.Config.New()` accepts Dragonfly's dimension and runtime settings, and an
 `MCDB.Config().Open(...)` provider creates a writable, saveable world below the configured worlds

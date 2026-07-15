@@ -565,7 +565,7 @@ func TestCSharpPlayerEntityVisibilityMethods(t *testing.T) {
 	}
 }
 
-func TestCSharpPlayerZeroArgumentActions(t *testing.T) {
+func TestCSharpPlayerActions(t *testing.T) {
 	host := &recordingHost{}
 	pluginRuntime := openCSharpRuntimeWithHost(t, host)
 	commands, err := pluginRuntime.Commands()
@@ -608,6 +608,35 @@ func TestCSharpPlayerZeroArgumentActions(t *testing.T) {
 	}
 	if !slices.Equal(host.actions, want) {
 		t.Fatalf("player actions=%v, want %v", host.actions, want)
+	}
+	wantBlockActions := []PlayerBlockActionKind{
+		PlayerBlockActionBreakBlock,
+		PlayerBlockActionContinueBreaking,
+		PlayerBlockActionPickBlock,
+		PlayerBlockActionSleep,
+		PlayerBlockActionStartBreaking,
+		PlayerBlockActionUseItemOnBlock,
+	}
+	if len(host.blockActions) != len(wantBlockActions) {
+		t.Fatalf("player block actions=%+v", host.blockActions)
+	}
+	for index, kind := range wantBlockActions {
+		call := host.blockActions[index]
+		if call.Kind != kind {
+			t.Fatalf("player block action %d=%+v, want %v", index, call, kind)
+		}
+	}
+	if call := host.blockActions[0]; call.Position != (BlockPos{Y: -1000}) || call.Face != 0 || call.ClickPosition != (Vec3{}) {
+		t.Fatalf("break-block transport=%+v", call)
+	}
+	if call := host.blockActions[1]; call.Face != 1 {
+		t.Fatalf("continue-breaking transport=%+v", call)
+	}
+	if call := host.blockActions[4]; call.Face != 2 {
+		t.Fatalf("start-breaking transport=%+v", call)
+	}
+	if call := host.blockActions[5]; call.Face != 1 || call.ClickPosition != (Vec3{X: 0.5, Y: 0.5, Z: 0.5}) {
+		t.Fatalf("use-item-on-block transport=%+v", call)
 	}
 }
 

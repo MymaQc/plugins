@@ -670,6 +670,13 @@ func (p *Players) PlayerAction(invocation native.InvocationID, id native.PlayerI
 	return value.value, ok && value.ok
 }
 
+func (p *Players) PlayerBlockAction(invocation native.InvocationID, id native.PlayerID, kind native.PlayerBlockActionKind, position native.BlockPos, face int32, clickPosition native.Vec3) bool {
+	valid, ok := readPlayer(p, invocation, id, func(connected *player.Player) bool {
+		return runPlayerBlockAction(connected, kind, position, face, clickPosition)
+	})
+	return ok && valid
+}
+
 func (p *Players) PlayerString(invocation native.InvocationID, id native.PlayerID, kind native.PlayerStringKind) (string, bool) {
 	value, ok := readPlayer(p, invocation, id, func(connected *player.Player) struct {
 		value string

@@ -181,10 +181,16 @@ type recordingHost struct {
 	actions            []PlayerActionKind
 	actionValues       []PlayerStateValue
 	actionResults      map[PlayerActionKind]PlayerStateValue
-	playerStrings      map[PlayerStringKind]string
-	stringReads        []PlayerStringKind
-	toasts             [][2]string
-	cooldowns          []struct {
+	blockActions       []struct {
+		Kind          PlayerBlockActionKind
+		Position      BlockPos
+		Face          int32
+		ClickPosition Vec3
+	}
+	playerStrings map[PlayerStringKind]string
+	stringReads   []PlayerStringKind
+	toasts        [][2]string
+	cooldowns     []struct {
 		Operation  PlayerCooldownOperation
 		Identifier string
 		Metadata   int32
@@ -372,6 +378,16 @@ func (h *recordingHost) PlayerAction(_ InvocationID, _ PlayerID, kind PlayerActi
 	h.actions = append(h.actions, kind)
 	h.actionValues = append(h.actionValues, value)
 	return h.actionResults[kind], true
+}
+
+func (h *recordingHost) PlayerBlockAction(_ InvocationID, _ PlayerID, kind PlayerBlockActionKind, position BlockPos, face int32, clickPosition Vec3) bool {
+	h.blockActions = append(h.blockActions, struct {
+		Kind          PlayerBlockActionKind
+		Position      BlockPos
+		Face          int32
+		ClickPosition Vec3
+	}{kind, position, face, clickPosition})
+	return true
 }
 
 func (h *recordingHost) PlayerString(_ InvocationID, _ PlayerID, kind PlayerStringKind) (string, bool) {

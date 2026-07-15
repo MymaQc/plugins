@@ -660,6 +660,10 @@ func main() {
 	if err != nil {
 		fatal(err)
 	}
+	playerBlockActionMethods, err := inspectPlayerBlockActionMethods(filepath.Join(directory, "server", "player", "player.go"))
+	if err != nil {
+		fatal(err)
+	}
 	worldLifecycleMethods, err := inspectWorldLifecycleMethods(filepath.Join(directory, "server", "world", "world.go"))
 	if err != nil {
 		fatal(err)
@@ -803,6 +807,18 @@ func main() {
 			Content: hostPlayerTransport,
 		},
 		{
+			Path:    filepath.Join(*root, "internal", "native", "player_block_action_generated.go"),
+			Content: generateNativePlayerBlockActions(playerBlockActionMethods),
+		},
+		{
+			Path:    filepath.Join(*root, "csharp", "Dragonfly.Native", "Generated", "Player.BlockAction.g.cs"),
+			Content: generateCSharpPlayerBlockActions(playerBlockActionMethods),
+		},
+		{
+			Path:    filepath.Join(*root, "internal", "host", "player_block_action_generated.go"),
+			Content: generateHostPlayerBlockActions(playerBlockActionMethods),
+		},
+		{
 			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "Packet.Types.g.cs"),
 			Content: generatePacketTypes(packets),
 		},
@@ -897,6 +913,10 @@ func main() {
 		{
 			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "Player.Kinematics.g.cs"),
 			Content: generatePlayerKinematicsMethods(playerKinematicsMethods),
+		},
+		{
+			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "Player.BlockAction.g.cs"),
+			Content: generatePlayerBlockActions(playerBlockActionMethods),
 		},
 		{
 			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "World.Lifecycle.g.cs"),

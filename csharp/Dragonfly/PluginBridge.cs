@@ -227,6 +227,26 @@ internal static unsafe class PluginBridge
                 : default;
         }
 
+        internal static void RunPlayerBlockAction(
+            ulong invocation,
+            PlayerId player,
+            uint kind,
+            Cube.Pos position,
+            Cube.Face face,
+            Vector3 clickPosition)
+        {
+            var api = Api;
+            if (api is null || api->PlayerBlockAction == null) return;
+            _ = api->PlayerBlockAction(
+                api->Context,
+                invocation,
+                player,
+                kind,
+                new BlockPos { X = position.X(), Y = position.Y(), Z = position.Z() },
+                (int)face,
+                new Vec3 { X = clickPosition.X, Y = clickPosition.Y, Z = clickPosition.Z });
+        }
+
         internal static double HealPlayer(
             ulong invocation,
             PlayerId player,

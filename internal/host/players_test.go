@@ -10,6 +10,7 @@ import (
 
 	"github.com/bedrock-gophers/plugins/internal/native"
 	"github.com/df-mc/dragonfly/server/block"
+	"github.com/df-mc/dragonfly/server/block/cube"
 	"github.com/df-mc/dragonfly/server/entity"
 	"github.com/df-mc/dragonfly/server/entity/effect"
 	"github.com/df-mc/dragonfly/server/item/enchantment"
@@ -100,6 +101,31 @@ func TestPlayersInvocationRegistryIsExactAndExpires(t *testing.T) {
 	if _, ok := players.InvocationTx(0); ok {
 		t.Fatal("zero invocation resolved")
 	}
+}
+
+func TestPlayersRunExactBlockActionsInActiveTransaction(t *testing.T) {
+	withPlayerTx(t, func(tx *world.Tx, connected *player.Player) {
+		players := NewPlayers()
+		id := players.Register(connected, 3)
+		invocation, end := players.BeginInvocation(tx)
+		defer end()
+		position := native.BlockPos{Y: -1000}
+		for _, kind := range []native.PlayerBlockActionKind{
+			native.PlayerBlockActionBreakBlock,
+			native.PlayerBlockActionContinueBreaking,
+			native.PlayerBlockActionPickBlock,
+			native.PlayerBlockActionSleep,
+			native.PlayerBlockActionStartBreaking,
+			native.PlayerBlockActionUseItemOnBlock,
+		} {
+			if !players.PlayerBlockAction(invocation, id, kind, position, int32(cube.FaceUp), native.Vec3{X: 0.5, Y: 0.5, Z: 0.5}) {
+				t.Fatalf("block action %d rejected", kind)
+			}
+		}
+		if players.PlayerBlockAction(invocation, id, native.PlayerBlockActionKind(999), position, 0, native.Vec3{}) {
+			t.Fatal("unknown block action accepted")
+		}
+	})
 }
 
 type testCustomGameMode struct {

@@ -307,6 +307,22 @@ func bg_go_player_action(context C.uint64_t, invocation C.DfInvocationId, player
 	return C.DF_STATUS_OK
 }
 
+//export bg_go_player_block_action
+func bg_go_player_block_action(context C.uint64_t, invocation C.DfInvocationId, player C.DfPlayerId, kind C.uint32_t, position C.DfBlockPos, face C.int32_t, clickPosition C.DfVec3) C.DfStatus {
+	host, ok := resolveHost(uint64(context))
+	if !ok || !host.PlayerBlockAction(
+		InvocationID(invocation),
+		playerID(player),
+		PlayerBlockActionKind(kind),
+		nativeBlockPosition(position),
+		int32(face),
+		nativeEntityVec3(clickPosition),
+	) {
+		return C.DF_STATUS_ERROR
+	}
+	return C.DF_STATUS_OK
+}
+
 //export bg_go_player_heal
 func bg_go_player_heal(context C.uint64_t, invocation C.DfInvocationId, player C.DfPlayerId, health C.double, view *C.DfHealingSourceView, result *C.DfPlayerHealResult) C.DfStatus {
 	if result == nil {
