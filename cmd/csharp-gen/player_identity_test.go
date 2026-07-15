@@ -13,6 +13,11 @@ const playerIdentitySource = `package player
 func (p *Player) Name() string { return "" }
 func (p *Player) UUID() uuid.UUID { return uuid.Nil }
 func (p *Player) XUID() string { return "" }
+func (p *Player) DeviceID() string { return "" }
+func (p *Player) DeviceModel() string { return "" }
+func (p *Player) SelfSignedID() string { return "" }
+func (p *Player) Locale() language.Tag { return language.Und }
+func (p *Player) Addr() net.Addr { return nil }
 `
 
 func TestPlayerIdentityUsesGoAST(t *testing.T) {
@@ -29,6 +34,12 @@ func TestPlayerIdentityUsesGoAST(t *testing.T) {
 		"public string Name() => PlayerName;",
 		"public Guid UUID() => PluginBridge.Host.PlayerUUID(Id);",
 		"public string XUID() => PluginBridge.Host.PlayerXUID(_invocation, Id);",
+		"public string DeviceID() => PluginBridge.Host.PlayerString",
+		"public string DeviceModel() => PluginBridge.Host.PlayerString",
+		"public string SelfSignedID() => PluginBridge.Host.PlayerString",
+		"public Language.Tag Locale()",
+		"public Net.Addr? Addr()",
+		"public string String() => _value ?? \"und\";",
 	} {
 		if !strings.Contains(generated, expected) {
 			t.Fatalf("generated player identity surface missing %q:\n%s", expected, generated)
@@ -38,9 +49,14 @@ func TestPlayerIdentityUsesGoAST(t *testing.T) {
 
 func TestPlayerIdentityRejectsSignatureDrift(t *testing.T) {
 	tests := map[string][2]string{
-		"Name": {"Name() string", "Name() []byte"},
-		"UUID": {"UUID() uuid.UUID", "UUID() string"},
-		"XUID": {"XUID() string", "XUID() int64"},
+		"Name":         {"Name() string", "Name() []byte"},
+		"UUID":         {"UUID() uuid.UUID", "UUID() string"},
+		"XUID":         {"XUID() string", "XUID() int64"},
+		"DeviceID":     {"DeviceID() string", "DeviceID() []byte"},
+		"DeviceModel":  {"DeviceModel() string", "DeviceModel() []byte"},
+		"SelfSignedID": {"SelfSignedID() string", "SelfSignedID() []byte"},
+		"Locale":       {"Locale() language.Tag", "Locale() string"},
+		"Addr":         {"Addr() net.Addr", "Addr() string"},
 	}
 	for name, replacement := range tests {
 		t.Run(name, func(t *testing.T) {

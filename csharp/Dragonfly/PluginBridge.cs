@@ -52,24 +52,27 @@ internal static unsafe class PluginBridge
             _ = api->PlayerScoreboardRemove(api->Context, invocation, player);
         }
 
-        internal static string PlayerString(ulong invocation, PlayerId player, uint kind)
+        internal static string PlayerString(ulong invocation, PlayerId player, uint kind) =>
+            TryPlayerString(invocation, player, kind, out var value) ? value : string.Empty;
+
+        internal static bool TryPlayerString(ulong invocation, PlayerId player, uint kind, out string value)
         {
+            value = string.Empty;
             var api = Api;
-            if (api is null || api->PlayerStringGet == null)
-                throw new InvalidOperationException("player is unavailable");
+            if (api is null || api->PlayerStringGet == null) return false;
             const ulong maxBytes = 16UL << 20;
             StringBuffer output = default;
             var status = api->PlayerStringGet(api->Context, invocation, player, kind, &output);
             if (status == Abi.Ok)
             {
                 if (output.Length != 0 || output.Data is not null || output.Capacity != 0)
-                    throw new InvalidOperationException("invalid player string returned by server");
-                return string.Empty;
+                    return false;
+                return true;
             }
             for (var attempt = 0; attempt < 3; attempt++)
             {
                 if (output.Length == 0 || output.Length > maxBytes)
-                    throw new InvalidOperationException("player is no longer available");
+                    return false;
                 var data = GC.AllocateUninitializedArray<byte>(checked((int)output.Length));
                 fixed (byte* pointer = data)
                 {
@@ -78,12 +81,13 @@ internal static unsafe class PluginBridge
                     if (status == Abi.Ok)
                     {
                         if (output.Data != pointer || output.Capacity != (ulong)data.Length || output.Length > output.Capacity)
-                            throw new InvalidOperationException("invalid player string returned by server");
-                        return Utf8(output);
+                            return false;
+                        value = Utf8(output);
+                        return true;
                     }
                 }
             }
-            throw new InvalidOperationException("player string changed while being read");
+            return false;
         }
 
         internal static void SendPlayerToast(ulong invocation, PlayerId player, string title, string message)

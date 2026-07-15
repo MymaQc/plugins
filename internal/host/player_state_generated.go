@@ -289,6 +289,24 @@ func playerString(connected *player.Player, kind native.PlayerStringKind) (strin
 		return connected.NameTag(), true
 	case native.PlayerStringScoreTag:
 		return connected.ScoreTag(), true
+	case native.PlayerStringDeviceID:
+		return connected.DeviceID(), true
+	case native.PlayerStringDeviceModel:
+		return connected.DeviceModel(), true
+	case native.PlayerStringSelfSignedID:
+		return connected.SelfSignedID(), true
+	case native.PlayerStringLocale:
+		return connected.Locale().String(), true
+	case native.PlayerStringAddrNetwork:
+		if address := connected.Addr(); address != nil {
+			return address.Network(), true
+		}
+		return "", false
+	case native.PlayerStringAddrString:
+		if address := connected.Addr(); address != nil {
+			return address.String(), true
+		}
+		return "", false
 	default:
 		return "", false
 	}

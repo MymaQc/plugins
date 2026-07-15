@@ -110,6 +110,7 @@ func TestPlayerTransportPreservesExplicitIDs(t *testing.T) {
 		"PlayerActionInputLocked               PlayerActionKind = 30",
 		"PlayerStringNameTag         PlayerStringKind = 0",
 		"PlayerStringScoreTag        PlayerStringKind = 1",
+		"PlayerStringAddrString      PlayerStringKind = 7",
 		"EffectSlowFalling    EffectType = 27",
 		"EffectDarkness       EffectType = 30",
 		"PlayerTextTip          PlayerTextKind = 1",
@@ -138,6 +139,12 @@ func TestPlayerPresentationTransportCallsExactDragonflyMethods(t *testing.T) {
 		"connected.RemoveBossBar()",
 		"return connected.NameTag(), true",
 		"return connected.ScoreTag(), true",
+		"return connected.DeviceID(), true",
+		"return connected.DeviceModel(), true",
+		"return connected.SelfSignedID(), true",
+		"return connected.Locale().String(), true",
+		"return address.Network(), true",
+		"return address.String(), true",
 	} {
 		if !strings.Contains(string(generated), expected) {
 			t.Fatalf("generated host transport missing %q", expected)
@@ -196,6 +203,10 @@ func TestPlayerTransportRejectsSpecDrift(t *testing.T) {
 		"control name": {
 			mutate: func(spec *playerTransportSpec) { spec.Controls.Methods[0].Name = "Changed" },
 			want:   "player control methods changed",
+		},
+		"identity name": {
+			mutate: func(spec *playerTransportSpec) { spec.IdentityMethods[0] = "Changed" },
+			want:   "player identity methods changed",
 		},
 		"text name": {
 			mutate: func(spec *playerTransportSpec) { spec.TextMethods[0].Name = "Changed" },
@@ -259,6 +270,10 @@ func inspectPinnedPlayerTransport(t *testing.T) playerTransportSpec {
 	if err != nil {
 		t.Fatal(err)
 	}
+	identity, err := inspectPlayerIdentityMethods(playerPath)
+	if err != nil {
+		t.Fatal(err)
+	}
 	presentation, err := inspectPlayerPresentationMethods(playerPath)
 	if err != nil {
 		t.Fatal(err)
@@ -280,7 +295,7 @@ func inspectPinnedPlayerTransport(t *testing.T) playerTransportSpec {
 		t.Fatal(err)
 	}
 	return playerTransportSpec{
-		StateMethods: state, ActionMethods: actions, Controls: controls, PresentationMethods: presentation, TextMethods: text,
+		StateMethods: state, ActionMethods: actions, Controls: controls, IdentityMethods: identity, PresentationMethods: presentation, TextMethods: text,
 		Effects: effects, Sounds: sounds, GameModeMethods: gameModes,
 	}
 }
@@ -291,6 +306,7 @@ func clonePlayerTransportSpec(spec playerTransportSpec) playerTransportSpec {
 	spec.Controls.Methods = append([]playerControlMethod(nil), spec.Controls.Methods...)
 	spec.Controls.HudElements = append([]playerControlValue(nil), spec.Controls.HudElements...)
 	spec.Controls.InputLocks = append([]playerControlValue(nil), spec.Controls.InputLocks...)
+	spec.IdentityMethods = append([]string(nil), spec.IdentityMethods...)
 	spec.PresentationMethods = append([]playerPresentationMethod(nil), spec.PresentationMethods...)
 	spec.TextMethods = append([]method(nil), spec.TextMethods...)
 	spec.Effects.Types = append([]effectTypeSpec(nil), spec.Effects.Types...)

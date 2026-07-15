@@ -484,6 +484,63 @@ func TestCSharpPlayerControls(t *testing.T) {
 	}
 }
 
+func TestCSharpPlayerConnectionIdentity(t *testing.T) {
+	host := &recordingHost{playerStrings: map[PlayerStringKind]string{
+		PlayerStringDeviceID:     "device-id",
+		PlayerStringDeviceModel:  "Desktop",
+		PlayerStringSelfSignedID: "self-signed",
+		PlayerStringLocale:       "en-US",
+		PlayerStringAddrNetwork:  "udp",
+		PlayerStringAddrString:   "127.0.0.1:19132",
+	}}
+	pluginRuntime := openCSharpRuntimeWithHost(t, host)
+	commands, err := pluginRuntime.Commands()
+	if err != nil {
+		t.Fatal(err)
+	}
+	kitchen := commandNamed(t, commands, "kitchen")
+	var overload uint64
+	found := false
+	for index, candidate := range kitchen.Overloads {
+		if len(candidate.Parameters) == 1 && candidate.Parameters[0].Name == "connection" {
+			overload, found = uint64(index), true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("connection overload missing: %#v", kitchen.Overloads)
+	}
+	player := PlayerID{UUID: [16]byte{5}, Generation: 4}
+	input := CommandInput{
+		Invocation: 42, Source: "Danick", SourceKind: CommandSourcePlayer, SourcePlayer: &player,
+		Overload: overload, Arguments: []string{"connection"},
+		OnlinePlayers: []CommandPlayer{{Player: player, Name: "Danick"}},
+	}
+	output, err := pluginRuntime.HandleCommand(kitchen.Index, input)
+	if err != nil || output.Failed || output.Message !=
+		"device=device-id, model=Desktop, self=self-signed, locale=en-US, addr=udp/127.0.0.1:19132" {
+		t.Fatalf("connection output=%#v error=%v", output, err)
+	}
+	wantReads := []PlayerStringKind{
+		PlayerStringAddrNetwork, PlayerStringAddrNetwork,
+		PlayerStringAddrString, PlayerStringAddrString,
+		PlayerStringDeviceID, PlayerStringDeviceID,
+		PlayerStringDeviceModel, PlayerStringDeviceModel,
+		PlayerStringSelfSignedID, PlayerStringSelfSignedID,
+		PlayerStringLocale, PlayerStringLocale,
+	}
+	if !slices.Equal(host.stringReads, wantReads) {
+		t.Fatalf("connection string reads=%v", host.stringReads)
+	}
+
+	host.playerStrings = nil
+	host.stringReads = nil
+	output, err = pluginRuntime.HandleCommand(kitchen.Index, input)
+	if err != nil || output.Failed || output.Message != "device=, model=, self=, locale=, addr=nil/nil" {
+		t.Fatalf("missing connection output=%#v error=%v", output, err)
+	}
+}
+
 func TestCSharpTypedEffects(t *testing.T) {
 	host := &recordingHost{}
 	pluginRuntime := openCSharpRuntimeWithHost(t, host)
@@ -1015,7 +1072,7 @@ func TestCSharpReflectedCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 	kitchen := commandNamed(t, commands, "kitchen")
-	if !slices.Contains(kitchen.Aliases, "ks") || len(kitchen.Overloads) != 30 {
+	if !slices.Contains(kitchen.Aliases, "ks") || len(kitchen.Overloads) != 31 {
 		t.Fatalf("kitchen descriptor = %#v", kitchen)
 	}
 	if kitchen.Overloads[1].Parameters[0].Name != "echo" ||

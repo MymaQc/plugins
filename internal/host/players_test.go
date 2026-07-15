@@ -365,8 +365,20 @@ func TestPlayersReadPresentationStrings(t *testing.T) {
 		player.SetScoreTag("Score tag")
 		nameTag, nameOK := players.PlayerString(invocation, id, native.PlayerStringNameTag)
 		scoreTag, scoreOK := players.PlayerString(invocation, id, native.PlayerStringScoreTag)
+		deviceID, deviceIDOK := players.PlayerString(invocation, id, native.PlayerStringDeviceID)
+		deviceModel, deviceModelOK := players.PlayerString(invocation, id, native.PlayerStringDeviceModel)
+		selfSignedID, selfSignedIDOK := players.PlayerString(invocation, id, native.PlayerStringSelfSignedID)
+		locale, localeOK := players.PlayerString(invocation, id, native.PlayerStringLocale)
 		if !nameOK || !scoreOK || nameTag != "Name tag" || scoreTag != "Score tag" {
 			t.Fatalf("name=%q/%v score=%q/%v", nameTag, nameOK, scoreTag, scoreOK)
+		}
+		if !deviceIDOK || !deviceModelOK || !selfSignedIDOK || !localeOK ||
+			deviceID != "" || deviceModel != "" || selfSignedID != "" || locale != player.Locale().String() {
+			t.Fatalf("connection strings=%q/%v %q/%v %q/%v %q/%v", deviceID, deviceIDOK,
+				deviceModel, deviceModelOK, selfSignedID, selfSignedIDOK, locale, localeOK)
+		}
+		if _, addrOK := players.PlayerString(invocation, id, native.PlayerStringAddrNetwork); addrOK {
+			t.Fatal("nop player returned an address")
 		}
 		if !players.SendPlayerToast(invocation, id, "Title", "Message") {
 			t.Fatal("send toast failed")

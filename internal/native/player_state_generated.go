@@ -87,6 +87,12 @@ type PlayerStringKind uint32
 const (
 	PlayerStringNameTag         PlayerStringKind = 0
 	PlayerStringScoreTag        PlayerStringKind = 1
+	PlayerStringDeviceID        PlayerStringKind = 2
+	PlayerStringDeviceModel     PlayerStringKind = 3
+	PlayerStringSelfSignedID    PlayerStringKind = 4
+	PlayerStringLocale          PlayerStringKind = 5
+	PlayerStringAddrNetwork     PlayerStringKind = 6
+	PlayerStringAddrString      PlayerStringKind = 7
 )
 
 type EffectType int32

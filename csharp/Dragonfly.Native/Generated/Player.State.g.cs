@@ -69,4 +69,10 @@ public static partial class Abi
     public const uint PlayerActionInputLocked = 30;
     public const uint PlayerStringNameTag = 0;
     public const uint PlayerStringScoreTag = 1;
+    public const uint PlayerStringDeviceID = 2;
+    public const uint PlayerStringDeviceModel = 3;
+    public const uint PlayerStringSelfSignedID = 4;
+    public const uint PlayerStringLocale = 5;
+    public const uint PlayerStringAddrNetwork = 6;
+    public const uint PlayerStringAddrString = 7;
 }

@@ -12,6 +12,7 @@ type playerTransportSpec struct {
 	StateMethods        []playerStateMethod
 	ActionMethods       []playerActionMethod
 	Controls            playerControlSpec
+	IdentityMethods     []string
 	PresentationMethods []playerPresentationMethod
 	TextMethods         []method
 	Effects             effectSpec
@@ -97,6 +98,12 @@ var playerActionTransportIDs = []transportNameID{
 var playerStringTransportIDs = []transportNameID{
 	{Name: "NameTag", ID: 0},
 	{Name: "ScoreTag", ID: 1},
+	{Name: "DeviceID", ID: 2},
+	{Name: "DeviceModel", ID: 3},
+	{Name: "SelfSignedID", ID: 4},
+	{Name: "Locale", ID: 5},
+	{Name: "AddrNetwork", ID: 6},
+	{Name: "AddrString", ID: 7},
 }
 
 var playerStateTransportASTMethods = []string{
@@ -605,6 +612,24 @@ func playerString(connected *player.Player, kind native.PlayerStringKind) (strin
 		return connected.NameTag(), true
 	case native.PlayerStringScoreTag:
 		return connected.ScoreTag(), true
+	case native.PlayerStringDeviceID:
+		return connected.DeviceID(), true
+	case native.PlayerStringDeviceModel:
+		return connected.DeviceModel(), true
+	case native.PlayerStringSelfSignedID:
+		return connected.SelfSignedID(), true
+	case native.PlayerStringLocale:
+		return connected.Locale().String(), true
+	case native.PlayerStringAddrNetwork:
+		if address := connected.Addr(); address != nil {
+			return address.Network(), true
+		}
+		return "", false
+	case native.PlayerStringAddrString:
+		if address := connected.Addr(); address != nil {
+			return address.String(), true
+		}
+		return "", false
 	default:
 		return "", false
 	}
@@ -730,6 +755,9 @@ func validatePlayerTransportSpec(spec playerTransportSpec) error {
 		controlNames = append(controlNames, value.Name)
 	}
 	if err := requireTransportNames("player control methods", controlNames, selectedPlayerControlMethods); err != nil {
+		return err
+	}
+	if err := requireTransportNames("player identity methods", spec.IdentityMethods, selectedPlayerIdentityMethods); err != nil {
 		return err
 	}
 	presentationNames := make([]string, 0, len(spec.PresentationMethods))

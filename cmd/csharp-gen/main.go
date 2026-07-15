@@ -742,7 +742,7 @@ func main() {
 		fatal(err)
 	}
 	playerTransport := playerTransportSpec{
-		StateMethods: playerStateMethods, ActionMethods: playerActionMethods, Controls: playerControls, PresentationMethods: playerPresentationMethods,
+		StateMethods: playerStateMethods, ActionMethods: playerActionMethods, Controls: playerControls, IdentityMethods: playerIdentityMethods, PresentationMethods: playerPresentationMethods,
 		TextMethods: playerMethods, Effects: effects, Sounds: sounds, GameModeMethods: playerGameModes,
 	}
 	nativePlayerTransport, err := generateNativePlayerTransport(playerTransport)
