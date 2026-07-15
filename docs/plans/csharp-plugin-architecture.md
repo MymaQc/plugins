@@ -260,6 +260,9 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    Host ABI 54 appends exact AST-generated `Player.KnockBack` transport. Host ABI 55 appends
    `Player.FinalDamageFrom`, preserving Dragonfly's live armour, enchantment, and resistance
    calculation instead of duplicating it in C#.
+   Host ABI 56 appends exact AST-generated `Player.UsingItem` and `Sleeping` reads. `DeathPosition`
+   remains absent until custom `World.Dimension` values can cross the API without being collapsed
+   to one of Dragonfly's three registered dimensions.
    The AST-generated `Scoreboard` class mirrors Dragonfly's mutable name, write, set/remove,
    padding, line-copy, and descending-order behavior. `Player.SendScoreboard` activates the
    existing private transport with raw lines so the Go host applies padding and ordering once.

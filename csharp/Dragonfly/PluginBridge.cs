@@ -623,6 +623,26 @@ internal static unsafe class PluginBridge
                 height);
         }
 
+        internal static bool PlayerUsingItem(ulong invocation, PlayerId player)
+        {
+            var api = Api;
+            if (api is null || api->PlayerUsingItem == null) return false;
+            byte value;
+            return api->PlayerUsingItem(api->Context, invocation, player, &value) == Abi.Ok && value == 1;
+        }
+
+        internal static (Cube.Pos Position, bool Sleeping) PlayerSleeping(ulong invocation, PlayerId player)
+        {
+            var api = Api;
+            if (api is null || api->PlayerSleeping == null) return default;
+            BlockPos position;
+            byte sleeping;
+            if (api->PlayerSleeping(api->Context, invocation, player, &position, &sleeping) != Abi.Ok ||
+                sleeping > 1)
+                return default;
+            return (new Cube.Pos(position.X, position.Y, position.Z), sleeping != 0);
+        }
+
         internal static void CloseEntity(ulong invocation, EntityId entity)
         {
             var api = Api;

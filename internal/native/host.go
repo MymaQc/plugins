@@ -433,6 +433,8 @@ type Host interface {
 	HealPlayer(InvocationID, PlayerID, float64, HealingSource) (float64, bool)
 	HurtPlayer(InvocationID, PlayerID, float64, DamageSource) (PlayerHurtResult, bool)
 	FinalPlayerDamage(InvocationID, PlayerID, float64, DamageSource) (float64, bool)
+	PlayerUsingItem(InvocationID, PlayerID) (bool, bool)
+	PlayerSleeping(InvocationID, PlayerID) (BlockPos, bool, bool)
 	ChangePlayerEffect(InvocationID, PlayerID, PlayerEffectOperation, PlayerEffect) bool
 	PlayerEffects(InvocationID, PlayerID) ([]PlayerEffect, bool)
 	ClearPlayerEffects(InvocationID, PlayerID) bool
@@ -567,6 +569,10 @@ func (noopHost) HurtPlayer(InvocationID, PlayerID, float64, DamageSource) (Playe
 }
 func (noopHost) FinalPlayerDamage(InvocationID, PlayerID, float64, DamageSource) (float64, bool) {
 	return 0, false
+}
+func (noopHost) PlayerUsingItem(InvocationID, PlayerID) (bool, bool) { return false, false }
+func (noopHost) PlayerSleeping(InvocationID, PlayerID) (BlockPos, bool, bool) {
+	return BlockPos{}, false, false
 }
 func (noopHost) ChangePlayerEffect(InvocationID, PlayerID, PlayerEffectOperation, PlayerEffect) bool {
 	return false

@@ -1241,6 +1241,8 @@ public sealed class KitchenSink : Plugin
             var experience = player.Experience();
             var enchantmentSeed = player.EnchantmentSeed();
             var canCollectExperience = player.CanCollectExperience();
+            var usingItem = player.UsingItem();
+            var (sleepPosition, sleeping) = player.Sleeping();
 
             player.SetFood(food);
             player.SetMaxHealth(maxHealth);
@@ -1274,7 +1276,7 @@ public sealed class KitchenSink : Plugin
             var collectedExperience = player.CollectExperience(0);
 
             output.Printf(
-                "food={0}, health={1}/{2}, experience={3}:{4}, scale={5}, invisible={6}, immobile={7}, speed={8}/{9}/{10}, physical={11}/{12}/{13}/{14}/{15}/{16}/{17}, activity={18}/{19}/{20}/{21}/{22}/{23}, fire={24}/{25}, air={26}/{27}, xp={28}/{29}/{30}/{31}/{32}",
+                "food={0}, health={1}/{2}, experience={3}:{4}, scale={5}, invisible={6}, immobile={7}, speed={8}/{9}/{10}, physical={11}/{12}/{13}/{14}/{15}/{16}/{17}, activity={18}/{19}/{20}/{21}/{22}/{23}, fire={24}/{25}, air={26}/{27}, xp={28}/{29}/{30}/{31}/{32}, using={33}, sleeping={34},{35},{36}/{37}",
                 food,
                 health,
                 maxHealth,
@@ -1307,7 +1309,12 @@ public sealed class KitchenSink : Plugin
                 enchantmentSeed,
                 canCollectExperience ? "true" : "false",
                 addedExperience,
-                collectedExperience ? "true" : "false");
+                collectedExperience ? "true" : "false",
+                usingItem ? "true" : "false",
+                sleepPosition.X(),
+                sleepPosition.Y(),
+                sleepPosition.Z(),
+                sleeping ? "true" : "false");
         }
     }
 

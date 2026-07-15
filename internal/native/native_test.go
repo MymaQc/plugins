@@ -166,6 +166,9 @@ type recordingHost struct {
 	knockBackSources  []Vec3
 	knockBackForces   []float64
 	knockBackHeights  []float64
+	usingItem         bool
+	sleepingPosition  BlockPos
+	sleeping          bool
 	states            []PlayerStateKind
 	values            []PlayerStateValue
 	state             PlayerStateValue
@@ -315,6 +318,14 @@ func (h *recordingHost) KnockBackPlayer(_ InvocationID, _ PlayerID, source Vec3,
 	h.knockBackForces = append(h.knockBackForces, force)
 	h.knockBackHeights = append(h.knockBackHeights, height)
 	return true
+}
+
+func (h *recordingHost) PlayerUsingItem(InvocationID, PlayerID) (bool, bool) {
+	return h.usingItem, true
+}
+
+func (h *recordingHost) PlayerSleeping(InvocationID, PlayerID) (BlockPos, bool, bool) {
+	return h.sleepingPosition, h.sleeping, true
 }
 
 func (h *recordingHost) TransferPlayer(invocation InvocationID, player PlayerID, world WorldID, position Vec3) bool {

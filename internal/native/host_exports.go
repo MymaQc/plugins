@@ -367,6 +367,48 @@ func bg_go_player_final_damage(context C.uint64_t, invocation C.DfInvocationId, 
 	return C.DF_STATUS_OK
 }
 
+//export bg_go_player_using_item
+func bg_go_player_using_item(context C.uint64_t, invocation C.DfInvocationId, player C.DfPlayerId, usingItem *C.uint8_t) C.DfStatus {
+	if usingItem == nil {
+		return C.DF_STATUS_ERROR
+	}
+	*usingItem = 0
+	host, ok := resolveHost(uint64(context))
+	if !ok {
+		return C.DF_STATUS_ERROR
+	}
+	value, ok := host.PlayerUsingItem(InvocationID(invocation), playerID(player))
+	if !ok {
+		return C.DF_STATUS_ERROR
+	}
+	if value {
+		*usingItem = 1
+	}
+	return C.DF_STATUS_OK
+}
+
+//export bg_go_player_sleeping
+func bg_go_player_sleeping(context C.uint64_t, invocation C.DfInvocationId, player C.DfPlayerId, position *C.DfBlockPos, sleeping *C.uint8_t) C.DfStatus {
+	if position == nil || sleeping == nil {
+		return C.DF_STATUS_ERROR
+	}
+	*position = C.DfBlockPos{}
+	*sleeping = 0
+	host, ok := resolveHost(uint64(context))
+	if !ok {
+		return C.DF_STATUS_ERROR
+	}
+	value, active, ok := host.PlayerSleeping(InvocationID(invocation), playerID(player))
+	if !ok {
+		return C.DF_STATUS_ERROR
+	}
+	position.x, position.y, position.z = C.int32_t(value.X), C.int32_t(value.Y), C.int32_t(value.Z)
+	if active {
+		*sleeping = 1
+	}
+	return C.DF_STATUS_OK
+}
+
 func copyHealingSourceView(view *C.DfHealingSourceView) (HealingSource, bool) {
 	if view == nil || uint32(view.kind) > uint32(HealingSourceRegeneration) || view.data > 1 {
 		return HealingSource{}, false

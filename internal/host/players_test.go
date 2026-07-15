@@ -273,6 +273,21 @@ func TestPlayersKnockBackUsesDragonflySemantics(t *testing.T) {
 	})
 }
 
+func TestPlayersReadItemUseAndSleepingState(t *testing.T) {
+	withPlayer(t, func(player *player.Player) {
+		players := NewPlayers()
+		id := players.Register(player, 1)
+		invocation, leave := players.BeginInvocation(player.Tx())
+		defer leave()
+		if using, ok := players.PlayerUsingItem(invocation, id); !ok || using {
+			t.Fatalf("using item = %v ok=%v", using, ok)
+		}
+		if position, sleeping, ok := players.PlayerSleeping(invocation, id); !ok || sleeping || position != (native.BlockPos{}) {
+			t.Fatalf("sleeping = %+v/%v ok=%v", position, sleeping, ok)
+		}
+	})
+}
+
 func TestPlayersSendsAndRemovesScoreboard(t *testing.T) {
 	withPlayer(t, func(player *player.Player) {
 		players := NewPlayers()

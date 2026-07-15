@@ -101,6 +101,7 @@ entity visibility behavior for players, host entities, and plugin-defined entiti
 armour knockback resistance instead of approximating the result with `SetVelocity`.
 `Player.FinalDamageFrom(damage, source)` uses Dragonfly's live armour, enchantments, and resistance
 calculation without mutating player health.
+`Player.UsingItem()` and `Player.Sleeping()` read Dragonfly's live item-use and bed state directly.
 Presentation parity includes instant-respawn and coordinate toggles, sleeping indicators,
 dialogue/boss-bar/scoreboard removal, live name/score tags, and toasts, using the exact Dragonfly
 `Player` method names.

@@ -267,8 +267,8 @@ _Static_assert(DF_PLAYER_COOLDOWN_HAS == 0u, "player cooldown has operation chan
 _Static_assert(DF_PLAYER_COOLDOWN_SET == 1u, "player cooldown set operation changed");
 _Static_assert(sizeof(DfDifficultyView) == 24, "DfDifficultyView ABI layout changed");
 _Static_assert(offsetof(DfDifficultyView, starvation_health_limit) == 8, "DfDifficultyView.starvation_health_limit ABI offset changed");
-_Static_assert(sizeof(DfHostApiV27) == 1008, "DfHostApiV27 ABI layout changed");
-_Static_assert(DF_HOST_ABI_VERSION == 55u, "host ABI version changed without bridge review");
+_Static_assert(sizeof(DfHostApiV27) == 1024, "DfHostApiV27 ABI layout changed");
+_Static_assert(DF_HOST_ABI_VERSION == 56u, "host ABI version changed without bridge review");
 _Static_assert(offsetof(DfHostApiV27, player_skin_open) == 80, "DfHostApiV27.player_skin_open ABI offset changed");
 _Static_assert(offsetof(DfHostApiV27, player_skin_set) == 112, "DfHostApiV27.player_skin_set ABI offset changed");
 _Static_assert(offsetof(DfHostApiV27, inventory_size) == 120, "DfHostApiV27.inventory_size ABI offset changed");
@@ -306,6 +306,8 @@ _Static_assert(offsetof(DfHostApiV27, player_toast) == 976, "DfHostApiV27.player
 _Static_assert(offsetof(DfHostApiV27, player_cooldown) == 984, "DfHostApiV27.player_cooldown ABI offset changed");
 _Static_assert(offsetof(DfHostApiV27, player_knock_back) == 992, "DfHostApiV27.player_knock_back ABI offset changed");
 _Static_assert(offsetof(DfHostApiV27, player_final_damage) == 1000, "DfHostApiV27.player_final_damage ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, player_using_item) == 1008, "DfHostApiV27.player_using_item ABI offset changed");
+_Static_assert(offsetof(DfHostApiV27, player_sleeping) == 1016, "DfHostApiV27.player_sleeping ABI offset changed");
 _Static_assert(sizeof(DfEntityNewView) == 152, "DfEntityNewView ABI layout changed");
 _Static_assert(sizeof(DfBBox) == 48, "DfBBox ABI layout changed");
 _Static_assert(offsetof(DfBBox, min) == 0, "DfBBox.min ABI offset changed");
@@ -375,6 +377,8 @@ extern DfStatus bg_go_player_toast(uint64_t context, DfInvocationId invocation, 
 extern DfStatus bg_go_player_cooldown(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t operation, DfStringView identifier, int32_t metadata, int64_t duration_nanoseconds, uint8_t *active);
 extern DfStatus bg_go_player_knock_back(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfVec3 source, double force, double height);
 extern DfStatus bg_go_player_final_damage(uint64_t context, DfInvocationId invocation, DfPlayerId player, double damage, const DfDamageSourceView *source, double *result);
+extern DfStatus bg_go_player_using_item(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint8_t *using_item);
+extern DfStatus bg_go_player_sleeping(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfBlockPos *position, uint8_t *sleeping);
 extern DfStatus bg_go_player_heal(uint64_t context, DfInvocationId invocation, DfPlayerId player, double health, const DfHealingSourceView *source, DfPlayerHealResult *result);
 extern DfStatus bg_go_player_hurt(uint64_t context, DfInvocationId invocation, DfPlayerId player, double damage, const DfDamageSourceView *source, DfPlayerHurtResult *result);
 extern DfStatus bg_go_player_effect(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t operation, DfEffectView effect);
@@ -539,6 +543,14 @@ static DfStatus host_player_knock_back(uint64_t context, DfInvocationId invocati
 
 static DfStatus host_player_final_damage(uint64_t context, DfInvocationId invocation, DfPlayerId player, double damage, const DfDamageSourceView *source, double *result) {
     return bg_go_player_final_damage(context, invocation, player, damage, source, result);
+}
+
+static DfStatus host_player_using_item(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint8_t *using_item) {
+    return bg_go_player_using_item(context, invocation, player, using_item);
+}
+
+static DfStatus host_player_sleeping(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfBlockPos *position, uint8_t *sleeping) {
+    return bg_go_player_sleeping(context, invocation, player, position, sleeping);
 }
 
 static DfStatus host_player_heal(uint64_t context, DfInvocationId invocation, DfPlayerId player, double health, const DfHealingSourceView *source, DfPlayerHealResult *result) {
@@ -954,6 +966,8 @@ DfStatus bg_runtime_open(
         .player_cooldown = host_player_cooldown,
         .player_knock_back = host_player_knock_back,
         .player_final_damage = host_player_final_damage,
+        .player_using_item = host_player_using_item,
+        .player_sleeping = host_player_sleeping,
     };
     DfRuntimeConfig config = {
         .plugin_directory = {

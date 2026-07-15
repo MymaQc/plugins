@@ -194,42 +194,47 @@ func TestCSharpVanillaGameModeCommand(t *testing.T) {
 }
 
 func TestCSharpPlayerStateMethods(t *testing.T) {
-	host := &recordingHost{rejectStateWrites: true, stateValues: map[PlayerStateKind]PlayerStateValue{
-		PlayerStateFood:                 {Integer: 10},
-		PlayerStateHealth:               {Number: 16},
-		PlayerStateMaxHealth:            {Number: 20},
-		PlayerStateExperienceLevel:      {Integer: 3},
-		PlayerStateExperienceProgress:   {Number: 0.25},
-		PlayerStateScale:                {Number: 1},
-		PlayerStateInvisible:            {},
-		PlayerStateImmobile:             {},
-		PlayerStateSpeed:                {Number: 0.1},
-		PlayerStateFlightSpeed:          {Number: 0.05},
-		PlayerStateVerticalFlightSpeed:  {Number: 1},
-		PlayerStateFallDistance:         {Number: 2.5},
-		PlayerStateAbsorption:           {Number: 4},
-		PlayerStateDead:                 {},
-		PlayerStateOnGround:             {Integer: 1},
-		PlayerStateEyeHeight:            {Number: 1.62},
-		PlayerStateTorsoHeight:          {Number: 1.52},
-		PlayerStateBreathing:            {Integer: 1},
-		PlayerStateSprinting:            {Integer: 1},
-		PlayerStateSneaking:             {},
-		PlayerStateSwimming:             {Integer: 1},
-		PlayerStateCrawling:             {},
-		PlayerStateGliding:              {Integer: 1},
-		PlayerStateFlying:               {},
-		PlayerStateOnFireDuration:       {Integer: int64(2 * time.Second)},
-		PlayerStateFireProof:            {Integer: 1},
-		PlayerStateAirSupply:            {Integer: int64(10 * time.Second)},
-		PlayerStateMaxAirSupply:         {Integer: int64(15 * time.Second)},
-		PlayerStateExperience:           {Integer: 27},
-		PlayerStateEnchantmentSeed:      {Integer: 42},
-		PlayerStateCanCollectExperience: {Integer: 1},
-	}, actionResults: map[PlayerActionKind]PlayerStateValue{
-		PlayerActionAddExperience:     {Integer: 0},
-		PlayerActionCollectExperience: {Integer: 1},
-	}}
+	host := &recordingHost{
+		rejectStateWrites: true,
+		usingItem:         true,
+		sleeping:          true,
+		sleepingPosition:  BlockPos{X: 4, Y: 65, Z: -2},
+		stateValues: map[PlayerStateKind]PlayerStateValue{
+			PlayerStateFood:                 {Integer: 10},
+			PlayerStateHealth:               {Number: 16},
+			PlayerStateMaxHealth:            {Number: 20},
+			PlayerStateExperienceLevel:      {Integer: 3},
+			PlayerStateExperienceProgress:   {Number: 0.25},
+			PlayerStateScale:                {Number: 1},
+			PlayerStateInvisible:            {},
+			PlayerStateImmobile:             {},
+			PlayerStateSpeed:                {Number: 0.1},
+			PlayerStateFlightSpeed:          {Number: 0.05},
+			PlayerStateVerticalFlightSpeed:  {Number: 1},
+			PlayerStateFallDistance:         {Number: 2.5},
+			PlayerStateAbsorption:           {Number: 4},
+			PlayerStateDead:                 {},
+			PlayerStateOnGround:             {Integer: 1},
+			PlayerStateEyeHeight:            {Number: 1.62},
+			PlayerStateTorsoHeight:          {Number: 1.52},
+			PlayerStateBreathing:            {Integer: 1},
+			PlayerStateSprinting:            {Integer: 1},
+			PlayerStateSneaking:             {},
+			PlayerStateSwimming:             {Integer: 1},
+			PlayerStateCrawling:             {},
+			PlayerStateGliding:              {Integer: 1},
+			PlayerStateFlying:               {},
+			PlayerStateOnFireDuration:       {Integer: int64(2 * time.Second)},
+			PlayerStateFireProof:            {Integer: 1},
+			PlayerStateAirSupply:            {Integer: int64(10 * time.Second)},
+			PlayerStateMaxAirSupply:         {Integer: int64(15 * time.Second)},
+			PlayerStateExperience:           {Integer: 27},
+			PlayerStateEnchantmentSeed:      {Integer: 42},
+			PlayerStateCanCollectExperience: {Integer: 1},
+		}, actionResults: map[PlayerActionKind]PlayerStateValue{
+			PlayerActionAddExperience:     {Integer: 0},
+			PlayerActionCollectExperience: {Integer: 1},
+		}}
 	pluginRuntime := openCSharpRuntimeWithHost(t, host)
 	commands, err := pluginRuntime.Commands()
 	if err != nil {
@@ -253,7 +258,7 @@ func TestCSharpPlayerStateMethods(t *testing.T) {
 		Overload: overload, Arguments: []string{"state"},
 		OnlinePlayers: []CommandPlayer{{Player: player, Name: "Danick"}},
 	})
-	if err != nil || output.Failed || output.Message != "food=10, health=16/20, experience=3:0.25, scale=1, invisible=false, immobile=false, speed=0.1/0.05/1, physical=2.5/4/false/true/1.62/1.52/true, activity=true/false/true/false/true/false, fire=true/2, air=10/15, xp=27/42/true/0/true" {
+	if err != nil || output.Failed || output.Message != "food=10, health=16/20, experience=3:0.25, scale=1, invisible=false, immobile=false, speed=0.1/0.05/1, physical=2.5/4/false/true/1.62/1.52/true, activity=true/false/true/false/true/false, fire=true/2, air=10/15, xp=27/42/true/0/true, using=true, sleeping=4,65,-2/true" {
 		t.Fatalf("state output=%#v error=%v", output, err)
 	}
 	wantReads := []PlayerStateKind{

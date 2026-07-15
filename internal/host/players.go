@@ -602,6 +602,25 @@ func (p *Players) FinalPlayerDamage(invocation native.InvocationID, id native.Pl
 	return resolved.value, ok && resolved.ok
 }
 
+func (p *Players) PlayerUsingItem(invocation native.InvocationID, id native.PlayerID) (bool, bool) {
+	return readPlayer(p, invocation, id, (*player.Player).UsingItem)
+}
+
+func (p *Players) PlayerSleeping(invocation native.InvocationID, id native.PlayerID) (native.BlockPos, bool, bool) {
+	type result struct {
+		position native.BlockPos
+		sleeping bool
+	}
+	value, ok := readPlayer(p, invocation, id, func(connected *player.Player) result {
+		position, sleeping := connected.Sleeping()
+		return result{
+			position: native.BlockPos{X: int32(position.X()), Y: int32(position.Y()), Z: int32(position.Z())},
+			sleeping: sleeping,
+		}
+	})
+	return value.position, value.sleeping, ok
+}
+
 func (p *Players) PlayerState(invocation native.InvocationID, id native.PlayerID, kind native.PlayerStateKind) (native.PlayerStateValue, bool) {
 	value, ok := readPlayer(p, invocation, id, func(connected *player.Player) struct {
 		value native.PlayerStateValue
