@@ -671,6 +671,10 @@ func main() {
 	if err != nil {
 		fatal(err)
 	}
+	playerEntityActionMethods, err := inspectPlayerEntityActionMethods(filepath.Join(directory, "server", "player", "player.go"))
+	if err != nil {
+		fatal(err)
+	}
 	worldLifecycleMethods, err := inspectWorldLifecycleMethods(filepath.Join(directory, "server", "world", "world.go"))
 	if err != nil {
 		fatal(err)
@@ -838,6 +842,18 @@ func main() {
 			Content: generateHostPlayerViewLayer(playerViewLayer),
 		},
 		{
+			Path:    filepath.Join(*root, "internal", "native", "player_entity_action_generated.go"),
+			Content: generateNativePlayerEntityActions(playerEntityActionMethods),
+		},
+		{
+			Path:    filepath.Join(*root, "csharp", "Dragonfly.Native", "Generated", "Player.EntityAction.g.cs"),
+			Content: generateCSharpPlayerEntityActions(playerEntityActionMethods),
+		},
+		{
+			Path:    filepath.Join(*root, "internal", "host", "player_entity_action_generated.go"),
+			Content: generateHostPlayerEntityActions(playerEntityActionMethods),
+		},
+		{
 			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "Packet.Types.g.cs"),
 			Content: generatePacketTypes(packets),
 		},
@@ -940,6 +956,10 @@ func main() {
 		{
 			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "Player.ViewLayer.g.cs"),
 			Content: generatePlayerViewLayer(playerViewLayer),
+		},
+		{
+			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "Player.EntityAction.g.cs"),
+			Content: generatePlayerEntityActions(playerEntityActionMethods),
 		},
 		{
 			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "World.Lifecycle.g.cs"),

@@ -1609,6 +1609,27 @@ internal static unsafe class PluginBridge
             }
         }
 
+        internal static bool RunPlayerEntityAction(
+            ulong invocation,
+            PlayerId player,
+            World.Entity entity,
+            uint kind)
+        {
+            ArgumentNullException.ThrowIfNull(entity);
+            var api = Api;
+            if (api is null || api->PlayerEntityAction == null ||
+                !TryEntityId(invocation, entity, out var entityId)) return false;
+            byte result = 0;
+            return api->PlayerEntityAction(
+                       api->Context,
+                       invocation,
+                       player,
+                       entityId,
+                       kind,
+                       &result) == Abi.Ok &&
+                   result <= 1 && result != 0;
+        }
+
         internal static Skin PlayerSkin(ulong invocation, PlayerId player)
         {
             var api = Api;

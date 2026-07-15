@@ -850,6 +850,12 @@ func (p *Players) PlayerViewLayer(invocation native.InvocationID, viewerID nativ
 	})
 }
 
+func (p *Players) PlayerEntityAction(invocation native.InvocationID, playerID native.PlayerID, entityID native.EntityID, kind native.PlayerEntityActionKind) (bool, bool) {
+	return p.runPlayerEntityResult(invocation, playerID, entityID, func(connected *player.Player, entity world.Entity) (bool, bool) {
+		return runExactPlayerEntityAction(connected, entity, kind)
+	})
+}
+
 func (p *Players) runPlayerEntityAction(invocation native.InvocationID, viewerID native.PlayerID, entityID native.EntityID, action func(*player.Player, world.Entity) bool) bool {
 	viewer, ok := p.ResolveID(viewerID, invocation)
 	if ok {
@@ -880,6 +886,38 @@ func (p *Players) runPlayerEntityAction(invocation native.InvocationID, viewerID
 		}
 	})
 	return task.Err() == nil && accepted
+}
+
+func (p *Players) runPlayerEntityResult(invocation native.InvocationID, playerID native.PlayerID, entityID native.EntityID, action func(*player.Player, world.Entity) (bool, bool)) (bool, bool) {
+	connected, ok := p.ResolveID(playerID, invocation)
+	if ok {
+		entity, ok := p.ResolveEntityID(entityID, invocation)
+		if !ok {
+			return false, false
+		}
+		return action(connected, entity)
+	}
+	if invocation != 0 {
+		if _, ok := p.InvocationTx(invocation); !ok {
+			return false, false
+		}
+	}
+	playerEntry, ok := p.playerEntry(playerID)
+	if !ok {
+		return false, false
+	}
+	entityHandle, ok := p.entities.Handle(entityID)
+	if !ok {
+		return false, false
+	}
+	var result, completed bool
+	task := world.NewEntityRef[*player.Player](playerEntry.handle).Do(func(tx *world.Tx, connected *player.Player) {
+		entity, ok := entityHandle.Entity(tx)
+		if ok {
+			result, completed = action(connected, entity)
+		}
+	})
+	return result, task.Err() == nil && completed
 }
 
 func setPlayerEntityVisible(viewer *player.Player, entity world.Entity, visible bool) {

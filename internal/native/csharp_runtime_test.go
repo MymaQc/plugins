@@ -1293,7 +1293,7 @@ func TestCSharpReflectedCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 	kitchen := commandNamed(t, commands, "kitchen")
-	if !slices.Contains(kitchen.Aliases, "ks") || len(kitchen.Overloads) != 35 {
+	if !slices.Contains(kitchen.Aliases, "ks") || len(kitchen.Overloads) != 36 {
 		t.Fatalf("kitchen descriptor = %#v", kitchen)
 	}
 	if kitchen.Overloads[1].Parameters[0].Name != "echo" ||
@@ -1870,6 +1870,55 @@ func TestCSharpReflectedCommands(t *testing.T) {
 	output, err = pluginRuntime.HandleCommand(kitchen.Index, input)
 	if err != nil || output.Failed || output.Message != "crop=7, planted=7" {
 		t.Fatalf("crop round trip output=%#v error=%v", output, err)
+	}
+}
+
+func TestCSharpPlayerEntityActions(t *testing.T) {
+	host := &recordingHost{entityActionResults: map[PlayerEntityActionKind]bool{
+		PlayerEntityActionUseItemOnEntity: true,
+		PlayerEntityActionAttackEntity:    false,
+	}}
+	pluginRuntime := openCSharpRuntimeWithHost(t, host)
+	commands, err := pluginRuntime.Commands()
+	if err != nil {
+		t.Fatal(err)
+	}
+	kitchen := commandNamed(t, commands, "kitchen")
+	var overload uint64
+	found := false
+	for index, candidate := range kitchen.Overloads {
+		if len(candidate.Parameters) == 2 && candidate.Parameters[0].Name == "entity-actions" {
+			overload, found = uint64(index), true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("entity-actions overload missing: %#v", kitchen.Overloads)
+	}
+	source := PlayerID{UUID: [16]byte{1}, Generation: 7}
+	target := PlayerID{UUID: [16]byte{2}, Generation: 8}
+	targetArgument := "02000000000000000000000000000000:8:52:4:65:-2:RestartFU"
+	output, err := pluginRuntime.HandleCommand(kitchen.Index, CommandInput{
+		Invocation: 47, Source: "Danick", SourceKind: CommandSourcePlayer, SourcePlayer: &source,
+		Overload: overload, Arguments: []string{"entity-actions", targetArgument},
+		OnlinePlayers: []CommandPlayer{
+			{Player: source, Name: "Danick"},
+			{Player: target, Name: "RestartFU"},
+		},
+	})
+	if err != nil || output.Failed || output.Message != "used=true, attacked=false" {
+		t.Fatalf("entity-actions output=%#v error=%v", output, err)
+	}
+	wantKinds := []PlayerEntityActionKind{
+		PlayerEntityActionUseItemOnEntity,
+		PlayerEntityActionAttackEntity,
+	}
+	wantTargets := []EntityID{
+		{UUID: target.UUID, Generation: target.Generation},
+		{UUID: target.UUID, Generation: target.Generation},
+	}
+	if !slices.Equal(host.entityActions, wantKinds) || !slices.Equal(host.entityActionTargets, wantTargets) {
+		t.Fatalf("entity actions=%v targets=%+v", host.entityActions, host.entityActionTargets)
 	}
 }
 

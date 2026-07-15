@@ -16,6 +16,8 @@ Runnable parity showcase. Its single plugin class demonstrates:
 - the cancellable host `OnJoin` lifecycle extension emitted after the framework installs its
   Dragonfly player handler;
 - every zero-argument player action plus exact typed block interactions in `/kitchen actions`;
+- exact `UseItemOnEntity` and `AttackEntity` results against a selected player in
+  `/kitchen entity-actions`;
 - reflected command arguments and overloads;
 - direct `Player.Message` output;
 - transaction-safe range, lazy block/entity/player/bounding-box iteration, current-world lookup, height/light

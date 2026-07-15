@@ -163,6 +163,34 @@ func TestPlayersRunExactViewLayerMethodsInActiveTransaction(t *testing.T) {
 	})
 }
 
+func TestPlayersRunExactEntityActionsInActiveTransaction(t *testing.T) {
+	withPlayerTx(t, func(tx *world.Tx, connected *player.Player) {
+		players := NewPlayers()
+		id := players.Register(connected, 5)
+		targetUUID := uuid.New()
+		targetHandle := world.EntitySpawnOpts{ID: targetUUID, Position: connected.Position()}.New(
+			player.Type,
+			player.Config{UUID: targetUUID, Name: "Target", Position: connected.Position()},
+		)
+		target := tx.AddEntity(targetHandle).(*player.Player)
+		targetID := players.Register(target, 6)
+		entity := native.EntityID{UUID: targetID.UUID, Generation: targetID.Generation}
+		invocation, end := players.BeginInvocation(tx)
+		defer end()
+		used, ok := players.PlayerEntityAction(invocation, id, entity, native.PlayerEntityActionUseItemOnEntity)
+		if !ok || !used {
+			t.Fatalf("use-item-on-entity = %v, %v", used, ok)
+		}
+		attacked, ok := players.PlayerEntityAction(invocation, id, entity, native.PlayerEntityActionAttackEntity)
+		if !ok || !attacked {
+			t.Fatalf("attack-entity = %v, %v", attacked, ok)
+		}
+		if _, ok := players.PlayerEntityAction(invocation, id, entity, native.PlayerEntityActionKind(999)); ok {
+			t.Fatal("unknown entity action accepted")
+		}
+	})
+}
+
 type testCustomGameMode struct {
 	flags uint8
 	data  []byte

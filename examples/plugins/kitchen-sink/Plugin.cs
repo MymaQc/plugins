@@ -65,7 +65,8 @@ public sealed class KitchenSink : Plugin
             new KitchenCooldown(),
             new KitchenScoreboard(),
             new KitchenSkin(),
-            new KitchenVisibility()));
+            new KitchenVisibility(),
+            new KitchenEntityActions()));
         Console.WriteLine("kitchen-sink enabled");
     }
 
@@ -485,6 +486,28 @@ public sealed class KitchenSink : Plugin
             player.StartBreaking(position, Cube.Face.North);
             player.UseItemOnBlock(position, Cube.Face.Up, new Vector3(0.5, 0.5, 0.5));
             output.Print("Player actions invoked.");
+        }
+    }
+
+    internal sealed class KitchenEntityActions : Cmd.Runnable
+    {
+        [Cmd.Tag("entity-actions")]
+        public Cmd.SubCommand EntityActions;
+        public Player Target = null!;
+
+        public void Run(Cmd.Source source, Cmd.Output output, World.Tx? tx)
+        {
+            if (source is not Player player)
+            {
+                output.Error("This command can only be used by a player.");
+                return;
+            }
+            var used = player.UseItemOnEntity(Target);
+            var attacked = player.AttackEntity(Target);
+            output.Printf(
+                "used={0}, attacked={1}",
+                used ? "true" : "false",
+                attacked ? "true" : "false");
         }
     }
 

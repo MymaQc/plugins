@@ -223,10 +223,13 @@ type recordingHost struct {
 		Text       string
 		Visibility uint8
 	}
-	skin          PlayerSkin
-	setSkins      []PlayerSkin
-	inventoryItem ItemStack
-	inventorySets []struct {
+	entityActions       []PlayerEntityActionKind
+	entityActionTargets []EntityID
+	entityActionResults map[PlayerEntityActionKind]bool
+	skin                PlayerSkin
+	setSkins            []PlayerSkin
+	inventoryItem       ItemStack
+	inventorySets       []struct {
 		Inventory InventoryID
 		Slot      uint32
 		Item      ItemStack
@@ -404,6 +407,12 @@ func (h *recordingHost) PlayerViewLayer(_ InvocationID, _ PlayerID, entity Entit
 		Visibility uint8
 	}{entity, kind, text, visibility})
 	return true
+}
+
+func (h *recordingHost) PlayerEntityAction(_ InvocationID, _ PlayerID, entity EntityID, kind PlayerEntityActionKind) (bool, bool) {
+	h.entityActions = append(h.entityActions, kind)
+	h.entityActionTargets = append(h.entityActionTargets, entity)
+	return h.entityActionResults[kind], true
 }
 
 func (h *recordingHost) PlayerString(_ InvocationID, _ PlayerID, kind PlayerStringKind) (string, bool) {

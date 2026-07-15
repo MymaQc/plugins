@@ -111,6 +111,8 @@ dialogue/boss-bar/scoreboard removal, live name/score tags, and toasts, using th
 Block-interaction parity includes AST-generated `BreakBlock`, `ContinueBreaking`, `PickBlock`,
 `Sleep`, `StartBreaking`, and `UseItemOnBlock`, with typed `Cube.Pos`, `Cube.Face`, and `Vector3`
 arguments passed to Dragonfly inside the active player transaction.
+Entity-interaction parity includes exact AST-generated `UseItemOnEntity` and `AttackEntity`
+methods. Both accept `World.Entity` and return Dragonfly's real `bool` result.
 `World.New()` creates a writable in-memory world.
 `World.Config.New()` accepts Dragonfly's dimension and runtime settings, and an
 `MCDB.Config().Open(...)` provider creates a writable, saveable world below the configured worlds

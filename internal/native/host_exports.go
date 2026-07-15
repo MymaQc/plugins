@@ -339,6 +339,28 @@ func bg_go_player_view_layer(context C.uint64_t, invocation C.DfInvocationId, pl
 	return C.DF_STATUS_OK
 }
 
+//export bg_go_player_entity_action
+func bg_go_player_entity_action(context C.uint64_t, invocation C.DfInvocationId, player C.DfPlayerId, entity C.DfEntityId, kind C.uint32_t, result *C.uint8_t) C.DfStatus {
+	host, ok := resolveHost(uint64(context))
+	if !ok || result == nil {
+		return C.DF_STATUS_ERROR
+	}
+	value, ok := host.PlayerEntityAction(
+		InvocationID(invocation),
+		playerID(player),
+		entityID(entity),
+		PlayerEntityActionKind(kind),
+	)
+	if !ok {
+		return C.DF_STATUS_ERROR
+	}
+	*result = 0
+	if value {
+		*result = 1
+	}
+	return C.DF_STATUS_OK
+}
+
 //export bg_go_player_heal
 func bg_go_player_heal(context C.uint64_t, invocation C.DfInvocationId, player C.DfPlayerId, health C.double, view *C.DfHealingSourceView, result *C.DfPlayerHealResult) C.DfStatus {
 	if result == nil {
