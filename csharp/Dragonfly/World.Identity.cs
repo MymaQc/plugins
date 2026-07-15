@@ -6,7 +6,7 @@ public sealed partial class World : IEquatable<World>
 {
     private readonly ulong _invocation;
     internal WorldId Id { get; }
-    internal ulong Invocation => _invocation;
+    internal ulong Invocation => InvocationContext.Resolve(_invocation);
 
     internal World(ulong invocation, WorldId id)
     {

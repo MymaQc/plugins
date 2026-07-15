@@ -1296,8 +1296,8 @@ func TestCSharpReflectedCommands(t *testing.T) {
 		host.worldPlayer != player.UUID || host.worldPlayerSpawn != (BlockPos{X: 8, Y: 70, Z: -4}) ||
 		host.transferPlayer != player || host.transferWorld != 91 ||
 		host.transferPosition != (Vec3{X: 8.5, Y: 70, Z: -3.5}) ||
-		host.worldRangeCalls != 1 || host.worldRangeInvocation != 0 || host.worldRangeWorld != 91 ||
-		host.highestLightBlockerCall != (csharpWorldQueryCall{world: 91, x: 8, z: -4}) ||
+		host.worldRangeCalls != 1 || host.worldRangeInvocation != 42 || host.worldRangeWorld != 91 ||
+		host.highestLightBlockerCall != (csharpWorldQueryCall{invocation: 42, world: 91, x: 8, z: -4}) ||
 		host.worldTime != 6000 || !host.worldTimeCycle || host.worldSleepDuration != time.Second ||
 		host.worldDefaultMode != csharpBuiltinGameModeDescriptor || host.worldTickRange != 4 ||
 		host.worldDifficulty != (DifficultyView{ID: 2, Builtin: true, StarvationHealthLimit: 2, FireSpreadIncrease: 14}) ||
@@ -1311,10 +1311,16 @@ func TestCSharpReflectedCommands(t *testing.T) {
 	}
 	longWorldName := strings.Repeat("arena", 80)
 	host.worldName = longWorldName
-	output, err = pluginRuntime.HandleCommand(kitchen.Index, configuredWorld)
+	secondWorld := configuredWorld
+	secondWorld.Invocation = 43
+	output, err = pluginRuntime.HandleCommand(kitchen.Index, secondWorld)
 	if err != nil || output.Failed || output.Message !=
 		"memory=World, persistent="+longWorldName+", spawn=8,70,-4, range=-64..319, highest_light_blocker=70, time=6000, overworld=true, cycle=true, difficulty=true, player_spawn=true" {
 		t.Fatalf("long world name output=%#v error=%v", output, err)
+	}
+	if host.worldRangeInvocation != 43 || host.highestLightBlockerCall.invocation != 43 || host.transferInvocation != 43 {
+		t.Fatalf("cached world invocation: range=%d highest=%d transfer=%d, want 43",
+			host.worldRangeInvocation, host.highestLightBlockerCall.invocation, host.transferInvocation)
 	}
 	host.worldName = "kitchen:arena"
 	playerEntity := EntityID{UUID: player.UUID, Generation: player.Generation}

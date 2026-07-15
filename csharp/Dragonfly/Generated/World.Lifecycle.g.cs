@@ -3,32 +3,32 @@ namespace Dragonfly;
 
 public sealed partial class World
 {
-    public string Name() => PluginBridge.Host.WorldName(_invocation, Id) ?? string.Empty;
-    public Cube.Range Range() => PluginBridge.Host.WorldRange(_invocation, Id);
+    public string Name() => PluginBridge.Host.WorldName(Invocation, Id) ?? string.Empty;
+    public Cube.Range Range() => PluginBridge.Host.WorldRange(Invocation, Id);
     public int HighestLightBlocker(int x, int z) =>
-        PluginBridge.Host.WorldHighestLightBlocker(_invocation, Id, x, z);
-    public int Time() => PluginBridge.Host.WorldTime(_invocation, Id);
-    public void SetTime(int @new) => PluginBridge.Host.SetWorldTime(_invocation, Id, @new);
-    public void StopTime() => PluginBridge.Host.SetWorldTimeCycle(_invocation, Id, false);
-    public void StartTime() => PluginBridge.Host.SetWorldTimeCycle(_invocation, Id, true);
-    public bool TimeCycle() => PluginBridge.Host.WorldTimeCycle(_invocation, Id);
-    public Cube.Pos Spawn() => PluginBridge.Host.WorldSpawn(_invocation, Id);
+        PluginBridge.Host.WorldHighestLightBlocker(Invocation, Id, x, z);
+    public int Time() => PluginBridge.Host.WorldTime(Invocation, Id);
+    public void SetTime(int @new) => PluginBridge.Host.SetWorldTime(Invocation, Id, @new);
+    public void StopTime() => PluginBridge.Host.SetWorldTimeCycle(Invocation, Id, false);
+    public void StartTime() => PluginBridge.Host.SetWorldTimeCycle(Invocation, Id, true);
+    public bool TimeCycle() => PluginBridge.Host.WorldTimeCycle(Invocation, Id);
+    public Cube.Pos Spawn() => PluginBridge.Host.WorldSpawn(Invocation, Id);
     public void SetSpawn(Cube.Pos pos) =>
-        PluginBridge.Host.SetWorldSpawn(_invocation, Id, pos);
+        PluginBridge.Host.SetWorldSpawn(Invocation, Id, pos);
     public Cube.Pos PlayerSpawn(Guid id) =>
-        PluginBridge.Host.WorldPlayerSpawn(_invocation, Id, id);
+        PluginBridge.Host.WorldPlayerSpawn(Invocation, Id, id);
     public void SetPlayerSpawn(Guid id, Cube.Pos pos) =>
-        PluginBridge.Host.SetWorldPlayerSpawn(_invocation, Id, id, pos);
+        PluginBridge.Host.SetWorldPlayerSpawn(Invocation, Id, id, pos);
     public void SetRequiredSleepDuration(TimeSpan duration) =>
-        PluginBridge.Host.SetWorldRequiredSleepDuration(_invocation, Id, duration);
-    public GameMode DefaultGameMode() => PluginBridge.Host.WorldDefaultGameMode(_invocation, Id);
-    public void SetTickRange(int v) => PluginBridge.Host.SetWorldTickRange(_invocation, Id, v);
+        PluginBridge.Host.SetWorldRequiredSleepDuration(Invocation, Id, duration);
+    public GameMode DefaultGameMode() => PluginBridge.Host.WorldDefaultGameMode(Invocation, Id);
+    public void SetTickRange(int v) => PluginBridge.Host.SetWorldTickRange(Invocation, Id, v);
     public void SetDefaultGameMode(GameMode mode) =>
-        PluginBridge.Host.SetWorldDefaultGameMode(_invocation, Id, mode);
+        PluginBridge.Host.SetWorldDefaultGameMode(Invocation, Id, mode);
     public void SetDifficulty(Difficulty d) =>
-        PluginBridge.Host.SetWorldDifficulty(_invocation, Id, d);
-    public void Save() => PluginBridge.Host.SaveWorld(_invocation, Id);
-    public void Close() => PluginBridge.Host.CloseWorld(_invocation, Id);
+        PluginBridge.Host.SetWorldDifficulty(Invocation, Id, d);
+    public void Save() => PluginBridge.Host.SaveWorld(Invocation, Id);
+    public void Close() => PluginBridge.Host.CloseWorld(Invocation, Id);
 }
 
 public static class WorldStateExtensions

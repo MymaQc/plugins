@@ -1785,6 +1785,7 @@ internal static unsafe class PluginBridge
                 if (pending is null || snapshot is null || outcome > 1 ||
                     response.Length > 1024 * 1024 || (response.Length != 0 && response.Data is null))
                     return Abi.Error;
+                using var invocationScope = InvocationContext.Enter(invocation);
                 var latency = Math.Min((double)snapshot->LatencyMilliseconds, TimeSpan.MaxValue.TotalMilliseconds);
                 var submitter = new Player(
                     snapshot->Player,
@@ -3431,6 +3432,7 @@ internal static unsafe class PluginBridge
             if (invocation == 0 || !Scheduled.TryGetValue(callback, out var scheduled)) return Abi.Error;
             try
             {
+                using var invocationScope = InvocationContext.Enter(invocation);
                 scheduled.Callback(new World.Tx(invocation));
                 return Abi.Ok;
             }
@@ -3483,6 +3485,8 @@ internal static unsafe class PluginBridge
         try
         {
             if (instance is null || input is null || state is null) return Abi.Error;
+            using var invocationScope = InvocationContext.Enter(
+                eventId >= Abi.PlayerMoveEvent && eventId <= Abi.WorldCloseEvent ? *(ulong*)input : 0);
             var plugin = Get(instance);
             switch (eventId)
             {

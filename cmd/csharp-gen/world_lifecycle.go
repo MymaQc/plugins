@@ -111,50 +111,50 @@ func generateWorldLifecycleMethods(methods []worldLifecycleMethod) []byte {
 	for _, method := range methods {
 		switch method.Name {
 		case "Name":
-			output.WriteString("    public string Name() => PluginBridge.Host.WorldName(_invocation, Id) ?? string.Empty;\n")
+			output.WriteString("    public string Name() => PluginBridge.Host.WorldName(Invocation, Id) ?? string.Empty;\n")
 		case "Dimension":
 			// C# does not permit a nested World.Dimension type and a World.Dimension
 			// member. An extension preserves both exact plugin spellings.
 		case "Range":
-			output.WriteString("    public Cube.Range Range() => PluginBridge.Host.WorldRange(_invocation, Id);\n")
+			output.WriteString("    public Cube.Range Range() => PluginBridge.Host.WorldRange(Invocation, Id);\n")
 		case "HighestLightBlocker":
-			fmt.Fprintf(&output, "    public int HighestLightBlocker(int %s, int %s) =>\n        PluginBridge.Host.WorldHighestLightBlocker(_invocation, Id, %s, %s);\n", method.Parameters[0], method.Parameters[1], method.Parameters[0], method.Parameters[1])
+			fmt.Fprintf(&output, "    public int HighestLightBlocker(int %s, int %s) =>\n        PluginBridge.Host.WorldHighestLightBlocker(Invocation, Id, %s, %s);\n", method.Parameters[0], method.Parameters[1], method.Parameters[0], method.Parameters[1])
 		case "Time":
-			output.WriteString("    public int Time() => PluginBridge.Host.WorldTime(_invocation, Id);\n")
+			output.WriteString("    public int Time() => PluginBridge.Host.WorldTime(Invocation, Id);\n")
 		case "SetTime":
 			parameter := csharpIdentifier(method.Parameters[0])
-			fmt.Fprintf(&output, "    public void SetTime(int %s) => PluginBridge.Host.SetWorldTime(_invocation, Id, %s);\n", parameter, parameter)
+			fmt.Fprintf(&output, "    public void SetTime(int %s) => PluginBridge.Host.SetWorldTime(Invocation, Id, %s);\n", parameter, parameter)
 		case "StopTime":
-			output.WriteString("    public void StopTime() => PluginBridge.Host.SetWorldTimeCycle(_invocation, Id, false);\n")
+			output.WriteString("    public void StopTime() => PluginBridge.Host.SetWorldTimeCycle(Invocation, Id, false);\n")
 		case "StartTime":
-			output.WriteString("    public void StartTime() => PluginBridge.Host.SetWorldTimeCycle(_invocation, Id, true);\n")
+			output.WriteString("    public void StartTime() => PluginBridge.Host.SetWorldTimeCycle(Invocation, Id, true);\n")
 		case "TimeCycle":
-			output.WriteString("    public bool TimeCycle() => PluginBridge.Host.WorldTimeCycle(_invocation, Id);\n")
+			output.WriteString("    public bool TimeCycle() => PluginBridge.Host.WorldTimeCycle(Invocation, Id);\n")
 		case "Spawn":
-			output.WriteString("    public Cube.Pos Spawn() => PluginBridge.Host.WorldSpawn(_invocation, Id);\n")
+			output.WriteString("    public Cube.Pos Spawn() => PluginBridge.Host.WorldSpawn(Invocation, Id);\n")
 		case "SetSpawn":
-			fmt.Fprintf(&output, "    public void SetSpawn(Cube.Pos %s) =>\n        PluginBridge.Host.SetWorldSpawn(_invocation, Id, %s);\n", method.Parameters[0], method.Parameters[0])
+			fmt.Fprintf(&output, "    public void SetSpawn(Cube.Pos %s) =>\n        PluginBridge.Host.SetWorldSpawn(Invocation, Id, %s);\n", method.Parameters[0], method.Parameters[0])
 		case "PlayerSpawn":
-			fmt.Fprintf(&output, "    public Cube.Pos PlayerSpawn(Guid %s) =>\n        PluginBridge.Host.WorldPlayerSpawn(_invocation, Id, %s);\n", method.Parameters[0], method.Parameters[0])
+			fmt.Fprintf(&output, "    public Cube.Pos PlayerSpawn(Guid %s) =>\n        PluginBridge.Host.WorldPlayerSpawn(Invocation, Id, %s);\n", method.Parameters[0], method.Parameters[0])
 		case "SetPlayerSpawn":
-			fmt.Fprintf(&output, "    public void SetPlayerSpawn(Guid %s, Cube.Pos %s) =>\n        PluginBridge.Host.SetWorldPlayerSpawn(_invocation, Id, %s, %s);\n", method.Parameters[0], method.Parameters[1], method.Parameters[0], method.Parameters[1])
+			fmt.Fprintf(&output, "    public void SetPlayerSpawn(Guid %s, Cube.Pos %s) =>\n        PluginBridge.Host.SetWorldPlayerSpawn(Invocation, Id, %s, %s);\n", method.Parameters[0], method.Parameters[1], method.Parameters[0], method.Parameters[1])
 		case "SetRequiredSleepDuration":
 			parameter := csharpIdentifier(method.Parameters[0])
-			fmt.Fprintf(&output, "    public void SetRequiredSleepDuration(TimeSpan %s) =>\n        PluginBridge.Host.SetWorldRequiredSleepDuration(_invocation, Id, %s);\n", parameter, parameter)
+			fmt.Fprintf(&output, "    public void SetRequiredSleepDuration(TimeSpan %s) =>\n        PluginBridge.Host.SetWorldRequiredSleepDuration(Invocation, Id, %s);\n", parameter, parameter)
 		case "DefaultGameMode":
-			output.WriteString("    public GameMode DefaultGameMode() => PluginBridge.Host.WorldDefaultGameMode(_invocation, Id);\n")
+			output.WriteString("    public GameMode DefaultGameMode() => PluginBridge.Host.WorldDefaultGameMode(Invocation, Id);\n")
 		case "SetTickRange":
-			fmt.Fprintf(&output, "    public void SetTickRange(int %s) => PluginBridge.Host.SetWorldTickRange(_invocation, Id, %s);\n", method.Parameters[0], method.Parameters[0])
+			fmt.Fprintf(&output, "    public void SetTickRange(int %s) => PluginBridge.Host.SetWorldTickRange(Invocation, Id, %s);\n", method.Parameters[0], method.Parameters[0])
 		case "SetDefaultGameMode":
-			fmt.Fprintf(&output, "    public void SetDefaultGameMode(GameMode %s) =>\n        PluginBridge.Host.SetWorldDefaultGameMode(_invocation, Id, %s);\n", method.Parameters[0], method.Parameters[0])
+			fmt.Fprintf(&output, "    public void SetDefaultGameMode(GameMode %s) =>\n        PluginBridge.Host.SetWorldDefaultGameMode(Invocation, Id, %s);\n", method.Parameters[0], method.Parameters[0])
 		case "Difficulty":
 			// See Dimension above.
 		case "SetDifficulty":
-			fmt.Fprintf(&output, "    public void SetDifficulty(Difficulty %s) =>\n        PluginBridge.Host.SetWorldDifficulty(_invocation, Id, %s);\n", method.Parameters[0], method.Parameters[0])
+			fmt.Fprintf(&output, "    public void SetDifficulty(Difficulty %s) =>\n        PluginBridge.Host.SetWorldDifficulty(Invocation, Id, %s);\n", method.Parameters[0], method.Parameters[0])
 		case "Save":
-			output.WriteString("    public void Save() => PluginBridge.Host.SaveWorld(_invocation, Id);\n")
+			output.WriteString("    public void Save() => PluginBridge.Host.SaveWorld(Invocation, Id);\n")
 		case "Close":
-			output.WriteString("    public void Close() => PluginBridge.Host.CloseWorld(_invocation, Id);\n")
+			output.WriteString("    public void Close() => PluginBridge.Host.CloseWorld(Invocation, Id);\n")
 		default:
 			panic("unsupported world lifecycle method: " + method.Name)
 		}

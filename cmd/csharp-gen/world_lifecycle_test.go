@@ -50,4 +50,7 @@ func TestPinnedDragonflyWorldLifecycleUsesGoAST(t *testing.T) {
 			t.Fatalf("generated world lifecycle missing %q:\n%s", expected, generated)
 		}
 	}
+	if strings.Contains(generated, "_invocation") {
+		t.Fatalf("generated world lifecycle bypasses callback invocation:\n%s", generated)
+	}
 }

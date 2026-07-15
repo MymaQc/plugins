@@ -60,6 +60,7 @@ internal static unsafe class CommandRegistry
         var output = new Cmd.Output();
         try
         {
+            using var invocationScope = InvocationContext.Enter(input->Invocation);
             var source = Source(input, output);
             var binding = command.Bindings[checked((int)input->Overload)];
             if (binding.Runnable is Cmd.Allower allower && !allower.Allow(source))

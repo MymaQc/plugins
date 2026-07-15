@@ -231,7 +231,11 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    selected upstream config fields atomically; `MCDB.Config.Open(path)` selects a writable,
    persistent provider rooted below the configured worlds directory. Created worlds are owned and
    closed by the framework, but internal registry keys and provider handles never enter plugin
-   code. `World.Name()` remains Dragonfly's display name. ABI 43 adds the AST-pinned package-level
+   code. `World.Name()` remains Dragonfly's display name.
+   Cached `World` values resolve lifecycle calls through the active command, event, form, or
+   scheduled-callback invocation. Reusing a world from its own transaction therefore stays on the
+   owning `World.Tx` instead of synchronously waiting on that same owner.
+   ABI 43 adds the AST-pinned package-level
    `World.BlockByName(string, Dictionary<string, object?>?)` surface. Its private property codec
    preserves Dragonfly's exact `bool`, `uint8`, `int32`, and `string` state types, and the host
    resolves them through `world.BlockByName`; failed names or state hashes return `(null, false)`.
