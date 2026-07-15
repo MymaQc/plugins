@@ -308,6 +308,29 @@ func TestPlayersRunPresentationActions(t *testing.T) {
 	})
 }
 
+func TestPlayersReadPresentationStrings(t *testing.T) {
+	withPlayer(t, func(player *player.Player) {
+		players := NewPlayers()
+		id := players.Register(player, 1)
+		invocation, leave := players.BeginInvocation(player.Tx())
+		defer leave()
+
+		player.SetNameTag("Name tag")
+		player.SetScoreTag("Score tag")
+		nameTag, nameOK := players.PlayerString(invocation, id, native.PlayerStringNameTag)
+		scoreTag, scoreOK := players.PlayerString(invocation, id, native.PlayerStringScoreTag)
+		if !nameOK || !scoreOK || nameTag != "Name tag" || scoreTag != "Score tag" {
+			t.Fatalf("name=%q/%v score=%q/%v", nameTag, nameOK, scoreTag, scoreOK)
+		}
+		if !players.SendPlayerToast(invocation, id, "Title", "Message") {
+			t.Fatal("send toast failed")
+		}
+		if _, ok := players.PlayerString(invocation, id, native.PlayerStringKind(99)); ok {
+			t.Fatal("unknown player string kind accepted")
+		}
+	})
+}
+
 func TestPlayersTracksStableGenerationAndNames(t *testing.T) {
 	withPlayer(t, func(player *player.Player) {
 		players := NewPlayers()

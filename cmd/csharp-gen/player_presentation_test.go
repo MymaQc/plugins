@@ -27,6 +27,9 @@ func TestPlayerPresentationMethodsMatchPinnedDragonfly(t *testing.T) {
 		[]byte("public void CloseDialogue()"),
 		[]byte("public void RemoveBossBar()"),
 		[]byte("public void RemoveScoreboard()"),
+		[]byte("public string NameTag()"),
+		[]byte("public string ScoreTag()"),
+		[]byte("public void SendToast(string title, string message)"),
 	} {
 		if !bytes.Contains(generated, expected) {
 			t.Fatalf("generated presentation methods missing %q", expected)

@@ -14,4 +14,7 @@ public sealed partial class Player
     public void CloseDialogue() => PluginBridge.Host.RunPlayerAction(_invocation, Id, Abi.PlayerActionCloseDialogue, default);
     public void RemoveBossBar() => PluginBridge.Host.RunPlayerAction(_invocation, Id, Abi.PlayerActionRemoveBossBar, default);
     public void RemoveScoreboard() => PluginBridge.Host.RemovePlayerScoreboard(_invocation, Id);
+    public string NameTag() => PluginBridge.Host.PlayerString(_invocation, Id, Abi.PlayerStringNameTag);
+    public string ScoreTag() => PluginBridge.Host.PlayerString(_invocation, Id, Abi.PlayerStringScoreTag);
+    public void SendToast(string title, string message) => PluginBridge.Host.SendPlayerToast(_invocation, Id, title, message);
 }

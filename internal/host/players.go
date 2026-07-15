@@ -608,6 +608,24 @@ func (p *Players) PlayerAction(invocation native.InvocationID, id native.PlayerI
 	return value.value, ok && value.ok
 }
 
+func (p *Players) PlayerString(invocation native.InvocationID, id native.PlayerID, kind native.PlayerStringKind) (string, bool) {
+	value, ok := readPlayer(p, invocation, id, func(connected *player.Player) struct {
+		value string
+		ok    bool
+	} {
+		value, ok := playerString(connected, kind)
+		return struct {
+			value string
+			ok    bool
+		}{value, ok}
+	})
+	return value.value, ok && value.ok
+}
+
+func (p *Players) SendPlayerToast(invocation native.InvocationID, id native.PlayerID, title, message string) bool {
+	return p.mutatePlayer(invocation, id, func(connected *player.Player) { connected.SendToast(title, message) })
+}
+
 func (p *Players) ChangePlayerEffect(invocation native.InvocationID, id native.PlayerID, operation native.PlayerEffectOperation, value native.PlayerEffect) bool {
 	effectType, ok := effect.ByID(int(value.Type))
 	if !ok {

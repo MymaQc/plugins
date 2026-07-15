@@ -17,6 +17,9 @@ var selectedPlayerPresentationMethods = []string{
 	"CloseDialogue",
 	"RemoveBossBar",
 	"RemoveScoreboard",
+	"NameTag",
+	"ScoreTag",
+	"SendToast",
 }
 
 type playerPresentationMethod struct {
@@ -45,6 +48,9 @@ func inspectPlayerPresentationMethods(path string) ([]playerPresentationMethod, 
 		"CloseDialogue":         {},
 		"RemoveBossBar":         {},
 		"RemoveScoreboard":      {},
+		"NameTag":               {Results: "string"},
+		"ScoreTag":              {Results: "string"},
+		"SendToast":             {Parameters: "string, string"},
 	}
 	methods := make([]playerPresentationMethod, 0, len(selectedPlayerPresentationMethods))
 	for _, name := range selectedPlayerPresentationMethods {
@@ -88,6 +94,10 @@ func generatePlayerPresentationMethods(methods []playerPresentationMethod) []byt
 			fmt.Fprintf(&output, "    public void SendSleepingIndicator(int %s, int %s) => PluginBridge.Host.RunPlayerAction(_invocation, Id, Abi.PlayerActionSendSleepingIndicator, new PlayerStateValue { Integer = %s, Number = %s });\n", method.Parameters[0], method.Parameters[1], method.Parameters[0], method.Parameters[1])
 		case "RemoveScoreboard":
 			output.WriteString("    public void RemoveScoreboard() => PluginBridge.Host.RemovePlayerScoreboard(_invocation, Id);\n")
+		case "NameTag", "ScoreTag":
+			fmt.Fprintf(&output, "    public string %s() => PluginBridge.Host.PlayerString(_invocation, Id, Abi.PlayerString%s);\n", method.Name, method.Name)
+		case "SendToast":
+			fmt.Fprintf(&output, "    public void SendToast(string %s, string %s) => PluginBridge.Host.SendPlayerToast(_invocation, Id, %s, %s);\n", method.Parameters[0], method.Parameters[1], method.Parameters[0], method.Parameters[1])
 		default:
 			panic("unsupported player presentation method: " + method.Name)
 		}

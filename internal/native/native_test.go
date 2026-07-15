@@ -172,6 +172,9 @@ type recordingHost struct {
 	actions           []PlayerActionKind
 	actionValues      []PlayerStateValue
 	actionResults     map[PlayerActionKind]PlayerStateValue
+	playerStrings     map[PlayerStringKind]string
+	stringReads       []PlayerStringKind
+	toasts            [][2]string
 	heals             []struct {
 		Health float64
 		Source HealingSource
@@ -329,6 +332,17 @@ func (h *recordingHost) PlayerAction(_ InvocationID, _ PlayerID, kind PlayerActi
 	h.actions = append(h.actions, kind)
 	h.actionValues = append(h.actionValues, value)
 	return h.actionResults[kind], true
+}
+
+func (h *recordingHost) PlayerString(_ InvocationID, _ PlayerID, kind PlayerStringKind) (string, bool) {
+	h.stringReads = append(h.stringReads, kind)
+	value, ok := h.playerStrings[kind]
+	return value, ok
+}
+
+func (h *recordingHost) SendPlayerToast(_ InvocationID, _ PlayerID, title, message string) bool {
+	h.toasts = append(h.toasts, [2]string{title, message})
+	return true
 }
 
 func (h *recordingHost) HealPlayer(_ InvocationID, _ PlayerID, health float64, source HealingSource) (float64, bool) {

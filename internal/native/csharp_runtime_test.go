@@ -337,7 +337,10 @@ func TestCSharpPlayerStateMethods(t *testing.T) {
 }
 
 func TestCSharpPlayerPresentationMethods(t *testing.T) {
-	host := &recordingHost{}
+	host := &recordingHost{playerStrings: map[PlayerStringKind]string{
+		PlayerStringNameTag:  "Dánick",
+		PlayerStringScoreTag: "§a42",
+	}}
 	pluginRuntime := openCSharpRuntimeWithHost(t, host)
 	commands, err := pluginRuntime.Commands()
 	if err != nil {
@@ -361,7 +364,7 @@ func TestCSharpPlayerPresentationMethods(t *testing.T) {
 		Overload: overload, Arguments: []string{"presentation"},
 		OnlinePlayers: []CommandPlayer{{Player: player, Name: "Danick"}},
 	})
-	if err != nil || output.Failed || output.Message != "presentation=ok" {
+	if err != nil || output.Failed || output.Message != "presentation=Dánick/§a42" {
 		t.Fatalf("presentation output=%#v error=%v", output, err)
 	}
 	wantActions := []PlayerActionKind{
@@ -381,6 +384,15 @@ func TestCSharpPlayerPresentationMethods(t *testing.T) {
 	}
 	if !host.scoreboardRemoved {
 		t.Fatal("scoreboard removal was not routed")
+	}
+	if !slices.Equal(host.stringReads, []PlayerStringKind{
+		PlayerStringNameTag, PlayerStringNameTag,
+		PlayerStringScoreTag, PlayerStringScoreTag,
+	}) {
+		t.Fatalf("player string reads=%v", host.stringReads)
+	}
+	if !slices.Equal(host.toasts, [][2]string{{"Kitchen", "Presentation"}}) {
+		t.Fatalf("toasts=%v", host.toasts)
 	}
 }
 

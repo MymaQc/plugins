@@ -1248,7 +1248,10 @@ public sealed class KitchenSink : Plugin
             player.CloseDialogue();
             player.RemoveBossBar();
             player.RemoveScoreboard();
-            output.Print("presentation=ok");
+            var nameTag = player.NameTag();
+            var scoreTag = player.ScoreTag();
+            player.SendToast("Kitchen", "Presentation");
+            output.Printf("presentation={0}/{1}", nameTag, scoreTag);
         }
     }
 

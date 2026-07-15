@@ -75,6 +75,11 @@ var playerActionTransportIDs = []transportNameID{
 	{Name: "RemoveBossBar", ID: 13},
 }
 
+var playerStringTransportIDs = []transportNameID{
+	{Name: "NameTag", ID: 0},
+	{Name: "ScoreTag", ID: 1},
+}
+
 var playerStateTransportASTMethods = []string{
 	"Food", "SetFood", "AddFood", "Saturate", "Exhaust", "Health", "MaxHealth", "SetMaxHealth", "Heal", "Hurt",
 	"ExperienceLevel", "SetExperienceLevel", "ExperienceProgress", "SetExperienceProgress",
@@ -249,6 +254,15 @@ const (
 	}
 	output.WriteString(`)
 
+type PlayerStringKind uint32
+
+const (
+`)
+	for _, entry := range playerStringTransportIDs {
+		fmt.Fprintf(&output, "\t%-27s PlayerStringKind = %d\n", "PlayerString"+entry.Name, entry.ID)
+	}
+	output.WriteString(`)
+
 type EffectType int32
 
 const (
@@ -311,6 +325,9 @@ func generateCSharpPlayerStateTransport(spec playerTransportSpec) ([]byte, error
 	}
 	for _, entry := range playerActionTransportIDs {
 		fmt.Fprintf(&output, "    public const uint PlayerAction%s = %d;\n", entry.Name, entry.ID)
+	}
+	for _, entry := range playerStringTransportIDs {
+		fmt.Fprintf(&output, "    public const uint PlayerString%s = %d;\n", entry.Name, entry.ID)
 	}
 	output.WriteString("}\n")
 	return output.Bytes(), nil
@@ -479,6 +496,17 @@ func runPlayerAction(connected *player.Player, kind native.PlayerActionKind, val
 		return native.PlayerStateValue{}, false
 	}
 	return native.PlayerStateValue{}, true
+}
+
+func playerString(connected *player.Player, kind native.PlayerStringKind) (string, bool) {
+	switch kind {
+	case native.PlayerStringNameTag:
+		return connected.NameTag(), true
+	case native.PlayerStringScoreTag:
+		return connected.ScoreTag(), true
+	default:
+		return "", false
+	}
 }
 
 func readPlayerState(connected *player.Player, kind native.PlayerStateKind) (native.PlayerStateValue, bool) {

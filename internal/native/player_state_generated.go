@@ -65,6 +65,13 @@ const (
 	PlayerActionRemoveBossBar             PlayerActionKind = 13
 )
 
+type PlayerStringKind uint32
+
+const (
+	PlayerStringNameTag         PlayerStringKind = 0
+	PlayerStringScoreTag        PlayerStringKind = 1
+)
+
 type EffectType int32
 
 const (

@@ -52,6 +52,60 @@ internal static unsafe class PluginBridge
             _ = api->PlayerScoreboardRemove(api->Context, invocation, player);
         }
 
+        internal static string PlayerString(ulong invocation, PlayerId player, uint kind)
+        {
+            var api = Api;
+            if (api is null || api->PlayerStringGet == null)
+                throw new InvalidOperationException("player is unavailable");
+            const ulong maxBytes = 16UL << 20;
+            StringBuffer output = default;
+            var status = api->PlayerStringGet(api->Context, invocation, player, kind, &output);
+            if (status == Abi.Ok)
+            {
+                if (output.Length != 0 || output.Data is not null || output.Capacity != 0)
+                    throw new InvalidOperationException("invalid player string returned by server");
+                return string.Empty;
+            }
+            for (var attempt = 0; attempt < 3; attempt++)
+            {
+                if (output.Length == 0 || output.Length > maxBytes)
+                    throw new InvalidOperationException("player is no longer available");
+                var data = GC.AllocateUninitializedArray<byte>(checked((int)output.Length));
+                fixed (byte* pointer = data)
+                {
+                    output = new StringBuffer { Data = pointer, Capacity = (ulong)data.Length };
+                    status = api->PlayerStringGet(api->Context, invocation, player, kind, &output);
+                    if (status == Abi.Ok)
+                    {
+                        if (output.Data != pointer || output.Capacity != (ulong)data.Length || output.Length > output.Capacity)
+                            throw new InvalidOperationException("invalid player string returned by server");
+                        return Utf8(output);
+                    }
+                }
+            }
+            throw new InvalidOperationException("player string changed while being read");
+        }
+
+        internal static void SendPlayerToast(ulong invocation, PlayerId player, string title, string message)
+        {
+            ArgumentNullException.ThrowIfNull(title);
+            ArgumentNullException.ThrowIfNull(message);
+            var api = Api;
+            if (api is null || api->PlayerToast == null) return;
+            var titleBytes = Encoding.UTF8.GetBytes(title);
+            var messageBytes = Encoding.UTF8.GetBytes(message);
+            fixed (byte* titleData = titleBytes)
+            fixed (byte* messageData = messageBytes)
+            {
+                _ = api->PlayerToast(
+                    api->Context,
+                    invocation,
+                    player,
+                    new StringView { Data = titleData, Length = (ulong)titleBytes.Length },
+                    new StringView { Data = messageData, Length = (ulong)messageBytes.Length });
+            }
+        }
+
         internal static void SetPlayerState(ulong invocation, PlayerId player, uint kind, PlayerStateValue value)
         {
             var api = Api;

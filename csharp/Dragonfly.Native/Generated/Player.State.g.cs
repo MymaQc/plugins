@@ -50,4 +50,6 @@ public static partial class Abi
     public const uint PlayerActionSendSleepingIndicator = 11;
     public const uint PlayerActionCloseDialogue = 12;
     public const uint PlayerActionRemoveBossBar = 13;
+    public const uint PlayerStringNameTag = 0;
+    public const uint PlayerStringScoreTag = 1;
 }

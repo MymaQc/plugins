@@ -161,6 +161,17 @@ func runPlayerAction(connected *player.Player, kind native.PlayerActionKind, val
 	return native.PlayerStateValue{}, true
 }
 
+func playerString(connected *player.Player, kind native.PlayerStringKind) (string, bool) {
+	switch kind {
+	case native.PlayerStringNameTag:
+		return connected.NameTag(), true
+	case native.PlayerStringScoreTag:
+		return connected.ScoreTag(), true
+	default:
+		return "", false
+	}
+}
+
 func readPlayerState(connected *player.Player, kind native.PlayerStateKind) (native.PlayerStateValue, bool) {
 	switch kind {
 	case native.PlayerStateGameMode:

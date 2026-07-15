@@ -106,6 +106,8 @@ func TestPlayerTransportPreservesExplicitIDs(t *testing.T) {
 		"PlayerActionAddFood                   PlayerActionKind = 0",
 		"PlayerActionCollectExperience         PlayerActionKind = 6",
 		"PlayerActionRemoveBossBar             PlayerActionKind = 13",
+		"PlayerStringNameTag         PlayerStringKind = 0",
+		"PlayerStringScoreTag        PlayerStringKind = 1",
 		"EffectSlowFalling    EffectType = 27",
 		"EffectDarkness       EffectType = 30",
 		"PlayerTextTip          PlayerTextKind = 1",
@@ -132,6 +134,8 @@ func TestPlayerPresentationTransportCallsExactDragonflyMethods(t *testing.T) {
 		"connected.SendSleepingIndicator(int(value.Integer), int(value.Number))",
 		"connected.CloseDialogue()",
 		"connected.RemoveBossBar()",
+		"return connected.NameTag(), true",
+		"return connected.ScoreTag(), true",
 	} {
 		if !strings.Contains(string(generated), expected) {
 			t.Fatalf("generated host transport missing %q", expected)
