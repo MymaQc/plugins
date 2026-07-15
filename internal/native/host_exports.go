@@ -21,6 +21,7 @@ const (
 	maxSkinAnimations  = 64
 	maxSkinIDBytes     = 4096
 	maxScoreboardLines = 15
+	maxScoreboardBytes = 16 << 20
 	maxFormJSONBytes   = 1 << 20
 )
 
@@ -154,13 +155,23 @@ func bg_go_player_scoreboard(context C.uint64_t, invocation C.DfInvocationId, pl
 	if !ok || view.line_count > maxScoreboardLines || (view.line_count != 0 && view.lines == nil) {
 		return C.DF_STATUS_ERROR
 	}
+	name, valid := copyNativeBytes(view.name, maxScoreboardBytes)
+	if !valid || !utf8.Valid(name) {
+		return C.DF_STATUS_ERROR
+	}
 	lineViews := unsafe.Slice(view.lines, int(view.line_count))
 	lines := make([]string, len(lineViews))
+	total := len(name)
 	for index, line := range lineViews {
-		lines[index] = stringView(line)
+		value, valid := copyNativeBytes(line, maxScoreboardBytes-total)
+		if !valid || !utf8.Valid(value) {
+			return C.DF_STATUS_ERROR
+		}
+		total += len(value)
+		lines[index] = string(value)
 	}
 	if !host.SendPlayerScoreboard(InvocationID(invocation), playerID(player), PlayerScoreboard{
-		Name: stringView(view.name), Lines: lines, Padding: view.padding != 0, Descending: view.descending != 0,
+		Name: string(name), Lines: lines, Padding: view.padding != 0, Descending: view.descending != 0,
 	}) {
 		return C.DF_STATUS_ERROR
 	}

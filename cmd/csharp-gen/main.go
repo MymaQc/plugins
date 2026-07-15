@@ -634,6 +634,12 @@ func main() {
 	); err != nil {
 		fatal(err)
 	}
+	if err := inspectScoreboard(
+		filepath.Join(directory, "server", "player", "scoreboard", "scoreboard.go"),
+		filepath.Join(directory, "server", "player", "player.go"),
+	); err != nil {
+		fatal(err)
+	}
 	playerKinematicsMethods, err := inspectPlayerKinematicsMethods(filepath.Join(directory, "server", "player", "player.go"))
 	if err != nil {
 		fatal(err)
@@ -847,6 +853,10 @@ func main() {
 		{
 			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "Title.g.cs"),
 			Content: generateTitle(),
+		},
+		{
+			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "Scoreboard.g.cs"),
+			Content: generateScoreboard(),
 		},
 		{
 			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "Player.Cooldown.g.cs"),

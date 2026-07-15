@@ -115,6 +115,8 @@ Dragonfly's title value API. `Player.SendTitle` carries signed nanosecond durati
 unsigned-millisecond truncation.
 `Player.HasCooldown(item)` and `SetCooldown(item, duration)` use the generated typed item codec and
 call Dragonfly's live cooldown map directly.
+`Scoreboard.New(...)` exposes Dragonfly's mutable line, padding, and descending-order API;
+`Player.SendScoreboard` sends its raw state and `RemoveScoreboard` clears it.
 Forms use Dragonfly's reflected public-field model through `Form.New`, `NewMenu`, and `NewModal`,
 with typed elements, submitted values, `Closer`, and callback-owned `World.Tx`. `Form.Value`
 remains open for custom implementations, matching Dragonfly's public `form.Form` interface.

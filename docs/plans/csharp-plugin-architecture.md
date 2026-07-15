@@ -253,6 +253,9 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    Host ABI 52 replaces the dormant title bridge's unsigned millisecond durations with signed
    nanoseconds. Host ABI 53 adds AST-generated `Player.HasCooldown` and `SetCooldown` using typed
    item identities and signed durations.
+   The AST-generated `Scoreboard` class mirrors Dragonfly's mutable name, write, set/remove,
+   padding, line-copy, and descending-order behavior. `Player.SendScoreboard` activates the
+   existing private transport with raw lines so the Go host applies padding and ordering once.
    ABI 44 and plugin ABI 9 add AST-generated `EntitySpawnOpts`, `EntityType`, `EntityConfig`,
    `EntityData`, and `TickerEntity`. `EntitySpawnOpts.New` creates a worldless Dragonfly handle;
    `Tx.AddEntity`, `RemoveEntity`, and `AddEntityAt` preserve that handle across a fresh world-bound

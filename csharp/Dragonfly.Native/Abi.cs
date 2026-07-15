@@ -388,6 +388,16 @@ public unsafe struct TitleView
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public unsafe struct ScoreboardView
+{
+    public StringView Name;
+    public StringView* Lines;
+    public ulong LineCount;
+    public byte Padding;
+    public byte Descending;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 public unsafe struct HostApi
 {
     public uint Version;
@@ -417,7 +427,7 @@ public unsafe struct HostApi
     public delegate* unmanaged[Cdecl]<ulong, ulong, InventoryId, int> InventoryClear;
     public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, ItemStackViewV3*, ItemStackViewV3*, int> PlayerHeldItemsSet;
     public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, uint, int> PlayerHeldSlotSet;
-    public void* PlayerScoreboard;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, ScoreboardView, int> PlayerScoreboard;
     public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, int> PlayerScoreboardRemove;
     public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, FormView*, int> PlayerFormSend;
     public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, int> PlayerFormClose;

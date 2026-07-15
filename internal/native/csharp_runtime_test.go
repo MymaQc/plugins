@@ -442,6 +442,42 @@ func TestCSharpPlayerCooldownMethods(t *testing.T) {
 	}
 }
 
+func TestCSharpPlayerScoreboardMethods(t *testing.T) {
+	host := &recordingHost{}
+	pluginRuntime := openCSharpRuntimeWithHost(t, host)
+	commands, err := pluginRuntime.Commands()
+	if err != nil {
+		t.Fatal(err)
+	}
+	kitchen := commandNamed(t, commands, "kitchen")
+	var overload uint64
+	found := false
+	for index, candidate := range kitchen.Overloads {
+		if len(candidate.Parameters) == 1 && candidate.Parameters[0].Name == "scoreboard" {
+			overload, found = uint64(index), true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("scoreboard overload missing: %#v", kitchen.Overloads)
+	}
+	player := PlayerID{UUID: [16]byte{7}, Generation: 4}
+	output, err := pluginRuntime.HandleCommand(kitchen.Index, CommandInput{
+		Invocation: 44, Source: "Danick", SourceKind: CommandSourcePlayer, SourcePlayer: &player,
+		Overload: overload, Arguments: []string{"scoreboard"},
+		OnlinePlayers: []CommandPlayer{{Player: player, Name: "Danick"}},
+	})
+	if err != nil || output.Failed || output.Message != "scoreboard=Kitchen scoreboard/gamma/alpha" {
+		t.Fatalf("scoreboard output=%#v error=%v", output, err)
+	}
+	want := PlayerScoreboard{
+		Name: "Kitchen scoreboard", Lines: []string{"alpha", "gamma"}, Padding: false, Descending: true,
+	}
+	if !reflect.DeepEqual(host.scoreboard, want) {
+		t.Fatalf("scoreboard=%+v, want %+v", host.scoreboard, want)
+	}
+}
+
 func TestCSharpPlayerZeroArgumentActions(t *testing.T) {
 	host := &recordingHost{}
 	pluginRuntime := openCSharpRuntimeWithHost(t, host)
@@ -1118,7 +1154,7 @@ func TestCSharpReflectedCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 	kitchen := commandNamed(t, commands, "kitchen")
-	if !slices.Contains(kitchen.Aliases, "ks") || len(kitchen.Overloads) != 32 {
+	if !slices.Contains(kitchen.Aliases, "ks") || len(kitchen.Overloads) != 33 {
 		t.Fatalf("kitchen descriptor = %#v", kitchen)
 	}
 	if kitchen.Overloads[1].Parameters[0].Name != "echo" ||

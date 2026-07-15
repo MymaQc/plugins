@@ -62,7 +62,8 @@ public sealed class KitchenSink : Plugin
             new KitchenSound(),
             new KitchenControls(),
             new KitchenConnection(),
-            new KitchenCooldown()));
+            new KitchenCooldown(),
+            new KitchenScoreboard()));
         Console.WriteLine("kitchen-sink enabled");
     }
 
@@ -1353,6 +1354,29 @@ public sealed class KitchenSink : Plugin
             var active = player.HasCooldown(sword);
             player.SetCooldown(sword, TimeSpan.FromMilliseconds(1500));
             output.Printf("cooldown={0}", active ? "true" : "false");
+        }
+    }
+
+    internal sealed class KitchenScoreboard : Cmd.Runnable
+    {
+        public Cmd.SubCommand Scoreboard;
+
+        public void Run(Cmd.Source source, Cmd.Output output, World.Tx? tx)
+        {
+            if (source is not Player player)
+            {
+                output.Error("This command can only be used by a player.");
+                return;
+            }
+            var board = Dragonfly.Scoreboard.New("Kitchen", "scoreboard");
+            board.Set(0, "alpha\n\n");
+            _ = board.WriteString("beta\ngamma");
+            board.Remove(1);
+            board.RemovePadding();
+            board.SetDescending();
+            player.SendScoreboard(board);
+            var lines = board.Lines();
+            output.Printf("scoreboard={0}/{1}/{2}", board.Name(), lines[0], lines[1]);
         }
     }
 

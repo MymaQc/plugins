@@ -69,6 +69,67 @@ internal static unsafe class PluginBridge
             }
         }
 
+        internal static void SendPlayerScoreboard(ulong invocation, PlayerId player, Scoreboard scoreboard)
+        {
+            var api = Api;
+            if (api is null || api->PlayerScoreboard == null) return;
+            using var lease = new ScoreboardViewLease(scoreboard);
+            _ = api->PlayerScoreboard(api->Context, invocation, player, lease.View);
+        }
+
+        private sealed class ScoreboardViewLease : IDisposable
+        {
+            private readonly List<nint> _allocations = [];
+
+            internal ScoreboardViewLease(Scoreboard scoreboard)
+            {
+                try
+                {
+                    var lines = scoreboard.RawLines();
+                    var views = AllocateArray<StringView>(lines.Length);
+                    for (var index = 0; index < lines.Length; index++) views[index] = AllocateUtf8(lines[index]);
+                    View = new ScoreboardView
+                    {
+                        Name = AllocateUtf8(scoreboard.Name()),
+                        Lines = views,
+                        LineCount = (ulong)lines.Length,
+                        Padding = scoreboard.Padding() ? (byte)1 : (byte)0,
+                        Descending = scoreboard.Descending() ? (byte)1 : (byte)0,
+                    };
+                }
+                catch
+                {
+                    Dispose();
+                    throw;
+                }
+            }
+
+            internal ScoreboardView View { get; }
+
+            public void Dispose()
+            {
+                foreach (var allocation in _allocations) NativeMemory.Free((void*)allocation);
+                _allocations.Clear();
+            }
+
+            private StringView AllocateUtf8(string value)
+            {
+                var bytes = Encoding.UTF8.GetBytes(value);
+                var data = AllocateArray<byte>(bytes.Length);
+                if (bytes.Length != 0) bytes.CopyTo(new Span<byte>(data, bytes.Length));
+                return new StringView { Data = data, Length = (ulong)bytes.Length };
+            }
+
+            private T* AllocateArray<T>(int length) where T : unmanaged
+            {
+                if (length == 0) return null;
+                var pointer = (T*)NativeMemory.Alloc((nuint)length, (nuint)sizeof(T));
+                if (pointer is null) throw new OutOfMemoryException();
+                _allocations.Add((nint)pointer);
+                return pointer;
+            }
+        }
+
         internal static void RemovePlayerScoreboard(ulong invocation, PlayerId player)
         {
             var api = Api;
