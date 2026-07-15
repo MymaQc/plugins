@@ -99,6 +99,8 @@ persona IDs, model data, cape pixels, and animations.
 entity visibility behavior for players, host entities, and plugin-defined entities.
 `Player.KnockBack(source, force, height)` calls Dragonfly directly, preserving damage immunity and
 armour knockback resistance instead of approximating the result with `SetVelocity`.
+`Player.FinalDamageFrom(damage, source)` uses Dragonfly's live armour, enchantments, and resistance
+calculation without mutating player health.
 Presentation parity includes instant-respawn and coordinate toggles, sleeping indicators,
 dialogue/boss-bar/scoreboard removal, live name/score tags, and toasts, using the exact Dragonfly
 `Player` method names.

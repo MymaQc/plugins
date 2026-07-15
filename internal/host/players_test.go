@@ -470,6 +470,10 @@ func TestPlayersReadsAndChangesState(t *testing.T) {
 		if !ok || hurt.Damage != 4 || !hurt.Vulnerable {
 			t.Fatalf("hurt = %+v ok=%v", hurt, ok)
 		}
+		finalDamage, ok := players.FinalPlayerDamage(invocation, id, -4, native.DamageSource{Kind: native.DamageSourceInstant})
+		if !ok || finalDamage != 0 {
+			t.Fatalf("final damage = %v ok=%v", finalDamage, ok)
+		}
 		healed, ok := players.HealPlayer(invocation, id, 3, native.HealingSource{Kind: native.HealingSourceInstant})
 		if !ok || healed != 3 {
 			t.Fatalf("healed = %v ok=%v", healed, ok)

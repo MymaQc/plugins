@@ -266,11 +266,27 @@ internal static unsafe class PluginBridge
             ulong invocation,
             PlayerId player,
             double damage,
-            World.DamageSource source)
+            World.DamageSource source) =>
+            PlayerDamage(invocation, player, damage, source, false);
+
+        internal static double FinalPlayerDamage(
+            ulong invocation,
+            PlayerId player,
+            double damage,
+            World.DamageSource source) =>
+            PlayerDamage(invocation, player, damage, source, true).Damage;
+
+        private static (double Damage, bool Vulnerable) PlayerDamage(
+            ulong invocation,
+            PlayerId player,
+            double damage,
+            World.DamageSource source,
+            bool final)
         {
             ArgumentNullException.ThrowIfNull(source);
             var api = Api;
-            if (api is null || api->PlayerHurt == null) return default;
+            if (api is null || (final ? api->PlayerFinalDamage == null : api->PlayerHurt == null))
+                return default;
 
             uint kind;
             byte data = 0;
@@ -393,11 +409,21 @@ internal static unsafe class PluginBridge
                     Block = block is null ? null : &blockView,
                     Data = data,
                 };
-                PlayerHurtResult result;
-                if (api->PlayerHurt(api->Context, invocation, player, damage, &view, &result) != Abi.Ok ||
-                    result.Vulnerable > 1)
-                    return default;
-                return (result.Damage, result.Vulnerable != 0);
+                if (final)
+                {
+                    double result;
+                    return api->PlayerFinalDamage(api->Context, invocation, player, damage, &view, &result) == Abi.Ok
+                        ? (result, false)
+                        : default;
+                }
+                else
+                {
+                    PlayerHurtResult result;
+                    if (api->PlayerHurt(api->Context, invocation, player, damage, &view, &result) != Abi.Ok ||
+                        result.Vulnerable > 1)
+                        return default;
+                    return (result.Damage, result.Vulnerable != 0);
+                }
             }
         }
 

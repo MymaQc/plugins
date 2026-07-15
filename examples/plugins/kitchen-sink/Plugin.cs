@@ -540,9 +540,10 @@ public sealed class KitchenSink : Plugin
                 return;
             }
             var healed = player.Heal(player.MaxHealth(), new Effect.InstantHealingSource());
+            var finalDamage = player.FinalDamageFrom(2, new Entity.FallDamageSource());
             var (damage, vulnerable) = player.Hurt(1, new Entity.FallDamageSource());
-            output.Printf("healed={0}, damage={1}, vulnerable={2}, health={3}",
-                healed, damage, vulnerable, player.Health());
+            output.Printf("healed={0}, final={1}, damage={2}, vulnerable={3}, health={4}",
+                healed, finalDamage, damage, vulnerable, player.Health());
         }
     }
 

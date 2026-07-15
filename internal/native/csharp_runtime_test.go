@@ -1199,6 +1199,7 @@ func TestCSharpReflectedCommands(t *testing.T) {
 			worldDifficulty:  DifficultyView{ID: 2, Builtin: true, StarvationHealthLimit: 2, FireSpreadIncrease: 14},
 			healed:           4,
 			hurtResult:       PlayerHurtResult{Damage: 1, Vulnerable: true},
+			finalDamage:      1.5,
 			stateValues: map[PlayerStateKind]PlayerStateValue{
 				PlayerStateHealth:    {Number: 16},
 				PlayerStateMaxHealth: {Number: 20},
@@ -1313,13 +1314,17 @@ func TestCSharpReflectedCommands(t *testing.T) {
 	heal.Overload = 21
 	heal.Arguments = []string{"heal"}
 	output, err = pluginRuntime.HandleCommand(kitchen.Index, heal)
-	if err != nil || output.Failed || output.Message != "healed=4, damage=1, vulnerable=True, health=16" || len(host.heals) != 1 ||
+	if err != nil || output.Failed || output.Message != "healed=4, final=1.5, damage=1, vulnerable=True, health=16" || len(host.heals) != 1 ||
 		host.heals[0].Health != 20 || host.heals[0].Source.Kind != HealingSourceInstant {
 		t.Fatalf("heal output=%#v calls=%+v error=%v", output, host.heals, err)
 	}
 	if len(host.hurts) != 1 || host.hurts[0].Damage != 1 || host.hurts[0].Source.Kind != DamageSourceFall ||
 		!host.hurts[0].Source.FeatherFalling {
 		t.Fatalf("hurt calls=%+v", host.hurts)
+	}
+	if len(host.finalDamages) != 1 || host.finalDamages[0].Damage != 2 ||
+		host.finalDamages[0].Source.Kind != DamageSourceFall || !host.finalDamages[0].Source.FeatherFalling {
+		t.Fatalf("final damage calls=%+v", host.finalDamages)
 	}
 	sources := base
 	sources.Overload = 22

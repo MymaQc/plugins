@@ -348,6 +348,25 @@ func bg_go_player_hurt(context C.uint64_t, invocation C.DfInvocationId, player C
 	return C.DF_STATUS_OK
 }
 
+//export bg_go_player_final_damage
+func bg_go_player_final_damage(context C.uint64_t, invocation C.DfInvocationId, player C.DfPlayerId, damage C.double, view *C.DfDamageSourceView, result *C.double) C.DfStatus {
+	if result == nil {
+		return C.DF_STATUS_ERROR
+	}
+	*result = 0
+	host, ok := resolveHost(uint64(context))
+	source, valid := copyDamageSourceView(view)
+	if !ok || !valid {
+		return C.DF_STATUS_ERROR
+	}
+	value, ok := host.FinalPlayerDamage(InvocationID(invocation), playerID(player), float64(damage), source)
+	if !ok {
+		return C.DF_STATUS_ERROR
+	}
+	*result = C.double(value)
+	return C.DF_STATUS_OK
+}
+
 func copyHealingSourceView(view *C.DfHealingSourceView) (HealingSource, bool) {
 	if view == nil || uint32(view.kind) > uint32(HealingSourceRegeneration) || view.data > 1 {
 		return HealingSource{}, false

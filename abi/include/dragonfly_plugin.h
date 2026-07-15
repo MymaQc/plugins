@@ -9,8 +9,8 @@ extern "C" {
 #endif
 
 #define DF_ABI_VERSION 11u
-// Host version 54 adds direct player knockback.
-#define DF_HOST_ABI_VERSION 54u
+// Host version 55 adds exact final player damage calculation.
+#define DF_HOST_ABI_VERSION 55u
 #define DF_STATUS_OK 0
 #define DF_STATUS_ERROR 1
 
@@ -372,6 +372,7 @@ typedef DfStatus (*DfHostPlayerStateGetFn)(uint64_t context, DfInvocationId invo
 typedef DfStatus (*DfHostPlayerActionFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfPlayerStateValue value, DfPlayerStateValue *result);
 typedef DfStatus (*DfHostPlayerHealFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, double health, const DfHealingSourceView *source, DfPlayerHealResult *result);
 typedef DfStatus (*DfHostPlayerHurtFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, double damage, const DfDamageSourceView *source, DfPlayerHurtResult *result);
+typedef DfStatus (*DfHostPlayerFinalDamageFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, double damage, const DfDamageSourceView *source, double *result);
 typedef DfStatus (*DfHostPlayerEffectFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t operation, DfEffectView effect);
 typedef DfStatus (*DfHostPlayerEffectsFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfEffectBuffer *output);
 typedef DfStatus (*DfHostPlayerEffectsClearFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player);
@@ -637,6 +638,7 @@ typedef struct {
     DfHostPlayerToastFn player_toast;
     DfHostPlayerCooldownFn player_cooldown;
     DfHostPlayerKnockBackFn player_knock_back;
+    DfHostPlayerFinalDamageFn player_final_damage;
 } DfHostApiV27;
 #define DF_COMMAND_PARAMETER_SUBCOMMAND 1u
 #define DF_COMMAND_PARAMETER_ENUM 2u

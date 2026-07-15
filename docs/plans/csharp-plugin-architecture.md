@@ -257,7 +257,9 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    Host ABI 52 replaces the dormant title bridge's unsigned millisecond durations with signed
    nanoseconds. Host ABI 53 adds AST-generated `Player.HasCooldown` and `SetCooldown` using typed
    item identities and signed durations.
-   Host ABI 54 appends exact AST-generated `Player.KnockBack` transport.
+   Host ABI 54 appends exact AST-generated `Player.KnockBack` transport. Host ABI 55 appends
+   `Player.FinalDamageFrom`, preserving Dragonfly's live armour, enchantment, and resistance
+   calculation instead of duplicating it in C#.
    The AST-generated `Scoreboard` class mirrors Dragonfly's mutable name, write, set/remove,
    padding, line-copy, and descending-order behavior. `Player.SendScoreboard` activates the
    existing private transport with raw lines so the Go host applies padding and ordering once.

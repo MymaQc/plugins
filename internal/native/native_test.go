@@ -194,7 +194,12 @@ type recordingHost struct {
 		Damage float64
 		Source DamageSource
 	}
-	hurtResult    PlayerHurtResult
+	hurtResult   PlayerHurtResult
+	finalDamages []struct {
+		Damage float64
+		Source DamageSource
+	}
+	finalDamage   float64
 	effectOps     []PlayerEffectOperation
 	effects       []PlayerEffect
 	activeEffects []PlayerEffect
@@ -385,6 +390,14 @@ func (h *recordingHost) HurtPlayer(_ InvocationID, _ PlayerID, damage float64, s
 		Source DamageSource
 	}{damage, source})
 	return h.hurtResult, true
+}
+
+func (h *recordingHost) FinalPlayerDamage(_ InvocationID, _ PlayerID, damage float64, source DamageSource) (float64, bool) {
+	h.finalDamages = append(h.finalDamages, struct {
+		Damage float64
+		Source DamageSource
+	}{damage, source})
+	return h.finalDamage, true
 }
 
 func (h *recordingHost) ChangePlayerEffect(_ InvocationID, _ PlayerID, operation PlayerEffectOperation, effect PlayerEffect) bool {

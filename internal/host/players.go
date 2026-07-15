@@ -587,6 +587,21 @@ func (p *Players) HurtPlayer(invocation native.InvocationID, id native.PlayerID,
 	return resolved.value, ok && resolved.ok
 }
 
+func (p *Players) FinalPlayerDamage(invocation native.InvocationID, id native.PlayerID, damage float64, source native.DamageSource) (float64, bool) {
+	type result struct {
+		value float64
+		ok    bool
+	}
+	resolved, ok := callPlayer(p, invocation, id, func(tx *world.Tx, connected *player.Player) result {
+		damageSource, ok := p.damageSource(tx, source)
+		if !ok {
+			return result{}
+		}
+		return result{value: connected.FinalDamageFrom(damage, damageSource), ok: true}
+	})
+	return resolved.value, ok && resolved.ok
+}
+
 func (p *Players) PlayerState(invocation native.InvocationID, id native.PlayerID, kind native.PlayerStateKind) (native.PlayerStateValue, bool) {
 	value, ok := readPlayer(p, invocation, id, func(connected *player.Player) struct {
 		value native.PlayerStateValue
