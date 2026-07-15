@@ -95,6 +95,8 @@ enchantment seed access/reset, add/remove experience, and collection checks/acti
 Dragonfly directly, preserving food-loss and experience-gain handlers, mending, and pickup delay.
 `Player.Skin()` and `Player.SetSkin(Skin)` round-trip the complete Dragonfly skin value, including
 persona IDs, model data, cape pixels, and animations.
+`Player.HideEntity(World.Entity)` and `ShowEntity(World.Entity)` preserve Dragonfly's per-viewer
+entity visibility behavior for players, host entities, and plugin-defined entities.
 Presentation parity includes instant-respawn and coordinate toggles, sleeping indicators,
 dialogue/boss-bar/scoreboard removal, live name/score tags, and toasts, using the exact Dragonfly
 `Player` method names.

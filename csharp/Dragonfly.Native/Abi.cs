@@ -410,7 +410,7 @@ public unsafe struct HostApi
     public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, uint, PlayerStateValue, int> PlayerStateSet;
     public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, uint, PlayerStateValue*, int> PlayerStateGet;
     public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, uint, EffectView, int> PlayerEffect;
-    public void* PlayerEntityVisibility;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, EntityId, byte, int> PlayerEntityVisibility;
     public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, ulong*, SkinInfo*, int> PlayerSkinOpen;
     public delegate* unmanaged[Cdecl]<ulong, ulong, ulong, ulong, SkinAnimationInfo*, int> PlayerSkinAnimationInfo;
     public delegate* unmanaged[Cdecl]<ulong, ulong, ulong, SkinData*, int> PlayerSkinRead;

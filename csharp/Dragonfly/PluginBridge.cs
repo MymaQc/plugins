@@ -357,8 +357,8 @@ internal static unsafe class PluginBridge
             var flags = DamageSourceFlags(source);
             var entityId = default(EntityId);
             var secondaryEntityId = default(EntityId);
-            if (entity is not null && !TryDamageSourceEntityId(invocation, entity, out entityId) ||
-                secondaryEntity is not null && !TryDamageSourceEntityId(invocation, secondaryEntity, out secondaryEntityId))
+            if (entity is not null && !TryEntityId(invocation, entity, out entityId) ||
+                secondaryEntity is not null && !TryEntityId(invocation, secondaryEntity, out secondaryEntityId))
                 return default;
 
             var blockIdentifier = Array.Empty<byte>();
@@ -401,7 +401,7 @@ internal static unsafe class PluginBridge
             }
         }
 
-        private static bool TryDamageSourceEntityId(
+        private static bool TryEntityId(
             ulong invocation,
             World.Entity entity,
             out EntityId id)
@@ -1442,6 +1442,24 @@ internal static unsafe class PluginBridge
                 foreach (var allocation in _allocations) NativeMemory.Free((void*)allocation);
                 _allocations.Clear();
             }
+        }
+
+        internal static void SetPlayerEntityVisible(
+            ulong invocation,
+            PlayerId player,
+            World.Entity entity,
+            bool visible)
+        {
+            ArgumentNullException.ThrowIfNull(entity);
+            var api = Api;
+            if (api is null || api->PlayerEntityVisibility == null ||
+                !TryEntityId(invocation, entity, out var entityId)) return;
+            _ = api->PlayerEntityVisibility(
+                api->Context,
+                invocation,
+                player,
+                entityId,
+                visible ? (byte)1 : (byte)0);
         }
 
         internal static Skin PlayerSkin(ulong invocation, PlayerId player)

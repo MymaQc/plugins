@@ -64,7 +64,8 @@ public sealed class KitchenSink : Plugin
             new KitchenConnection(),
             new KitchenCooldown(),
             new KitchenScoreboard(),
-            new KitchenSkin()));
+            new KitchenSkin(),
+            new KitchenVisibility()));
         Console.WriteLine("kitchen-sink enabled");
     }
 
@@ -1401,6 +1402,23 @@ public sealed class KitchenSink : Plugin
                 bounds.Height,
                 skin.FullID,
                 skin.Animations.Length);
+        }
+    }
+
+    internal sealed class KitchenVisibility : Cmd.Runnable
+    {
+        public Cmd.SubCommand Visibility;
+
+        public void Run(Cmd.Source source, Cmd.Output output, World.Tx? tx)
+        {
+            if (source is not Player player)
+            {
+                output.Error("This command can only be used by a player.");
+                return;
+            }
+            player.HideEntity(player);
+            player.ShowEntity(player);
+            output.Printf("visibility=hide/show");
         }
     }
 

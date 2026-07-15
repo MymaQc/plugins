@@ -520,6 +520,40 @@ func TestCSharpPlayerSkinMethods(t *testing.T) {
 	}
 }
 
+func TestCSharpPlayerEntityVisibilityMethods(t *testing.T) {
+	host := &recordingHost{}
+	pluginRuntime := openCSharpRuntimeWithHost(t, host)
+	commands, err := pluginRuntime.Commands()
+	if err != nil {
+		t.Fatal(err)
+	}
+	kitchen := commandNamed(t, commands, "kitchen")
+	var overload uint64
+	found := false
+	for index, candidate := range kitchen.Overloads {
+		if len(candidate.Parameters) == 1 && candidate.Parameters[0].Name == "visibility" {
+			overload, found = uint64(index), true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("visibility overload missing: %#v", kitchen.Overloads)
+	}
+	player := PlayerID{UUID: [16]byte{9}, Generation: 6}
+	output, err := pluginRuntime.HandleCommand(kitchen.Index, CommandInput{
+		Invocation: 46, Source: "Danick", SourceKind: CommandSourcePlayer, SourcePlayer: &player,
+		Overload: overload, Arguments: []string{"visibility"},
+		OnlinePlayers: []CommandPlayer{{Player: player, Name: "Danick"}},
+	})
+	if err != nil || output.Failed || output.Message != "visibility=hide/show" {
+		t.Fatalf("visibility output=%#v error=%v", output, err)
+	}
+	entity := EntityID{UUID: player.UUID, Generation: player.Generation}
+	if !slices.Equal(host.entities, []EntityID{entity, entity}) || !slices.Equal(host.visible, []bool{false, true}) {
+		t.Fatalf("visibility calls: entities=%+v visible=%v", host.entities, host.visible)
+	}
+}
+
 func TestCSharpPlayerZeroArgumentActions(t *testing.T) {
 	host := &recordingHost{}
 	pluginRuntime := openCSharpRuntimeWithHost(t, host)
@@ -1196,7 +1230,7 @@ func TestCSharpReflectedCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 	kitchen := commandNamed(t, commands, "kitchen")
-	if !slices.Contains(kitchen.Aliases, "ks") || len(kitchen.Overloads) != 34 {
+	if !slices.Contains(kitchen.Aliases, "ks") || len(kitchen.Overloads) != 35 {
 		t.Fatalf("kitchen descriptor = %#v", kitchen)
 	}
 	if kitchen.Overloads[1].Parameters[0].Name != "echo" ||
