@@ -394,6 +394,12 @@ func TestCSharpPlayerPresentationMethods(t *testing.T) {
 	if !slices.Equal(host.toasts, [][2]string{{"Kitchen", "Presentation"}}) {
 		t.Fatalf("toasts=%v", host.toasts)
 	}
+	if got, want := host.title, (PlayerTitle{
+		Text: "Kitchen title", Subtitle: "AST generated", ActionText: "Dragonfly parity",
+		FadeIn: 50 * time.Millisecond, Duration: 2 * time.Second, FadeOut: 75 * time.Millisecond,
+	}); got != want {
+		t.Fatalf("title=%+v, want %+v", got, want)
+	}
 }
 
 func TestCSharpPlayerZeroArgumentActions(t *testing.T) {

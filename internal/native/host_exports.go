@@ -187,17 +187,21 @@ func bg_go_player_title(context C.uint64_t, invocation C.DfInvocationId, player 
 		id.UUID[index] = byte(player.bytes[index])
 	}
 	id.Generation = uint64(player.generation)
-	title := PlayerTitle{
-		Text: stringView(value.text), Subtitle: stringView(value.subtitle),
-		ActionText: stringView(value.action_text),
-		FadeIn:     milliseconds(value.fade_in_milliseconds),
-		Duration:   milliseconds(value.duration_milliseconds),
-		FadeOut:    milliseconds(value.fade_out_milliseconds),
-	}
+	title := playerTitle(
+		stringView(value.text), stringView(value.subtitle), stringView(value.action_text),
+		int64(value.fade_in_duration_nanoseconds), int64(value.duration_nanoseconds), int64(value.fade_out_duration_nanoseconds),
+	)
 	if !host.SendPlayerTitle(InvocationID(invocation), id, title) {
 		return C.DF_STATUS_ERROR
 	}
 	return C.DF_STATUS_OK
+}
+
+func playerTitle(text, subtitle, actionText string, fadeIn, duration, fadeOut int64) PlayerTitle {
+	return PlayerTitle{
+		Text: text, Subtitle: subtitle, ActionText: actionText,
+		FadeIn: time.Duration(fadeIn), Duration: time.Duration(duration), FadeOut: time.Duration(fadeOut),
+	}
 }
 
 //export bg_go_player_transform
@@ -717,10 +721,4 @@ func entityID(entity C.DfEntityId) EntityID {
 	}
 	id.Generation = uint64(entity.generation)
 	return id
-}
-
-func milliseconds(value C.uint64_t) time.Duration {
-	const maximum = uint64((1<<63 - 1) / int64(time.Millisecond))
-	millis := min(uint64(value), maximum)
-	return time.Duration(millis) * time.Millisecond
 }

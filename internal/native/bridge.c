@@ -260,10 +260,13 @@ _Static_assert(sizeof(DfPacketFieldValue) == 96, "DfPacketFieldValue ABI layout 
 _Static_assert(offsetof(DfPacketFieldValue, data) == 72, "DfPacketFieldValue.data ABI offset changed");
 _Static_assert(sizeof(DfPacketInput) == 32, "DfPacketInput ABI layout changed");
 _Static_assert(sizeof(DfPacketState) == 1, "DfPacketState ABI layout changed");
+_Static_assert(sizeof(DfTitleView) == 72, "DfTitleView ABI layout changed");
+_Static_assert(offsetof(DfTitleView, fade_in_duration_nanoseconds) == 48, "DfTitleView.fade_in_duration_nanoseconds ABI offset changed");
+_Static_assert(offsetof(DfTitleView, fade_out_duration_nanoseconds) == 64, "DfTitleView.fade_out_duration_nanoseconds ABI offset changed");
 _Static_assert(sizeof(DfDifficultyView) == 24, "DfDifficultyView ABI layout changed");
 _Static_assert(offsetof(DfDifficultyView, starvation_health_limit) == 8, "DfDifficultyView.starvation_health_limit ABI offset changed");
 _Static_assert(sizeof(DfHostApiV27) == 984, "DfHostApiV27 ABI layout changed");
-_Static_assert(DF_HOST_ABI_VERSION == 51u, "host ABI version changed without bridge review");
+_Static_assert(DF_HOST_ABI_VERSION == 52u, "host ABI version changed without bridge review");
 _Static_assert(offsetof(DfHostApiV27, player_skin_open) == 80, "DfHostApiV27.player_skin_open ABI offset changed");
 _Static_assert(offsetof(DfHostApiV27, player_skin_set) == 112, "DfHostApiV27.player_skin_set ABI offset changed");
 _Static_assert(offsetof(DfHostApiV27, inventory_size) == 120, "DfHostApiV27.inventory_size ABI offset changed");

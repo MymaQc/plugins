@@ -45,6 +45,30 @@ internal static unsafe class PluginBridge
             _ = api->PlayerPacketWrite(api->Context, invocation, player, packet);
         }
 
+        internal static void SendPlayerTitle(ulong invocation, PlayerId player, Title title)
+        {
+            var api = Api;
+            if (api is null || api->PlayerTitle == null) return;
+            var text = Encoding.UTF8.GetBytes(title.Text());
+            var subtitle = Encoding.UTF8.GetBytes(title.Subtitle());
+            var actionText = Encoding.UTF8.GetBytes(title.ActionText());
+            fixed (byte* textData = text)
+            fixed (byte* subtitleData = subtitle)
+            fixed (byte* actionTextData = actionText)
+            {
+                var view = new TitleView
+                {
+                    Text = new StringView { Data = textData, Length = (ulong)text.Length },
+                    Subtitle = new StringView { Data = subtitleData, Length = (ulong)subtitle.Length },
+                    ActionText = new StringView { Data = actionTextData, Length = (ulong)actionText.Length },
+                    FadeInDurationNanoseconds = DurationNanoseconds(title.FadeInDuration(), nameof(title)),
+                    DurationNanoseconds = DurationNanoseconds(title.Duration(), nameof(title)),
+                    FadeOutDurationNanoseconds = DurationNanoseconds(title.FadeOutDuration(), nameof(title)),
+                };
+                _ = api->PlayerTitle(api->Context, invocation, player, view);
+            }
+        }
+
         internal static void RemovePlayerScoreboard(ulong invocation, PlayerId player)
         {
             var api = Api;

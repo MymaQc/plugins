@@ -37,19 +37,7 @@ public sealed partial class Player : Cmd.Source, Cmd.NamedTarget, World.Entity
     private void SendText(uint kind, string message) =>
         PluginBridge.Host.SendPlayerText(_invocation, Id, kind, message);
 
-    private static string FormatArguments(object?[] values) => string.Join(
-        " ",
-        values.Select(FormatArgument));
-
-    private static string FormatArgument(object? value) => value switch
-    {
-        null => "<nil>",
-        bool boolean => boolean ? "true" : "false",
-        float number => number.ToString("G", CultureInfo.InvariantCulture).Replace('E', 'e'),
-        double number => number.ToString("G", CultureInfo.InvariantCulture).Replace('E', 'e'),
-        IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture) ?? "",
-        _ => value.ToString() ?? "",
-    };
+    private static string FormatArguments(object?[] values) => GoText.Format(values);
 
     internal ulong Invocation => _invocation;
 

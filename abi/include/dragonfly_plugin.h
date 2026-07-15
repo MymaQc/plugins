@@ -9,8 +9,8 @@ extern "C" {
 #endif
 
 #define DF_ABI_VERSION 11u
-// Host version 51 adds typed player string reads and toast sends.
-#define DF_HOST_ABI_VERSION 51u
+// Host version 52 makes title durations signed nanoseconds.
+#define DF_HOST_ABI_VERSION 52u
 #define DF_STATUS_OK 0
 #define DF_STATUS_ERROR 1
 
@@ -331,7 +331,7 @@ typedef struct { uint32_t kind; uint32_t data; int32_t integer; uint32_t flags; 
 #define DF_SOUND_KIND_CROSSBOW_LOAD 85u
 #define DF_SOUND_KIND_GOAT_HORN 86u
 
-typedef struct { DfStringView text; DfStringView subtitle; DfStringView action_text; uint64_t fade_in_milliseconds; uint64_t duration_milliseconds; uint64_t fade_out_milliseconds; } DfTitleView;
+typedef struct { DfStringView text; DfStringView subtitle; DfStringView action_text; int64_t fade_in_duration_nanoseconds; int64_t duration_nanoseconds; int64_t fade_out_duration_nanoseconds; } DfTitleView;
 typedef struct { DfStringView name; const DfStringView *lines; uint64_t line_count; uint8_t padding; uint8_t descending; } DfScoreboardView;
 typedef struct { DfPlayerId player; DfStringView name; uint64_t latency_milliseconds; DfVec3 position; } DfPlayerSnapshot;
 typedef struct { DfPlayerId player; DfStringBuffer name; uint64_t latency_milliseconds; DfVec3 position; } DfPlayerSnapshotBuffer;

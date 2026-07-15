@@ -5,7 +5,7 @@ namespace Dragonfly.Native;
 public static partial class Abi
 {
     public const uint PluginVersion = 11;
-    public const uint HostVersion = 51;
+    public const uint HostVersion = 52;
     public const int Ok = 0;
     public const int Error = 1;
 
@@ -375,13 +375,24 @@ public unsafe struct FormView
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public unsafe struct TitleView
+{
+    public StringView Text;
+    public StringView Subtitle;
+    public StringView ActionText;
+    public long FadeInDurationNanoseconds;
+    public long DurationNanoseconds;
+    public long FadeOutDurationNanoseconds;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 public unsafe struct HostApi
 {
     public uint Version;
     public uint Size;
     public ulong Context;
     public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, uint, StringView, int> PlayerText;
-    public void* PlayerTitle;
+    public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, TitleView, int> PlayerTitle;
     public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, uint, Vec3, double, double, int> PlayerTransform;
     public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, NativePlayerKinematics*, int> PlayerKinematics;
     public delegate* unmanaged[Cdecl]<ulong, ulong, PlayerId, uint, PlayerStateValue, int> PlayerStateSet;

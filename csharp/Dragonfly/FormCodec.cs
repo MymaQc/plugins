@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Reflection;
 using System.Text.Json;
 using System.Diagnostics.CodeAnalysis;
@@ -7,13 +6,7 @@ namespace Dragonfly;
 
 internal static class FormCodec
 {
-    internal static string Format(object?[] values)
-    {
-        var formatted = string.Join(" ", values.Select(FormatValue)) + "\n";
-        if (formatted.EndsWith('\n')) formatted = formatted[..^1];
-        if (formatted.EndsWith('\n')) formatted = formatted[..^1];
-        return formatted;
-    }
+    internal static string Format(object?[] values) => GoText.Format(values);
 
     internal static void VerifyCustom(Form.Submittable submittable)
     {
@@ -206,16 +199,6 @@ internal static class FormCodec
 
     private static object Read(FieldInfo field, object target) =>
         field.GetValue(target) ?? throw new ArgumentException("form element fields cannot be null");
-
-    private static string FormatValue(object? value) => value switch
-    {
-        null => "<nil>",
-        bool boolean => boolean ? "true" : "false",
-        float number => number.ToString("G", CultureInfo.InvariantCulture).Replace('E', 'e'),
-        double number => number.ToString("G", CultureInfo.InvariantCulture).Replace('E', 'e'),
-        IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture) ?? string.Empty,
-        _ => value.ToString() ?? string.Empty,
-    };
 
     private static void WriteCustom(Utf8JsonWriter writer, Form.Custom form)
     {

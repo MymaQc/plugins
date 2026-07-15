@@ -110,6 +110,9 @@ lookups. `Player.SetGameMode` accepts custom implementations just like Dragonfly
 `Player.GameMode` returns their capabilities without exposing the transport descriptor.
 Player-backed attack and entity-use targets retain their concrete `Player` type, so normal
 `entity is Player target` checks and `target.Name()` work without public handle adapters.
+`Title.New(...)` and its immutable `WithSubtitle`, `WithActionText`, and duration methods mirror
+Dragonfly's title value API. `Player.SendTitle` carries signed nanosecond durations without the old
+unsigned-millisecond truncation.
 Forms use Dragonfly's reflected public-field model through `Form.New`, `NewMenu`, and `NewModal`,
 with typed elements, submitted values, `Closer`, and callback-owned `World.Tx`. `Form.Value`
 remains open for custom implementations, matching Dragonfly's public `form.Form` interface.

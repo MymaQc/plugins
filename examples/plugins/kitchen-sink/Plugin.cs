@@ -1327,6 +1327,12 @@ public sealed class KitchenSink : Plugin
             var nameTag = player.NameTag();
             var scoreTag = player.ScoreTag();
             player.SendToast("Kitchen", "Presentation");
+            player.SendTitle(Title.New("Kitchen", "title")
+                .WithSubtitle("AST generated")
+                .WithActionText("Dragonfly parity")
+                .WithFadeInDuration(TimeSpan.FromMilliseconds(50))
+                .WithDuration(TimeSpan.FromSeconds(2))
+                .WithFadeOutDuration(TimeSpan.FromMilliseconds(75)));
             output.Printf("presentation={0}/{1}", nameTag, scoreTag);
         }
     }
