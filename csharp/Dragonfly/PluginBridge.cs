@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.Json;
 using System.Collections.Concurrent;
 using Dragonfly.Native;
 
@@ -2748,6 +2749,7 @@ internal static unsafe class PluginBridge
             Destroy = &Destroy,
             HandleEvent = &HandleEvent,
             HandleScheduled = &HandleScheduled,
+            Allow = &Allow,
         };
         return Descriptor;
     }
@@ -3045,6 +3047,40 @@ internal static unsafe class PluginBridge
                 scheduled.Task.CallbackFailed(error);
                 return Abi.Error;
             }
+        }
+        catch { return Abi.Error; }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static int Allow(void* instance, AllowInput* input, StringBuffer* message, byte* allowed)
+    {
+        try
+        {
+            if (instance is null || input is null || message is null || allowed is null) return Abi.Error;
+            Net.Addr address;
+            if (input->IsUdp != 0)
+            {
+                if (input->IP.Length is not (4 or 16) || input->IP.Data is null) return Abi.Error;
+                address = new Net.UDPAddr(
+                    new ReadOnlySpan<byte>(input->IP.Data, checked((int)input->IP.Length)).ToArray(),
+                    input->Port,
+                    Utf8(input->Zone));
+            }
+            else
+            {
+                address = new Net.AddrSnapshot(Utf8(input->Network), Utf8(input->Address));
+            }
+            var identity = JsonSerializer.Deserialize(
+                new ReadOnlySpan<byte>(input->IdentityJson.Data, checked((int)input->IdentityJson.Length)),
+                LoginJsonContext.Default.IdentityData);
+            var client = JsonSerializer.Deserialize(
+                new ReadOnlySpan<byte>(input->ClientJson.Data, checked((int)input->ClientJson.Length)),
+                LoginJsonContext.Default.ClientData);
+            if (identity is null || client is null) return Abi.Error;
+            var result = Get(instance).Allow(address, identity, client);
+            if (!WriteExact(message, result.Message ?? string.Empty)) return Abi.Error;
+            *allowed = result.Allowed ? (byte)1 : (byte)0;
+            return Abi.Ok;
         }
         catch { return Abi.Error; }
     }

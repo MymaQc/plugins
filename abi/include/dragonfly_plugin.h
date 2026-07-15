@@ -8,8 +8,8 @@
 extern "C" {
 #endif
 
-#define DF_ABI_VERSION 10u
-// Version 45 replaces fire-and-forget world scheduling with Dragonfly task semantics.
+#define DF_ABI_VERSION 11u
+// Host version 46 includes task cancellation and typed decoded-packet field access.
 #define DF_HOST_ABI_VERSION 46u
 #define DF_STATUS_OK 0
 #define DF_STATUS_ERROR 1
@@ -34,6 +34,16 @@ typedef struct { int32_t min; int32_t max; } DfBlockRange;
 typedef struct { uint64_t value; } DfWorldId;
 typedef struct { const uint8_t *data; uint64_t len; } DfStringView;
 typedef struct { uint8_t *data; uint64_t len; uint64_t capacity; } DfStringBuffer;
+typedef struct {
+    DfStringView network;
+    DfStringView address;
+    DfStringView ip;
+    DfStringView zone;
+    DfStringView identity_json;
+    DfStringView client_json;
+    int32_t port;
+    uint8_t is_udp;
+} DfAllowInput;
 typedef void (*DfEventDropFn)(void *context);
 typedef struct { DfStringView ip; int32_t port; DfStringView zone; } DfUDPAddrView;
 #define DF_DAMAGE_SOURCE_REDUCED_BY_ARMOUR 1u
@@ -1327,6 +1337,7 @@ typedef DfStatus (*DfCommandEnumOptionsFn)(void *instance, uint64_t command, uin
 typedef DfStatus (*DfPluginSetHostFn)(void *instance, const DfHostApiV27 *host);
 typedef void (*DfPluginDestroyFn)(void *instance);
 typedef DfStatus (*DfPluginScheduledFn)(void *instance, uint64_t callback, DfInvocationId invocation, uint32_t phase, uint32_t result);
+typedef DfStatus (*DfPluginAllowFn)(void *instance, const DfAllowInput *input, DfStringBuffer *message, uint8_t *allowed);
 
 typedef struct {
     DfAbiHeader header;
@@ -1344,9 +1355,10 @@ typedef struct {
     DfPluginDestroyFn destroy;
     DfHandleEventFn handle_event;
     DfPluginScheduledFn handle_scheduled;
-} DfPluginApiV10;
+    DfPluginAllowFn allow;
+} DfPluginApiV11;
 
-typedef const DfPluginApiV10 *(*DfPluginEntryV10Fn)(void);
+typedef const DfPluginApiV11 *(*DfPluginEntryV11Fn)(void);
 
 typedef struct DfRuntime DfRuntime;
 typedef struct { DfStringView plugin_directory; const DfHostApiV27 *host; } DfRuntimeConfig;
@@ -1377,6 +1389,7 @@ DfStatus df_runtime_handle_command(DfRuntime *runtime, uint64_t index, const DfC
 DfStatus df_runtime_command_enum_options(DfRuntime *runtime, uint64_t index, uint64_t overload, uint64_t parameter, const DfCommandEnumContext *context, DfStringBuffer *output);
 DfStatus df_runtime_handle_event(DfRuntime *runtime, DfEventId event_id, const void *input, void *state);
 DfStatus df_runtime_handle_scheduled(DfRuntime *runtime, uint64_t plugin, uint64_t callback, DfInvocationId invocation, uint32_t phase, uint32_t result);
+DfStatus df_runtime_allow(DfRuntime *runtime, const DfAllowInput *input, DfStringBuffer *message, uint8_t *allowed);
 
 #ifdef __cplusplus
 }

@@ -89,6 +89,7 @@ func Run(ctx context.Context, config Config, log *slog.Logger) error {
 		closeDragonflyProviders(dragonflyConfig, log)
 		return fmt.Errorf("configure core worlds: %w", err)
 	}
+	dragonflyConfig.Allower = composeAllower(dragonflyConfig.Allower, pluginRuntime, log)
 	listenerGate := deferListenerCreation(&dragonflyConfig)
 	wrapPacketListeners(&dragonflyConfig)
 	var srv *server.Server

@@ -28,6 +28,17 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    Dragonfly leaves player acceptance to the server loop and that interface has no join method. The
    host invokes the callback after installing its handler. It is transaction-owned, cancellable,
    and subscribed only when overridden.
+   Connection admission separately mirrors Dragonfly's `server.Allower` exactly through
+   `Plugin.Allow(Net.Addr, Login.IdentityData, Login.ClientData)`. It is not an event and receives
+   no invented context or player: Dragonfly calls it before player construction. The Allower,
+   identity/client snapshot classes, and `Protocol.DeviceOS` values are generated from the pinned
+   Dragonfly and gophertunnel Go AST. Plugins allow by default; enabled plugins are evaluated in
+   deterministic library order and the first denial wins. Any preconfigured Go Allower runs first.
+   Callbacks may be concurrent. Identity data retains all six upstream fields, including the two
+   PlayFab fields excluded from gophertunnel's normal JSON. Client data remains explicitly
+   untrusted. Internal callback failures fail closed with a fixed public rejection while only a
+   private runtime status reaches the server log. Plugin ABI 11 adds this dedicated callback; host ABI 46 is
+   unchanged.
 2. Generated handler events. All 37 methods in the pinned Dragonfly `player.Handler` interface are generated and
    transported: movement, chat, world changes, damage/healing/death, respawn, skin changes, every
    block/item interaction, entity use/attacks, transfer, command execution, diagnostics, and quit.
@@ -209,7 +220,7 @@ The ABI is transport, not the API. C# names, interfaces, constructors, and behav
    C# maps Dragonfly task errors to domain exceptions without exposing ABI status. The private
    callback trampoline keeps delegates plugin-owned and borrows a fresh transaction only during
    execution. Framework teardown rejects new tasks, cancels pending delays, and drains running
-   callbacks before `OnDisable`. Host ABI 46 and plugin ABI 10 carry execution, terminal outcome,
+   callbacks before `OnDisable`. Host ABI 46 and plugin ABI 11 carry execution, terminal outcome,
    signed delay, and cancellation. `World.New()`
    constructs Dragonfly's in-memory NOP-provider world. `World.Config.New()` transports the
    selected upstream config fields atomically; `MCDB.Config.Open(path)` selects a writable,

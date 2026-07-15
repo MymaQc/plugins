@@ -64,6 +64,18 @@ public sealed class KitchenSink : Plugin
         $"kitchen-sink disabled: jumps={_jumps}, punches={_punches}, " +
         $"sprints={_sprints}, sneaks={_sneaks}, quits={_quits}");
 
+    public override (string Message, bool Allowed) Allow(
+        Net.Addr addr,
+        Login.IdentityData identity,
+        Login.ClientData client)
+    {
+        _ = (addr.Network(), addr.String(), identity.XUID, identity.Identity,
+            identity.DisplayName, identity.TitleID, identity.PlayFabTitleID, identity.PlayFabID,
+            client.DeviceOS, client.DeviceID, client.GameVersion, client.LanguageCode,
+            client.AnimatedImageData, client.PersonaPieces, client.PieceTintColours);
+        return (string.Empty, true);
+    }
+
     public override void OnJoin(Player.Context ctx)
     {
         if (string.IsNullOrWhiteSpace(ctx.Player().Name())) ctx.Cancel();

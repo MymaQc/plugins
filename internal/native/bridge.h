@@ -75,6 +75,12 @@ DfStatus bg_runtime_handle_scheduled(
     uint32_t phase,
     uint32_t result
 );
+DfStatus bg_runtime_allow(
+    BgRuntimeLibrary *library,
+    const DfAllowInput *input,
+    DfStringBuffer *message,
+    uint8_t *allowed
+);
 DfStatus bg_runtime_handle_player_move(
     BgRuntimeLibrary *library,
     const DfPlayerMoveInput *input,

@@ -566,6 +566,18 @@ func main() {
 	if err != nil {
 		fatal(err)
 	}
+	serverAllower, err := inspectServerAllower(filepath.Join(directory, "server", "allower.go"))
+	if err != nil {
+		fatal(err)
+	}
+	loginData, err := inspectLoginData(filepath.Join(gophertunnelDirectory, "minecraft", "protocol", "login", "data.go"))
+	if err != nil {
+		fatal(err)
+	}
+	deviceOS, err := inspectDeviceOS(filepath.Join(gophertunnelDirectory, "minecraft", "protocol", "os.go"))
+	if err != nil {
+		fatal(err)
+	}
 	playerIdentityMethods, err := inspectPlayerIdentityMethods(filepath.Join(directory, "server", "player", "player.go"))
 	if err != nil {
 		fatal(err)
@@ -707,6 +719,10 @@ func main() {
 		{
 			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "Server.g.cs"),
 			Content: generateServer(serverMethods),
+		},
+		{
+			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "Server.Allower.g.cs"),
+			Content: generateServerAllower(serverAllower, loginData, deviceOS),
 		},
 		{
 			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "Player.Identity.g.cs"),

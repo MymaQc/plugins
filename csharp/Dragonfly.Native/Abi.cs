@@ -4,7 +4,7 @@ namespace Dragonfly.Native;
 
 public static class Abi
 {
-    public const uint PluginVersion = 10;
+    public const uint PluginVersion = 11;
     public const uint HostVersion = 46;
     public const int Ok = 0;
     public const int Error = 1;
@@ -232,6 +232,19 @@ public unsafe struct StringBuffer
     public byte* Data;
     public ulong Length;
     public ulong Capacity;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct AllowInput
+{
+    public StringView Network;
+    public StringView Address;
+    public StringView IP;
+    public StringView Zone;
+    public StringView IdentityJson;
+    public StringView ClientJson;
+    public int Port;
+    public byte IsUdp;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -503,6 +516,7 @@ public unsafe struct PluginApi
     public delegate* unmanaged[Cdecl]<void*, void> Destroy;
     public delegate* unmanaged[Cdecl]<void*, uint, void*, void*, int> HandleEvent;
     public delegate* unmanaged[Cdecl]<void*, ulong, ulong, uint, uint, int> HandleScheduled;
+    public delegate* unmanaged[Cdecl]<void*, AllowInput*, StringBuffer*, byte*, int> Allow;
 }
 
 [StructLayout(LayoutKind.Sequential)]

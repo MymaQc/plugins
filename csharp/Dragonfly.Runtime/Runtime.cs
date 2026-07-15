@@ -93,7 +93,7 @@ internal unsafe sealed class RuntimeState : IDisposable
         var runtime = new RuntimeState();
         try
         {
-            foreach (var path in Directory.EnumerateFiles(directory, NativeExtension()).Order())
+            foreach (var path in Directory.EnumerateFiles(directory, NativeExtension()).Order(StringComparer.Ordinal))
                 runtime.Add(path, host);
             runtime.PublishEntityTypes();
             return runtime;
@@ -111,7 +111,7 @@ internal unsafe sealed class RuntimeState : IDisposable
         // leaves those handlers pointing into unmapped code, so the process owns every successful
         // load until exit even when validation or later server startup fails.
         var library = NativeLibrary.Load(path);
-        var entry = (delegate* unmanaged[Cdecl]<PluginApi*>)NativeLibrary.GetExport(library, "df_plugin_entry_v10");
+        var entry = (delegate* unmanaged[Cdecl]<PluginApi*>)NativeLibrary.GetExport(library, "df_plugin_entry_v11");
         var api = entry();
         if (api is null || api->Header.Version != Abi.PluginVersion || api->Header.Size < sizeof(PluginApi))
             throw new InvalidOperationException($"{path} has an incompatible plugin API");
@@ -520,6 +520,35 @@ internal unsafe sealed class RuntimeState : IDisposable
         }
     }
 
+    internal int Allow(AllowInput* input, StringBuffer* message, byte* allowed)
+    {
+        if (!_running || input is null || message is null || allowed is null) return Abi.Error;
+        Interlocked.Increment(ref _activeCalls);
+        try
+        {
+            if (!_running) return Abi.Error;
+            *allowed = 1;
+            message->Length = 0;
+            foreach (var plugin in Plugins)
+            {
+                if (!plugin.Enabled || plugin.Api->Allow == null) continue;
+                byte pluginAllowed = 1;
+                message->Length = 0;
+                if (plugin.Api->Allow(plugin.Instance, input, message, &pluginAllowed) != Abi.Ok || pluginAllowed > 1)
+                    return Abi.Error;
+                if (pluginAllowed != 0) continue;
+                *allowed = 0;
+                return Abi.Ok;
+            }
+            message->Length = 0;
+            return Abi.Ok;
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _activeCalls);
+        }
+    }
+
     public void Dispose()
     {
         Disable();
@@ -713,6 +742,13 @@ public static unsafe class Exports
     public static int HandleScheduled(void* runtime, ulong plugin, ulong callback, ulong invocation, uint phase, uint result)
     {
         try { return State(runtime).HandleScheduled(plugin, callback, invocation, phase, result); }
+        catch { return Abi.Error; }
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "df_runtime_allow", CallConvs = [typeof(CallConvCdecl)])]
+    public static int Allow(void* runtime, AllowInput* input, StringBuffer* message, byte* allowed)
+    {
+        try { return State(runtime).Allow(input, message, allowed); }
         catch { return Abi.Error; }
     }
 

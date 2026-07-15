@@ -90,7 +90,7 @@ public sealed class PluginEntryGenerator : IIncrementalGenerator
                 {
                 {{dependencies}}
                     [global::System.Runtime.InteropServices.UnmanagedCallersOnly(
-                        EntryPoint = "df_plugin_entry_v10",
+                        EntryPoint = "df_plugin_entry_v11",
                         CallConvs = [typeof(global::System.Runtime.CompilerServices.CallConvCdecl)])]
                     public static global::Dragonfly.Native.PluginApi* Load() =>
                         global::Dragonfly.PluginExport<{{plugin.Type}}>.Api(

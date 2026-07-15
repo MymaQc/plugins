@@ -161,7 +161,10 @@ _Static_assert(sizeof(DfCommandPlayer) == 72, "DfCommandPlayer ABI layout change
 _Static_assert(sizeof(DfCommandEnumContext) == 88, "DfCommandEnumContext ABI layout changed");
 _Static_assert(sizeof(DfCommandInput) == 120, "DfCommandInput ABI layout changed");
 _Static_assert(sizeof(DfCommandState) == 32, "DfCommandState ABI layout changed");
-_Static_assert(sizeof(DfPluginApiV10) == 136, "DfPluginApiV10 ABI layout changed");
+_Static_assert(sizeof(DfAllowInput) == 104, "DfAllowInput ABI layout changed");
+_Static_assert(offsetof(DfAllowInput, identity_json) == 64, "DfAllowInput.identity_json ABI offset changed");
+_Static_assert(offsetof(DfAllowInput, port) == 96, "DfAllowInput.port ABI offset changed");
+_Static_assert(sizeof(DfPluginApiV11) == 144, "DfPluginApiV11 ABI layout changed");
 _Static_assert(sizeof(DfInventoryId) == 32, "DfInventoryId ABI layout changed");
 _Static_assert(sizeof(DfItemStackInfo) == 80, "DfItemStackInfo ABI layout changed");
 _Static_assert(sizeof(DfItemStackSnapshot) == 88, "DfItemStackSnapshot ABI layout changed");
@@ -204,12 +207,13 @@ _Static_assert(sizeof(DfEntityTypeDescriptorV2) == 40, "DfEntityTypeDescriptorV2
 _Static_assert(offsetof(DfEntityTypeDescriptorV2, type_key) == 32, "DfEntityTypeDescriptorV2.type_key ABI offset changed");
 _Static_assert(sizeof(DfEntitySpawnViewV3) == 200, "DfEntitySpawnViewV3 ABI layout changed");
 _Static_assert(offsetof(DfEntitySpawnViewV3, custom_instance) == 176, "DfEntitySpawnViewV3.custom_instance ABI offset changed");
-_Static_assert(sizeof(DfPluginApiV10) == 136, "DfPluginApiV10 ABI layout changed");
-_Static_assert(offsetof(DfPluginApiV10, entity_type_count) == 64, "DfPluginApiV10.entity_type_count ABI offset changed");
-_Static_assert(offsetof(DfPluginApiV10, handle_entity) == 80, "DfPluginApiV10.handle_entity ABI offset changed");
-_Static_assert(offsetof(DfPluginApiV10, handle_event) == 120, "DfPluginApiV10.handle_event ABI offset changed");
-_Static_assert(offsetof(DfPluginApiV10, handle_scheduled) == 128, "DfPluginApiV10.handle_scheduled ABI offset changed");
-_Static_assert(DF_ABI_VERSION == 10u, "plugin ABI version changed without bridge review");
+_Static_assert(sizeof(DfPluginApiV11) == 144, "DfPluginApiV11 ABI layout changed");
+_Static_assert(offsetof(DfPluginApiV11, entity_type_count) == 64, "DfPluginApiV11.entity_type_count ABI offset changed");
+_Static_assert(offsetof(DfPluginApiV11, handle_entity) == 80, "DfPluginApiV11.handle_entity ABI offset changed");
+_Static_assert(offsetof(DfPluginApiV11, handle_event) == 120, "DfPluginApiV11.handle_event ABI offset changed");
+_Static_assert(offsetof(DfPluginApiV11, handle_scheduled) == 128, "DfPluginApiV11.handle_scheduled ABI offset changed");
+_Static_assert(offsetof(DfPluginApiV11, allow) == 136, "DfPluginApiV11.allow ABI offset changed");
+_Static_assert(DF_ABI_VERSION == 11u, "plugin ABI version changed without bridge review");
 _Static_assert(sizeof(DfEntityState) == 128, "DfEntityState ABI layout changed");
 _Static_assert(offsetof(DfEntityState, world) == 72, "DfEntityState.world ABI offset changed");
 _Static_assert(sizeof(DfPlayerKinematics) == 64, "DfPlayerKinematics ABI layout changed");
@@ -633,6 +637,7 @@ typedef DfStatus (*RuntimeCommandFn)(DfRuntime *, uint64_t, const DfCommandInput
 typedef DfStatus (*RuntimeCommandEnumFn)(DfRuntime *, uint64_t, uint64_t, uint64_t, const DfCommandEnumContext *, DfStringBuffer *);
 typedef DfStatus (*RuntimeEventFn)(DfRuntime *, DfEventId, const void *, void *);
 typedef DfStatus (*RuntimeScheduledFn)(DfRuntime *, uint64_t, uint64_t, DfInvocationId, uint32_t, uint32_t);
+typedef DfStatus (*RuntimeAllowFn)(DfRuntime *, const DfAllowInput *, DfStringBuffer *, uint8_t *);
 
 struct BgRuntimeLibrary {
     DfRuntime *runtime;
@@ -663,6 +668,7 @@ struct BgRuntimeLibrary {
     RuntimeCommandEnumFn command_enum_options;
     RuntimeEventFn handle_event;
     RuntimeScheduledFn handle_scheduled;
+    RuntimeAllowFn allow;
 };
 
 static void write_error(uint8_t *error, uint64_t capacity, const char *message) {
@@ -732,7 +738,8 @@ DfStatus bg_runtime_open(
     RuntimeCommandEnumFn command_enum_options = (RuntimeCommandEnumFn) load_symbol(handle, "df_runtime_command_enum_options", error, error_capacity);
     RuntimeEventFn handle_event = (RuntimeEventFn) load_symbol(handle, "df_runtime_handle_event", error, error_capacity);
     RuntimeScheduledFn handle_scheduled = (RuntimeScheduledFn) load_symbol(handle, "df_runtime_handle_scheduled", error, error_capacity);
-    if (create == NULL || destroy == NULL || enable == NULL || begin_disable == NULL || finish_disable == NULL || disable == NULL || plugin_count == NULL || subscriptions == NULL || entity_type_count == NULL || entity_type_at == NULL || entity_adopt == NULL || entity_adopt_local == NULL || entity_load == NULL || entity_save == NULL || entity_tick == NULL || entity_hurt == NULL || entity_heal == NULL || entity_death == NULL || entity_destroy == NULL || entity_decode_nbt == NULL || entity_call == NULL || command_count == NULL || command_at == NULL || handle_command == NULL || command_enum_options == NULL || handle_event == NULL || handle_scheduled == NULL) {
+    RuntimeAllowFn allow = (RuntimeAllowFn) load_symbol(handle, "df_runtime_allow", error, error_capacity);
+    if (create == NULL || destroy == NULL || enable == NULL || begin_disable == NULL || finish_disable == NULL || disable == NULL || plugin_count == NULL || subscriptions == NULL || entity_type_count == NULL || entity_type_at == NULL || entity_adopt == NULL || entity_adopt_local == NULL || entity_load == NULL || entity_save == NULL || entity_tick == NULL || entity_hurt == NULL || entity_heal == NULL || entity_death == NULL || entity_destroy == NULL || entity_decode_nbt == NULL || entity_call == NULL || command_count == NULL || command_at == NULL || handle_command == NULL || command_enum_options == NULL || handle_event == NULL || handle_scheduled == NULL || allow == NULL) {
         return DF_STATUS_ERROR;
     }
 
@@ -892,6 +899,7 @@ DfStatus bg_runtime_open(
     library->command_enum_options = command_enum_options;
     library->handle_event = handle_event;
     library->handle_scheduled = handle_scheduled;
+    library->allow = allow;
     *out = library;
     return DF_STATUS_OK;
 }
@@ -1057,6 +1065,18 @@ DfStatus bg_runtime_handle_scheduled(
         return DF_STATUS_ERROR;
     }
     return library->handle_scheduled(library->runtime, plugin, callback, invocation, phase, result);
+}
+
+DfStatus bg_runtime_allow(
+    BgRuntimeLibrary *library,
+    const DfAllowInput *input,
+    DfStringBuffer *message,
+    uint8_t *allowed
+) {
+    if (library == NULL || input == NULL || message == NULL || allowed == NULL) {
+        return DF_STATUS_ERROR;
+    }
+    return library->allow(library->runtime, input, message, allowed);
 }
 
 DfStatus bg_runtime_handle_player_move(

@@ -49,6 +49,24 @@ public sealed class Example : Plugin
 
 The project name is the plugin ID. A compile-time generator emits the hidden native entry point.
 
+Connection admission mirrors Dragonfly's `server.Allower` directly:
+
+```csharp
+public override (string Message, bool Allowed) Allow(
+    Net.Addr addr,
+    Login.IdentityData identity,
+    Login.ClientData client)
+{
+    if (Banned(identity.XUID)) return ("You are banned.", false);
+    return (string.Empty, true);
+}
+```
+
+All plugins allow connections by default. Implementations run in deterministic plugin load order;
+the first denial wins. The callback may run concurrently, before a `Player` exists, and Dragonfly's
+warning applies: identity data is verified, but client data is controlled by the connecting client.
+An empty denial message preserves Dragonfly's hidden disconnect-screen behavior.
+
 `OnJoin` is the one player-lifecycle extension supplied by the host rather than a generated
 `player.Handler` method: accepting a player belongs to the server loop in Dragonfly, so its public
 handler interface has no join callback. The host emits it after installing its handler. It receives
@@ -56,7 +74,7 @@ the same transaction-owned `Player.Context` and may cancel admission. The remain
 callbacks continue to mirror `player.Handler`.
 
 Current C# slice: loading, lifecycle, reflected commands, decoded packet interception, player text actions, game mode, typed
-effects, forms, items and player inventories, all 37 methods in Dragonfly's current
+effects, forms, items and player inventories, server connection admission, all 37 methods in Dragonfly's current
 `player.Handler`, and all 13 methods in `world.Handler`. Player callbacks include movement, world
 changes, damage/healing/death, mutable respawns and
 skins, block and item interactions, entity use/attacks, transfers, command execution, client

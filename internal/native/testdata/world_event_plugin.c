@@ -134,10 +134,10 @@ static DfStatus handle_event(void *opaque, DfEventId event, const void *raw_inpu
     }
 }
 
-static const DfPluginApiV10 api = {
+static const DfPluginApiV11 api = {
     .header = {
         .abi_version = DF_ABI_VERSION,
-        .struct_size = sizeof(DfPluginApiV10),
+        .struct_size = sizeof(DfPluginApiV11),
         .subscriptions = ((UINT64_C(1) << 13) - 1) << (DF_EVENT_WORLD_LIQUID_FLOW - 1),
     },
     .plugin_id = {plugin_id, sizeof(plugin_id) - 1},
@@ -147,6 +147,6 @@ static const DfPluginApiV10 api = {
     .handle_event = handle_event,
 };
 
-const DfPluginApiV10 *df_plugin_entry_v10(void) {
+const DfPluginApiV11 *df_plugin_entry_v11(void) {
     return &api;
 }
