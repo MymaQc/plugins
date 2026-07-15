@@ -63,6 +63,17 @@ const (
 	PlayerActionSendSleepingIndicator     PlayerActionKind = 11
 	PlayerActionCloseDialogue             PlayerActionKind = 12
 	PlayerActionRemoveBossBar             PlayerActionKind = 13
+	PlayerActionAbortBreaking             PlayerActionKind = 14
+	PlayerActionClearInputLocks           PlayerActionKind = 15
+	PlayerActionFinishBreaking            PlayerActionKind = 16
+	PlayerActionJump                      PlayerActionKind = 17
+	PlayerActionMoveItemsToInventory      PlayerActionKind = 18
+	PlayerActionPunchAir                  PlayerActionKind = 19
+	PlayerActionReleaseItem               PlayerActionKind = 20
+	PlayerActionRemoveAllDebugShapes      PlayerActionKind = 21
+	PlayerActionSwingArm                  PlayerActionKind = 22
+	PlayerActionUseItem                   PlayerActionKind = 23
+	PlayerActionWake                      PlayerActionKind = 24
 )
 
 type PlayerStringKind uint32

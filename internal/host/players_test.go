@@ -308,6 +308,36 @@ func TestPlayersRunPresentationActions(t *testing.T) {
 	})
 }
 
+func TestPlayersRunZeroArgumentActions(t *testing.T) {
+	withPlayer(t, func(player *player.Player) {
+		players := NewPlayers()
+		id := players.Register(player, 1)
+		invocation, leave := players.BeginInvocation(player.Tx())
+		defer leave()
+
+		for _, action := range []native.PlayerActionKind{
+			native.PlayerActionAbortBreaking,
+			native.PlayerActionClearInputLocks,
+			native.PlayerActionFinishBreaking,
+			native.PlayerActionJump,
+			native.PlayerActionMoveItemsToInventory,
+			native.PlayerActionPunchAir,
+			native.PlayerActionReleaseItem,
+			native.PlayerActionRemoveAllDebugShapes,
+			native.PlayerActionSwingArm,
+			native.PlayerActionUseItem,
+			native.PlayerActionWake,
+		} {
+			if _, ok := players.PlayerAction(invocation, id, action, native.PlayerStateValue{}); !ok {
+				t.Fatalf("action %d failed", action)
+			}
+		}
+		if _, ok := players.PlayerAction(invocation, id, native.PlayerActionKind(99), native.PlayerStateValue{}); ok {
+			t.Fatal("unknown player action accepted")
+		}
+	})
+}
+
 func TestPlayersReadPresentationStrings(t *testing.T) {
 	withPlayer(t, func(player *player.Player) {
 		players := NewPlayers()

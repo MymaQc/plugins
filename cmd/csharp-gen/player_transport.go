@@ -10,6 +10,7 @@ import (
 // explicit so adding or reordering an AST-discovered API cannot renumber it.
 type playerTransportSpec struct {
 	StateMethods        []playerStateMethod
+	ActionMethods       []playerActionMethod
 	PresentationMethods []playerPresentationMethod
 	TextMethods         []method
 	Effects             effectSpec
@@ -73,6 +74,17 @@ var playerActionTransportIDs = []transportNameID{
 	{Name: "SendSleepingIndicator", ID: 11},
 	{Name: "CloseDialogue", ID: 12},
 	{Name: "RemoveBossBar", ID: 13},
+	{Name: "AbortBreaking", ID: 14},
+	{Name: "ClearInputLocks", ID: 15},
+	{Name: "FinishBreaking", ID: 16},
+	{Name: "Jump", ID: 17},
+	{Name: "MoveItemsToInventory", ID: 18},
+	{Name: "PunchAir", ID: 19},
+	{Name: "ReleaseItem", ID: 20},
+	{Name: "RemoveAllDebugShapes", ID: 21},
+	{Name: "SwingArm", ID: 22},
+	{Name: "UseItem", ID: 23},
+	{Name: "Wake", ID: 24},
 }
 
 var playerStringTransportIDs = []transportNameID{
@@ -492,6 +504,28 @@ func runPlayerAction(connected *player.Player, kind native.PlayerActionKind, val
 		connected.CloseDialogue()
 	case native.PlayerActionRemoveBossBar:
 		connected.RemoveBossBar()
+	case native.PlayerActionAbortBreaking:
+		connected.AbortBreaking()
+	case native.PlayerActionClearInputLocks:
+		connected.ClearInputLocks()
+	case native.PlayerActionFinishBreaking:
+		connected.FinishBreaking()
+	case native.PlayerActionJump:
+		connected.Jump()
+	case native.PlayerActionMoveItemsToInventory:
+		connected.MoveItemsToInventory()
+	case native.PlayerActionPunchAir:
+		connected.PunchAir()
+	case native.PlayerActionReleaseItem:
+		connected.ReleaseItem()
+	case native.PlayerActionRemoveAllDebugShapes:
+		connected.RemoveAllDebugShapes()
+	case native.PlayerActionSwingArm:
+		connected.SwingArm()
+	case native.PlayerActionUseItem:
+		connected.UseItem()
+	case native.PlayerActionWake:
+		connected.Wake()
 	default:
 		return native.PlayerStateValue{}, false
 	}
@@ -615,6 +649,13 @@ func validatePlayerTransportSpec(spec playerTransportSpec) error {
 		stateNames = append(stateNames, value.Name)
 	}
 	if err := requireTransportNames("player state methods", stateNames, playerStateTransportASTMethods); err != nil {
+		return err
+	}
+	actionNames := make([]string, 0, len(spec.ActionMethods))
+	for _, value := range spec.ActionMethods {
+		actionNames = append(actionNames, value.Name)
+	}
+	if err := requireTransportNames("player action methods", actionNames, selectedPlayerActionMethods); err != nil {
 		return err
 	}
 	presentationNames := make([]string, 0, len(spec.PresentationMethods))

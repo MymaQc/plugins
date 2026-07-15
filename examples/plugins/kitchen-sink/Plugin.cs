@@ -44,6 +44,7 @@ public sealed class KitchenSink : Plugin
             new KitchenParticle(),
             new KitchenGameMode(),
             new KitchenState(),
+            new KitchenActions(),
             new KitchenPresentation(),
             new KitchenItem(),
             new KitchenForm(),
@@ -444,6 +445,32 @@ public sealed class KitchenSink : Plugin
                 position.X, position.Y, position.Z,
                 velocity.X, velocity.Y, velocity.Z,
                 rotation.Yaw, rotation.Pitch);
+        }
+    }
+
+    internal sealed class KitchenActions : Cmd.Runnable
+    {
+        public Cmd.SubCommand Actions;
+
+        public void Run(Cmd.Source source, Cmd.Output output, World.Tx? tx)
+        {
+            if (source is not Player player)
+            {
+                output.Error("This command can only be used by a player.");
+                return;
+            }
+            player.AbortBreaking();
+            player.ClearInputLocks();
+            player.FinishBreaking();
+            player.Jump();
+            player.MoveItemsToInventory();
+            player.PunchAir();
+            player.ReleaseItem();
+            player.RemoveAllDebugShapes();
+            player.SwingArm();
+            player.UseItem();
+            player.Wake();
+            output.Print("Player actions invoked.");
         }
     }
 

@@ -155,6 +155,28 @@ func runPlayerAction(connected *player.Player, kind native.PlayerActionKind, val
 		connected.CloseDialogue()
 	case native.PlayerActionRemoveBossBar:
 		connected.RemoveBossBar()
+	case native.PlayerActionAbortBreaking:
+		connected.AbortBreaking()
+	case native.PlayerActionClearInputLocks:
+		connected.ClearInputLocks()
+	case native.PlayerActionFinishBreaking:
+		connected.FinishBreaking()
+	case native.PlayerActionJump:
+		connected.Jump()
+	case native.PlayerActionMoveItemsToInventory:
+		connected.MoveItemsToInventory()
+	case native.PlayerActionPunchAir:
+		connected.PunchAir()
+	case native.PlayerActionReleaseItem:
+		connected.ReleaseItem()
+	case native.PlayerActionRemoveAllDebugShapes:
+		connected.RemoveAllDebugShapes()
+	case native.PlayerActionSwingArm:
+		connected.SwingArm()
+	case native.PlayerActionUseItem:
+		connected.UseItem()
+	case native.PlayerActionWake:
+		connected.Wake()
 	default:
 		return native.PlayerStateValue{}, false
 	}

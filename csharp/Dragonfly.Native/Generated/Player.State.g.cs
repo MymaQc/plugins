@@ -50,6 +50,17 @@ public static partial class Abi
     public const uint PlayerActionSendSleepingIndicator = 11;
     public const uint PlayerActionCloseDialogue = 12;
     public const uint PlayerActionRemoveBossBar = 13;
+    public const uint PlayerActionAbortBreaking = 14;
+    public const uint PlayerActionClearInputLocks = 15;
+    public const uint PlayerActionFinishBreaking = 16;
+    public const uint PlayerActionJump = 17;
+    public const uint PlayerActionMoveItemsToInventory = 18;
+    public const uint PlayerActionPunchAir = 19;
+    public const uint PlayerActionReleaseItem = 20;
+    public const uint PlayerActionRemoveAllDebugShapes = 21;
+    public const uint PlayerActionSwingArm = 22;
+    public const uint PlayerActionUseItem = 23;
+    public const uint PlayerActionWake = 24;
     public const uint PlayerStringNameTag = 0;
     public const uint PlayerStringScoreTag = 1;
 }
