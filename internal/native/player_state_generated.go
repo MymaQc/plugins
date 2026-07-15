@@ -74,6 +74,12 @@ const (
 	PlayerActionSwingArm                  PlayerActionKind = 22
 	PlayerActionUseItem                   PlayerActionKind = 23
 	PlayerActionWake                      PlayerActionKind = 24
+	PlayerActionShowHudElement            PlayerActionKind = 25
+	PlayerActionHideHudElement            PlayerActionKind = 26
+	PlayerActionHudElementHidden          PlayerActionKind = 27
+	PlayerActionLockInput                 PlayerActionKind = 28
+	PlayerActionUnlockInput               PlayerActionKind = 29
+	PlayerActionInputLocked               PlayerActionKind = 30
 )
 
 type PlayerStringKind uint32

@@ -14,6 +14,8 @@ import (
 	"github.com/df-mc/dragonfly/server/entity/effect"
 	"github.com/df-mc/dragonfly/server/item/enchantment"
 	"github.com/df-mc/dragonfly/server/player"
+	"github.com/df-mc/dragonfly/server/player/hud"
+	"github.com/df-mc/dragonfly/server/player/input"
 	"github.com/df-mc/dragonfly/server/world"
 	"github.com/go-gl/mathgl/mgl64"
 	"github.com/google/uuid"
@@ -336,6 +338,20 @@ func TestPlayersRunZeroArgumentActions(t *testing.T) {
 			t.Fatal("unknown player action accepted")
 		}
 	})
+}
+
+func TestPlayerControlMappings(t *testing.T) {
+	element, elementOK := playerHudElement(0)
+	lock, lockOK := playerInputLock(4096)
+	if !elementOK || element != hud.PaperDoll() || !lockOK || lock != input.MoveRight() {
+		t.Fatalf("decoded controls = %#v/%v %#v/%v", element, elementOK, lock, lockOK)
+	}
+	if _, ok := playerHudElement(-1); ok {
+		t.Fatal("invalid HUD element decoded")
+	}
+	if _, ok := playerInputLock(8); ok {
+		t.Fatal("reserved input lock decoded")
+	}
 }
 
 func TestPlayersReadPresentationStrings(t *testing.T) {

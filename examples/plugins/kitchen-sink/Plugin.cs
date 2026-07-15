@@ -59,7 +59,8 @@ public sealed class KitchenSink : Plugin
             new KitchenServer(this),
             new KitchenHandle(),
             new KitchenCustomEntity(),
-            new KitchenSound()));
+            new KitchenSound(),
+            new KitchenControls()));
         Console.WriteLine("kitchen-sink enabled");
     }
 
@@ -471,6 +472,35 @@ public sealed class KitchenSink : Plugin
             player.UseItem();
             player.Wake();
             output.Print("Player actions invoked.");
+        }
+    }
+
+    internal sealed class KitchenControls : Cmd.Runnable
+    {
+        public Cmd.SubCommand Controls;
+
+        public void Run(Cmd.Source source, Cmd.Output output, World.Tx? tx)
+        {
+            if (source is not Player player)
+            {
+                output.Error("This command can only be used by a player.");
+                return;
+            }
+            var elements = Hud.All();
+            foreach (var element in elements)
+            {
+                player.HideHudElement(element);
+                _ = player.HudElementHidden(element);
+                player.ShowHudElement(element);
+            }
+            var locks = Input.All();
+            foreach (var inputLock in locks)
+            {
+                player.LockInput(inputLock);
+                _ = player.InputLocked(inputLock);
+                player.UnlockInput(inputLock);
+            }
+            output.Printf("hud={0}, input={1}", elements.Length, locks.Length);
         }
     }
 

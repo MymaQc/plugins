@@ -442,6 +442,48 @@ func TestCSharpPlayerZeroArgumentActions(t *testing.T) {
 	}
 }
 
+func TestCSharpPlayerControls(t *testing.T) {
+	host := &recordingHost{}
+	pluginRuntime := openCSharpRuntimeWithHost(t, host)
+	commands, err := pluginRuntime.Commands()
+	if err != nil {
+		t.Fatal(err)
+	}
+	kitchen := commandNamed(t, commands, "kitchen")
+	var overload uint64
+	found := false
+	for index, candidate := range kitchen.Overloads {
+		if len(candidate.Parameters) == 1 && candidate.Parameters[0].Name == "controls" {
+			overload, found = uint64(index), true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("controls overload missing: %#v", kitchen.Overloads)
+	}
+	player := PlayerID{UUID: [16]byte{5}, Generation: 4}
+	output, err := pluginRuntime.HandleCommand(kitchen.Index, CommandInput{
+		Invocation: 42, Source: "Danick", SourceKind: CommandSourcePlayer, SourcePlayer: &player,
+		Overload: overload, Arguments: []string{"controls"},
+		OnlinePlayers: []CommandPlayer{{Player: player, Name: "Danick"}},
+	})
+	if err != nil || output.Failed || output.Message != "hud=13, input=11" {
+		t.Fatalf("controls output=%#v error=%v", output, err)
+	}
+	var want []PlayerActionKind
+	for range 13 {
+		want = append(want, PlayerActionHideHudElement, PlayerActionHudElementHidden, PlayerActionShowHudElement)
+	}
+	for range 11 {
+		want = append(want, PlayerActionLockInput, PlayerActionInputLocked, PlayerActionUnlockInput)
+	}
+	if !slices.Equal(host.actions, want) || len(host.actionValues) != 72 ||
+		host.actionValues[0].Integer != 0 || host.actionValues[38].Integer != 12 ||
+		host.actionValues[39].Integer != 2 || host.actionValues[71].Integer != 4096 {
+		t.Fatalf("control actions=%v values=%v", host.actions, host.actionValues)
+	}
+}
+
 func TestCSharpTypedEffects(t *testing.T) {
 	host := &recordingHost{}
 	pluginRuntime := openCSharpRuntimeWithHost(t, host)
@@ -973,7 +1015,7 @@ func TestCSharpReflectedCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 	kitchen := commandNamed(t, commands, "kitchen")
-	if !slices.Contains(kitchen.Aliases, "ks") || len(kitchen.Overloads) != 29 {
+	if !slices.Contains(kitchen.Aliases, "ks") || len(kitchen.Overloads) != 30 {
 		t.Fatalf("kitchen descriptor = %#v", kitchen)
 	}
 	if kitchen.Overloads[1].Parameters[0].Name != "echo" ||

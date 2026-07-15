@@ -61,6 +61,12 @@ public static partial class Abi
     public const uint PlayerActionSwingArm = 22;
     public const uint PlayerActionUseItem = 23;
     public const uint PlayerActionWake = 24;
+    public const uint PlayerActionShowHudElement = 25;
+    public const uint PlayerActionHideHudElement = 26;
+    public const uint PlayerActionHudElementHidden = 27;
+    public const uint PlayerActionLockInput = 28;
+    public const uint PlayerActionUnlockInput = 29;
+    public const uint PlayerActionInputLocked = 30;
     public const uint PlayerStringNameTag = 0;
     public const uint PlayerStringScoreTag = 1;
 }

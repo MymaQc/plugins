@@ -611,6 +611,15 @@ func main() {
 	if err != nil {
 		fatal(err)
 	}
+	playerControls, err := inspectPlayerControls(
+		filepath.Join(directory, "server", "player", "player.go"),
+		filepath.Join(directory, "server", "player", "hud", "element.go"),
+		filepath.Join(directory, "server", "player", "input", "lock.go"),
+		filepath.Join(gophertunnelDirectory, "minecraft", "protocol", "packet", "update_client_input_locks.go"),
+	)
+	if err != nil {
+		fatal(err)
+	}
 	playerPresentationMethods, err := inspectPlayerPresentationMethods(filepath.Join(directory, "server", "player", "player.go"))
 	if err != nil {
 		fatal(err)
@@ -733,7 +742,7 @@ func main() {
 		fatal(err)
 	}
 	playerTransport := playerTransportSpec{
-		StateMethods: playerStateMethods, ActionMethods: playerActionMethods, PresentationMethods: playerPresentationMethods,
+		StateMethods: playerStateMethods, ActionMethods: playerActionMethods, Controls: playerControls, PresentationMethods: playerPresentationMethods,
 		TextMethods: playerMethods, Effects: effects, Sounds: sounds, GameModeMethods: playerGameModes,
 	}
 	nativePlayerTransport, err := generateNativePlayerTransport(playerTransport)
@@ -816,6 +825,10 @@ func main() {
 		{
 			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "Player.Action.g.cs"),
 			Content: generatePlayerActionMethods(playerActionMethods),
+		},
+		{
+			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "Player.Control.g.cs"),
+			Content: generatePlayerControls(playerControls),
 		},
 		{
 			Path:    filepath.Join(*root, "csharp", "Dragonfly", "Generated", "Player.Presentation.g.cs"),

@@ -11,6 +11,7 @@ import (
 type playerTransportSpec struct {
 	StateMethods        []playerStateMethod
 	ActionMethods       []playerActionMethod
+	Controls            playerControlSpec
 	PresentationMethods []playerPresentationMethod
 	TextMethods         []method
 	Effects             effectSpec
@@ -85,6 +86,12 @@ var playerActionTransportIDs = []transportNameID{
 	{Name: "SwingArm", ID: 22},
 	{Name: "UseItem", ID: 23},
 	{Name: "Wake", ID: 24},
+	{Name: "ShowHudElement", ID: 25},
+	{Name: "HideHudElement", ID: 26},
+	{Name: "HudElementHidden", ID: 27},
+	{Name: "LockInput", ID: 28},
+	{Name: "UnlockInput", ID: 29},
+	{Name: "InputLocked", ID: 30},
 }
 
 var playerStringTransportIDs = []transportNameID{
@@ -360,6 +367,8 @@ import (
 
 	"github.com/bedrock-gophers/plugins/internal/native"
 	"github.com/df-mc/dragonfly/server/player"
+	"github.com/df-mc/dragonfly/server/player/hud"
+	"github.com/df-mc/dragonfly/server/player/input"
 )
 
 func sendPlayerText(connected *player.Player, kind native.PlayerTextKind, message string) bool {
@@ -526,10 +535,68 @@ func runPlayerAction(connected *player.Player, kind native.PlayerActionKind, val
 		connected.UseItem()
 	case native.PlayerActionWake:
 		connected.Wake()
+	case native.PlayerActionShowHudElement:
+		element, ok := playerHudElement(value.Integer)
+		if !ok {
+			return native.PlayerStateValue{}, false
+		}
+		connected.ShowHudElement(element)
+	case native.PlayerActionHideHudElement:
+		element, ok := playerHudElement(value.Integer)
+		if !ok {
+			return native.PlayerStateValue{}, false
+		}
+		connected.HideHudElement(element)
+	case native.PlayerActionHudElementHidden:
+		element, ok := playerHudElement(value.Integer)
+		if !ok {
+			return native.PlayerStateValue{}, false
+		}
+		return native.PlayerStateValue{Integer: boolInteger(connected.HudElementHidden(element))}, true
+	case native.PlayerActionLockInput:
+		lock, ok := playerInputLock(value.Integer)
+		if !ok {
+			return native.PlayerStateValue{}, false
+		}
+		connected.LockInput(lock)
+	case native.PlayerActionUnlockInput:
+		lock, ok := playerInputLock(value.Integer)
+		if !ok {
+			return native.PlayerStateValue{}, false
+		}
+		connected.UnlockInput(lock)
+	case native.PlayerActionInputLocked:
+		lock, ok := playerInputLock(value.Integer)
+		if !ok {
+			return native.PlayerStateValue{}, false
+		}
+		return native.PlayerStateValue{Integer: boolInteger(connected.InputLocked(lock))}, true
 	default:
 		return native.PlayerStateValue{}, false
 	}
 	return native.PlayerStateValue{}, true
+}
+
+func playerHudElement(value int64) (hud.Element, bool) {
+	switch value {
+`)
+	for _, value := range spec.Controls.HudElements {
+		fmt.Fprintf(&output, "\tcase %d:\n\t\treturn hud.%s(), true\n", value.Value, value.Name)
+	}
+	output.WriteString(`	default:
+		return hud.Element{}, false
+	}
+}
+
+func playerInputLock(value int64) (input.Lock, bool) {
+	switch value {
+`)
+	for _, value := range spec.Controls.InputLocks {
+		fmt.Fprintf(&output, "\tcase %d:\n\t\treturn input.%s(), true\n", value.Value, value.Name)
+	}
+	output.WriteString(`	default:
+		return input.Lock{}, false
+	}
 }
 
 func playerString(connected *player.Player, kind native.PlayerStringKind) (string, bool) {
@@ -656,6 +723,13 @@ func validatePlayerTransportSpec(spec playerTransportSpec) error {
 		actionNames = append(actionNames, value.Name)
 	}
 	if err := requireTransportNames("player action methods", actionNames, selectedPlayerActionMethods); err != nil {
+		return err
+	}
+	controlNames := make([]string, 0, len(spec.Controls.Methods))
+	for _, value := range spec.Controls.Methods {
+		controlNames = append(controlNames, value.Name)
+	}
+	if err := requireTransportNames("player control methods", controlNames, selectedPlayerControlMethods); err != nil {
 		return err
 	}
 	presentationNames := make([]string, 0, len(spec.PresentationMethods))

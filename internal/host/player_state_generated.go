@@ -8,6 +8,8 @@ import (
 
 	"github.com/bedrock-gophers/plugins/internal/native"
 	"github.com/df-mc/dragonfly/server/player"
+	"github.com/df-mc/dragonfly/server/player/hud"
+	"github.com/df-mc/dragonfly/server/player/input"
 )
 
 func sendPlayerText(connected *player.Player, kind native.PlayerTextKind, message string) bool {
@@ -177,10 +179,108 @@ func runPlayerAction(connected *player.Player, kind native.PlayerActionKind, val
 		connected.UseItem()
 	case native.PlayerActionWake:
 		connected.Wake()
+	case native.PlayerActionShowHudElement:
+		element, ok := playerHudElement(value.Integer)
+		if !ok {
+			return native.PlayerStateValue{}, false
+		}
+		connected.ShowHudElement(element)
+	case native.PlayerActionHideHudElement:
+		element, ok := playerHudElement(value.Integer)
+		if !ok {
+			return native.PlayerStateValue{}, false
+		}
+		connected.HideHudElement(element)
+	case native.PlayerActionHudElementHidden:
+		element, ok := playerHudElement(value.Integer)
+		if !ok {
+			return native.PlayerStateValue{}, false
+		}
+		return native.PlayerStateValue{Integer: boolInteger(connected.HudElementHidden(element))}, true
+	case native.PlayerActionLockInput:
+		lock, ok := playerInputLock(value.Integer)
+		if !ok {
+			return native.PlayerStateValue{}, false
+		}
+		connected.LockInput(lock)
+	case native.PlayerActionUnlockInput:
+		lock, ok := playerInputLock(value.Integer)
+		if !ok {
+			return native.PlayerStateValue{}, false
+		}
+		connected.UnlockInput(lock)
+	case native.PlayerActionInputLocked:
+		lock, ok := playerInputLock(value.Integer)
+		if !ok {
+			return native.PlayerStateValue{}, false
+		}
+		return native.PlayerStateValue{Integer: boolInteger(connected.InputLocked(lock))}, true
 	default:
 		return native.PlayerStateValue{}, false
 	}
 	return native.PlayerStateValue{}, true
+}
+
+func playerHudElement(value int64) (hud.Element, bool) {
+	switch value {
+	case 0:
+		return hud.PaperDoll(), true
+	case 1:
+		return hud.Armour(), true
+	case 2:
+		return hud.ToolTips(), true
+	case 3:
+		return hud.TouchControls(), true
+	case 4:
+		return hud.Crosshair(), true
+	case 5:
+		return hud.HotBar(), true
+	case 6:
+		return hud.Health(), true
+	case 7:
+		return hud.ProgressBar(), true
+	case 8:
+		return hud.Hunger(), true
+	case 9:
+		return hud.AirBubbles(), true
+	case 10:
+		return hud.HorseHealth(), true
+	case 11:
+		return hud.StatusEffects(), true
+	case 12:
+		return hud.ItemText(), true
+	default:
+		return hud.Element{}, false
+	}
+}
+
+func playerInputLock(value int64) (input.Lock, bool) {
+	switch value {
+	case 2:
+		return input.Camera(), true
+	case 4:
+		return input.Movement(), true
+	case 16:
+		return input.LateralMovement(), true
+	case 32:
+		return input.Sneak(), true
+	case 64:
+		return input.Jump(), true
+	case 128:
+		return input.Mount(), true
+	case 256:
+		return input.Dismount(), true
+	case 512:
+		return input.MoveForward(), true
+	case 1024:
+		return input.MoveBackward(), true
+	case 2048:
+		return input.MoveLeft(), true
+	case 4096:
+		return input.MoveRight(), true
+	default:
+		return input.Lock{}, false
+	}
 }
 
 func playerString(connected *player.Player, kind native.PlayerStringKind) (string, bool) {
