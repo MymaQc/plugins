@@ -128,6 +128,41 @@ func TestPlayersRunExactBlockActionsInActiveTransaction(t *testing.T) {
 	})
 }
 
+func TestPlayersRunExactViewLayerMethodsInActiveTransaction(t *testing.T) {
+	withPlayerTx(t, func(tx *world.Tx, connected *player.Player) {
+		players := NewPlayers()
+		id := players.Register(connected, 4)
+		invocation, end := players.BeginInvocation(tx)
+		defer end()
+		entity := native.EntityID{UUID: id.UUID, Generation: id.Generation}
+		calls := []struct {
+			kind       native.PlayerViewLayerKind
+			text       string
+			visibility uint8
+		}{
+			{native.PlayerViewLayerViewNameTag, "viewer name", 0},
+			{native.PlayerViewLayerViewPublicNameTag, "", 0},
+			{native.PlayerViewLayerViewScoreTag, "viewer score", 0},
+			{native.PlayerViewLayerViewPublicScoreTag, "", 0},
+			{native.PlayerViewLayerViewVisibility, "", 0},
+			{native.PlayerViewLayerViewVisibility, "", 1},
+			{native.PlayerViewLayerViewVisibility, "", 2},
+			{native.PlayerViewLayerRemoveViewLayer, "", 0},
+		}
+		for _, call := range calls {
+			if !players.PlayerViewLayer(invocation, id, entity, call.kind, call.text, call.visibility) {
+				t.Fatalf("view-layer method %d rejected", call.kind)
+			}
+		}
+		if players.PlayerViewLayer(invocation, id, entity, native.PlayerViewLayerKind(999), "", 0) {
+			t.Fatal("unknown view-layer method accepted")
+		}
+		if players.PlayerViewLayer(invocation, id, entity, native.PlayerViewLayerViewVisibility, "", 3) {
+			t.Fatal("unknown visibility level accepted")
+		}
+	})
+}
+
 type testCustomGameMode struct {
 	flags uint8
 	data  []byte

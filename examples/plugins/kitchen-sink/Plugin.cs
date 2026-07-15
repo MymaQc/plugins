@@ -1463,7 +1463,15 @@ public sealed class KitchenSink : Plugin
             }
             player.HideEntity(player);
             player.ShowEntity(player);
-            output.Printf("visibility=hide/show");
+            player.ViewNameTag(player, "Kitchen Viewer");
+            player.ViewPublicNameTag(player);
+            player.ViewScoreTag(player, "Kitchen Score");
+            player.ViewPublicScoreTag(player);
+            player.ViewVisibility(player, World.EnforceInvisible());
+            player.ViewVisibility(player, World.EnforceVisible());
+            player.ViewVisibility(player, World.PublicVisibility());
+            player.RemoveViewLayer(player);
+            output.Printf("visibility=hide/show/view-layer");
         }
     }
 

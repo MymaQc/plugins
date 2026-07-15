@@ -9,8 +9,8 @@ extern "C" {
 #endif
 
 #define DF_ABI_VERSION 11u
-// Host version 58 adds exact player block-interaction methods.
-#define DF_HOST_ABI_VERSION 58u
+// Host version 59 adds exact per-viewer entity overrides.
+#define DF_HOST_ABI_VERSION 59u
 #define DF_STATUS_OK 0
 #define DF_STATUS_ERROR 1
 
@@ -378,6 +378,7 @@ typedef DfStatus (*DfHostPlayerUsingItemFn)(uint64_t context, DfInvocationId inv
 typedef DfStatus (*DfHostPlayerSleepingFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfBlockPos *position, uint8_t *sleeping);
 typedef DfStatus (*DfHostPlayerDeathPositionFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfVec3 *position, DfDimensionView *dimension, uint8_t *found);
 typedef DfStatus (*DfHostPlayerBlockActionFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t kind, DfBlockPos position, int32_t face, DfVec3 click_position);
+typedef DfStatus (*DfHostPlayerViewLayerFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfEntityId entity, uint32_t kind, DfStringView text, uint8_t visibility);
 typedef DfStatus (*DfHostPlayerEffectFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, uint32_t operation, DfEffectView effect);
 typedef DfStatus (*DfHostPlayerEffectsFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player, DfEffectBuffer *output);
 typedef DfStatus (*DfHostPlayerEffectsClearFn)(uint64_t context, DfInvocationId invocation, DfPlayerId player);
@@ -648,6 +649,7 @@ typedef struct {
     DfHostPlayerSleepingFn player_sleeping;
     DfHostPlayerDeathPositionFn player_death_position;
     DfHostPlayerBlockActionFn player_block_action;
+    DfHostPlayerViewLayerFn player_view_layer;
 } DfHostApiV27;
 #define DF_COMMAND_PARAMETER_SUBCOMMAND 1u
 #define DF_COMMAND_PARAMETER_ENUM 2u

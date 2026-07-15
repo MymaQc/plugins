@@ -217,6 +217,12 @@ type recordingHost struct {
 	activeEffects []PlayerEffect
 	entities      []EntityID
 	visible       []bool
+	viewLayer     []struct {
+		Entity     EntityID
+		Kind       PlayerViewLayerKind
+		Text       string
+		Visibility uint8
+	}
 	skin          PlayerSkin
 	setSkins      []PlayerSkin
 	inventoryItem ItemStack
@@ -387,6 +393,16 @@ func (h *recordingHost) PlayerBlockAction(_ InvocationID, _ PlayerID, kind Playe
 		Face          int32
 		ClickPosition Vec3
 	}{kind, position, face, clickPosition})
+	return true
+}
+
+func (h *recordingHost) PlayerViewLayer(_ InvocationID, _ PlayerID, entity EntityID, kind PlayerViewLayerKind, text string, visibility uint8) bool {
+	h.viewLayer = append(h.viewLayer, struct {
+		Entity     EntityID
+		Kind       PlayerViewLayerKind
+		Text       string
+		Visibility uint8
+	}{entity, kind, text, visibility})
 	return true
 }
 

@@ -33,6 +33,8 @@ Runnable parity showcase. Its single plugin class demonstrates:
 - all 20 generated particle types and all 16 typed note instruments in `/kitchen particle`;
 - exact world-broadcast and player-only sound playback across every payload family in `/kitchen sound`;
 - registered lookup, player reads, and custom `World.GameMode` in `/kitchen game-mode`;
+- exact hide/show and all six per-viewer name-tag, score-tag, and visibility overrides in
+  `/kitchen visibility`;
 - food, health, experience, scale, visibility, and mobility state round-trips in `/kitchen state`;
 - direct typed healing in `/kitchen heal`;
 - in-memory `World.New()`, writable MCDB-backed `World.Config.New()`, owner scheduling,

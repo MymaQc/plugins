@@ -1582,6 +1582,33 @@ internal static unsafe class PluginBridge
                 visible ? (byte)1 : (byte)0);
         }
 
+        internal static void RunPlayerViewLayer(
+            ulong invocation,
+            PlayerId player,
+            World.Entity entity,
+            uint kind,
+            string text,
+            World.VisibilityLevel visibility)
+        {
+            ArgumentNullException.ThrowIfNull(entity);
+            ArgumentNullException.ThrowIfNull(text);
+            var api = Api;
+            if (api is null || api->PlayerViewLayer == null ||
+                !TryEntityId(invocation, entity, out var entityId)) return;
+            var bytes = Encoding.UTF8.GetBytes(text);
+            fixed (byte* data = bytes)
+            {
+                _ = api->PlayerViewLayer(
+                    api->Context,
+                    invocation,
+                    player,
+                    entityId,
+                    kind,
+                    new StringView { Data = data, Length = (ulong)bytes.Length },
+                    visibility.Value);
+            }
+        }
+
         internal static Skin PlayerSkin(ulong invocation, PlayerId player)
         {
             var api = Api;

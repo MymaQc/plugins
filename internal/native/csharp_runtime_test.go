@@ -556,12 +556,34 @@ func TestCSharpPlayerEntityVisibilityMethods(t *testing.T) {
 		Overload: overload, Arguments: []string{"visibility"},
 		OnlinePlayers: []CommandPlayer{{Player: player, Name: "Danick"}},
 	})
-	if err != nil || output.Failed || output.Message != "visibility=hide/show" {
+	if err != nil || output.Failed || output.Message != "visibility=hide/show/view-layer" {
 		t.Fatalf("visibility output=%#v error=%v", output, err)
 	}
 	entity := EntityID{UUID: player.UUID, Generation: player.Generation}
 	if !slices.Equal(host.entities, []EntityID{entity, entity}) || !slices.Equal(host.visible, []bool{false, true}) {
 		t.Fatalf("visibility calls: entities=%+v visible=%v", host.entities, host.visible)
+	}
+	wantKinds := []PlayerViewLayerKind{
+		PlayerViewLayerViewNameTag,
+		PlayerViewLayerViewPublicNameTag,
+		PlayerViewLayerViewScoreTag,
+		PlayerViewLayerViewPublicScoreTag,
+		PlayerViewLayerViewVisibility,
+		PlayerViewLayerViewVisibility,
+		PlayerViewLayerViewVisibility,
+		PlayerViewLayerRemoveViewLayer,
+	}
+	if len(host.viewLayer) != len(wantKinds) {
+		t.Fatalf("view-layer calls=%+v", host.viewLayer)
+	}
+	for index, kind := range wantKinds {
+		if call := host.viewLayer[index]; call.Entity != entity || call.Kind != kind {
+			t.Fatalf("view-layer call %d=%+v, want kind %d", index, call, kind)
+		}
+	}
+	if host.viewLayer[0].Text != "Kitchen Viewer" || host.viewLayer[2].Text != "Kitchen Score" ||
+		host.viewLayer[4].Visibility != 1 || host.viewLayer[5].Visibility != 2 || host.viewLayer[6].Visibility != 0 {
+		t.Fatalf("view-layer payloads=%+v", host.viewLayer)
 	}
 }
 

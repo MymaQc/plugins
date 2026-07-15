@@ -838,14 +838,26 @@ func (p *Players) ClearPlayerEffects(invocation native.InvocationID, id native.P
 }
 
 func (p *Players) SetPlayerEntityVisible(invocation native.InvocationID, viewerID native.PlayerID, entityID native.EntityID, visible bool) bool {
+	return p.runPlayerEntityAction(invocation, viewerID, entityID, func(viewer *player.Player, entity world.Entity) bool {
+		setPlayerEntityVisible(viewer, entity, visible)
+		return true
+	})
+}
+
+func (p *Players) PlayerViewLayer(invocation native.InvocationID, viewerID native.PlayerID, entityID native.EntityID, kind native.PlayerViewLayerKind, text string, visibility uint8) bool {
+	return p.runPlayerEntityAction(invocation, viewerID, entityID, func(viewer *player.Player, entity world.Entity) bool {
+		return runPlayerViewLayer(viewer, entity, kind, text, visibility)
+	})
+}
+
+func (p *Players) runPlayerEntityAction(invocation native.InvocationID, viewerID native.PlayerID, entityID native.EntityID, action func(*player.Player, world.Entity) bool) bool {
 	viewer, ok := p.ResolveID(viewerID, invocation)
 	if ok {
 		entity, ok := p.ResolveEntityID(entityID, invocation)
 		if !ok {
 			return false
 		}
-		setPlayerEntityVisible(viewer, entity, visible)
-		return true
+		return action(viewer, entity)
 	}
 	if invocation != 0 {
 		if _, ok := p.InvocationTx(invocation); !ok {
@@ -860,13 +872,14 @@ func (p *Players) SetPlayerEntityVisible(invocation native.InvocationID, viewerI
 	if !ok {
 		return false
 	}
+	accepted := false
 	task := world.NewEntityRef[*player.Player](viewerEntry.handle).Do(func(tx *world.Tx, connected *player.Player) {
 		entity, ok := entityHandle.Entity(tx)
 		if ok {
-			setPlayerEntityVisible(connected, entity, visible)
+			accepted = action(connected, entity)
 		}
 	})
-	return task.Err() == nil
+	return task.Err() == nil && accepted
 }
 
 func setPlayerEntityVisible(viewer *player.Player, entity world.Entity, visible bool) {
