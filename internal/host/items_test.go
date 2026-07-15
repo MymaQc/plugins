@@ -1,7 +1,9 @@
 package host
 
 import (
+	"bytes"
 	"context"
+	"encoding/gob"
 	"reflect"
 	"testing"
 
@@ -56,6 +58,55 @@ func TestPlayersInventoryItemRoundTrip(t *testing.T) {
 			t.Fatalf("held=%#v ok=%v", held, ok)
 		}
 	})
+}
+
+func TestItemStackFromNativeNormalizesByteArrayValues(t *testing.T) {
+	valuesNBT, ok := marshalItemNBT(map[string]any{
+		"bytes": fixedByteArray([]byte{1, 2, 3}),
+		"nested": map[string]any{
+			"raw": fixedByteArray([]byte{4, 5}),
+		},
+	})
+	if !ok {
+		t.Fatal("encode values")
+	}
+	stack, ok := itemStackFromNative(native.ItemStack{
+		Identifier: "minecraft:diamond_sword",
+		Count:      1,
+		ValuesNBT:  valuesNBT,
+	})
+	if !ok {
+		t.Fatal("decode item stack")
+	}
+	value, ok := stack.Value("bytes")
+	if !ok {
+		t.Fatal("missing bytes value")
+	}
+	bytesValue, ok := value.([]byte)
+	if !ok || !bytes.Equal(bytesValue, []byte{1, 2, 3}) {
+		t.Fatalf("stack bytes=%#v ok=%v", value, ok)
+	}
+	nested, ok := stack.Value("nested")
+	if !ok {
+		t.Fatal("missing nested value")
+	}
+	raw, ok := nested.(map[string]any)["raw"].([]byte)
+	if !ok || !bytes.Equal(raw, []byte{4, 5}) {
+		t.Fatalf("nested raw=%#v ok=%v", nested, ok)
+	}
+	values := stack.Values()
+	type mapValue struct {
+		K string
+		V any
+	}
+	encoded := []mapValue{
+		{K: "bytes", V: values["bytes"]},
+		{K: "nested", V: values["nested"]},
+		{K: "stats", V: map[string]any{"uses": int32(0), "rarity": "demo"}},
+	}
+	if err := gob.NewEncoder(new(bytes.Buffer)).Encode(encoded); err != nil {
+		t.Fatalf("gob encode values: %v", err)
+	}
 }
 
 func TestPlayersInventoryAddClearAndOffhand(t *testing.T) {
