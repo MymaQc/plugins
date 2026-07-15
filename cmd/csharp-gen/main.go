@@ -732,6 +732,10 @@ func main() {
 	if err != nil {
 		fatal(err)
 	}
+	csharpPlayerStateTransport, err := generateCSharpPlayerStateTransport(playerTransport)
+	if err != nil {
+		fatal(err)
+	}
 	hostPlayerTransport, err := generateHostPlayerTransport(playerTransport)
 	if err != nil {
 		fatal(err)
@@ -740,6 +744,10 @@ func main() {
 		{
 			Path:    filepath.Join(*root, "internal", "native", "player_state_generated.go"),
 			Content: nativePlayerTransport,
+		},
+		{
+			Path:    filepath.Join(*root, "csharp", "Dragonfly.Native", "Generated", "Player.State.g.cs"),
+			Content: csharpPlayerStateTransport,
 		},
 		{
 			Path:    filepath.Join(*root, "internal", "host", "player_state_generated.go"),

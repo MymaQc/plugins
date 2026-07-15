@@ -48,6 +48,10 @@ var playerStateTransportIDs = []transportNameID{
 	{Name: "Crawling", ID: 24},
 	{Name: "Gliding", ID: 25},
 	{Name: "Flying", ID: 26},
+	{Name: "OnFireDuration", ID: 27},
+	{Name: "FireProof", ID: 28},
+	{Name: "AirSupply", ID: 29},
+	{Name: "MaxAirSupply", ID: 30},
 }
 
 var playerStateTransportASTMethods = []string{
@@ -59,6 +63,8 @@ var playerStateTransportASTMethods = []string{
 	"StartSprinting", "StopSprinting", "Sprinting", "StartSneaking", "StopSneaking", "Sneaking",
 	"StartSwimming", "StopSwimming", "Swimming", "StartCrawling", "StopCrawling", "Crawling",
 	"StartGliding", "StopGliding", "Gliding", "StartFlying", "StopFlying", "Flying",
+	"FireProof", "OnFireDuration", "SetOnFire", "Extinguish",
+	"AirSupply", "SetAirSupply", "MaxAirSupply", "SetMaxAirSupply",
 }
 
 var playerTextTransportIDs = []transportNameID{
@@ -263,6 +269,19 @@ const (
 	return output.Bytes(), nil
 }
 
+func generateCSharpPlayerStateTransport(spec playerTransportSpec) ([]byte, error) {
+	if err := validatePlayerTransportSpec(spec); err != nil {
+		return nil, err
+	}
+	var output bytes.Buffer
+	output.WriteString("// Code generated from Dragonfly Go AST by csharp-gen. DO NOT EDIT.\n\nnamespace Dragonfly.Native;\n\npublic static partial class Abi\n{\n")
+	for _, entry := range playerStateTransportIDs {
+		fmt.Fprintf(&output, "    public const uint PlayerState%s = %d;\n", entry.Name, entry.ID)
+	}
+	output.WriteString("}\n")
+	return output.Bytes(), nil
+}
+
 func generateHostPlayerTransport(spec playerTransportSpec) ([]byte, error) {
 	if err := validatePlayerTransportSpec(spec); err != nil {
 		return nil, err
@@ -274,6 +293,7 @@ package host
 
 import (
 	"math"
+	"time"
 
 	"github.com/bedrock-gophers/plugins/internal/native"
 	"github.com/df-mc/dragonfly/server/player"
@@ -375,6 +395,12 @@ func setPlayerState(connected *player.Player, kind native.PlayerStateKind, value
 		if !setPlayerActivity(value.Integer, connected.StartFlying, connected.StopFlying) {
 			return false
 		}
+	case native.PlayerStateOnFireDuration:
+		connected.SetOnFire(time.Duration(value.Integer))
+	case native.PlayerStateAirSupply:
+		connected.SetAirSupply(time.Duration(value.Integer))
+	case native.PlayerStateMaxAirSupply:
+		connected.SetMaxAirSupply(time.Duration(value.Integer))
 	default:
 		return false
 	}
@@ -440,6 +466,14 @@ func readPlayerState(connected *player.Player, kind native.PlayerStateKind) (nat
 		return native.PlayerStateValue{Integer: boolInteger(connected.Gliding())}, true
 	case native.PlayerStateFlying:
 		return native.PlayerStateValue{Integer: boolInteger(connected.Flying())}, true
+	case native.PlayerStateOnFireDuration:
+		return native.PlayerStateValue{Integer: int64(connected.OnFireDuration())}, true
+	case native.PlayerStateFireProof:
+		return native.PlayerStateValue{Integer: boolInteger(connected.FireProof())}, true
+	case native.PlayerStateAirSupply:
+		return native.PlayerStateValue{Integer: int64(connected.AirSupply())}, true
+	case native.PlayerStateMaxAirSupply:
+		return native.PlayerStateValue{Integer: int64(connected.MaxAirSupply())}, true
 	default:
 		return native.PlayerStateValue{}, false
 	}

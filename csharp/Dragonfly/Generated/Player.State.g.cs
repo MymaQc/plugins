@@ -67,4 +67,12 @@ public sealed partial class Player
     public void StartFlying() => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateFlying, new PlayerStateValue { Integer = 1 });
     public void StopFlying() => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateFlying, default);
     public bool Flying() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateFlying).Integer != 0;
+    public bool FireProof() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateFireProof).Integer != 0;
+    public TimeSpan OnFireDuration() => PluginBridge.Host.PlayerDuration(PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateOnFireDuration).Integer);
+    public void SetOnFire(TimeSpan duration) => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateOnFireDuration, new PlayerStateValue { Integer = PluginBridge.Host.DurationNanoseconds(duration, nameof(duration)) });
+    public void Extinguish() => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateOnFireDuration, default);
+    public TimeSpan AirSupply() => PluginBridge.Host.PlayerDuration(PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateAirSupply).Integer);
+    public void SetAirSupply(TimeSpan duration) => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateAirSupply, new PlayerStateValue { Integer = PluginBridge.Host.DurationNanoseconds(duration, nameof(duration)) });
+    public TimeSpan MaxAirSupply() => PluginBridge.Host.PlayerDuration(PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateMaxAirSupply).Integer);
+    public void SetMaxAirSupply(TimeSpan duration) => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateMaxAirSupply, new PlayerStateValue { Integer = PluginBridge.Host.DurationNanoseconds(duration, nameof(duration)) });
 }

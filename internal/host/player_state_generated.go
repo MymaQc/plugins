@@ -4,6 +4,7 @@ package host
 
 import (
 	"math"
+	"time"
 
 	"github.com/bedrock-gophers/plugins/internal/native"
 	"github.com/df-mc/dragonfly/server/player"
@@ -108,6 +109,12 @@ func setPlayerState(connected *player.Player, kind native.PlayerStateKind, value
 		if !setPlayerActivity(value.Integer, connected.StartFlying, connected.StopFlying) {
 			return false
 		}
+	case native.PlayerStateOnFireDuration:
+		connected.SetOnFire(time.Duration(value.Integer))
+	case native.PlayerStateAirSupply:
+		connected.SetAirSupply(time.Duration(value.Integer))
+	case native.PlayerStateMaxAirSupply:
+		connected.SetMaxAirSupply(time.Duration(value.Integer))
 	default:
 		return false
 	}
@@ -173,6 +180,14 @@ func readPlayerState(connected *player.Player, kind native.PlayerStateKind) (nat
 		return native.PlayerStateValue{Integer: boolInteger(connected.Gliding())}, true
 	case native.PlayerStateFlying:
 		return native.PlayerStateValue{Integer: boolInteger(connected.Flying())}, true
+	case native.PlayerStateOnFireDuration:
+		return native.PlayerStateValue{Integer: int64(connected.OnFireDuration())}, true
+	case native.PlayerStateFireProof:
+		return native.PlayerStateValue{Integer: boolInteger(connected.FireProof())}, true
+	case native.PlayerStateAirSupply:
+		return native.PlayerStateValue{Integer: int64(connected.AirSupply())}, true
+	case native.PlayerStateMaxAirSupply:
+		return native.PlayerStateValue{Integer: int64(connected.MaxAirSupply())}, true
 	default:
 		return native.PlayerStateValue{}, false
 	}

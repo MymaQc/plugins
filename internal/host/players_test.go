@@ -328,6 +328,9 @@ func TestPlayersReadsAndChangesState(t *testing.T) {
 			{native.PlayerStateCrawling, native.PlayerStateValue{}},
 			{native.PlayerStateGliding, native.PlayerStateValue{}},
 			{native.PlayerStateFlying, native.PlayerStateValue{}},
+			{native.PlayerStateOnFireDuration, native.PlayerStateValue{Integer: int64(2 * time.Second)}},
+			{native.PlayerStateAirSupply, native.PlayerStateValue{Integer: int64(10 * time.Second)}},
+			{native.PlayerStateMaxAirSupply, native.PlayerStateValue{Integer: int64(15 * time.Second)}},
 		}
 		for _, change := range changes {
 			if !players.SetPlayerState(invocation, id, change.kind, change.value) {
@@ -368,7 +371,11 @@ func TestPlayersReadsAndChangesState(t *testing.T) {
 		eyeHeight, eyeHeightOK := players.PlayerState(invocation, id, native.PlayerStateEyeHeight)
 		torsoHeight, torsoHeightOK := players.PlayerState(invocation, id, native.PlayerStateTorsoHeight)
 		breathing, breathingOK := players.PlayerState(invocation, id, native.PlayerStateBreathing)
-		if gameMode.Integer != creativeDescriptor || food.Integer != 12 || maxHealth.Number != 40 || health.Number != 23 || level.Integer != 12 || math.Abs(progress.Number-0.5) > 0.02 || scale.Number != 1.5 || invisible.Integer != 1 || immobile.Integer != 1 || speed.Number != 0.2 || flightSpeed.Number != 0.1 || verticalFlightSpeed.Number != 1.5 || fallDistance.Number != 0 || absorption.Number != 1 || dead.Integer != 0 || (onGround.Integer != 0 && onGround.Integer != 1) || eyeHeight.Number != 1.62 || torsoHeight.Number != 1.52 || (breathing.Integer != 0 && breathing.Integer != 1) || !fallDistanceOK || !absorptionOK || !deadOK || !onGroundOK || !eyeHeightOK || !torsoHeightOK || !breathingOK {
+		onFire, onFireOK := players.PlayerState(invocation, id, native.PlayerStateOnFireDuration)
+		fireProof, fireProofOK := players.PlayerState(invocation, id, native.PlayerStateFireProof)
+		air, airOK := players.PlayerState(invocation, id, native.PlayerStateAirSupply)
+		maxAir, maxAirOK := players.PlayerState(invocation, id, native.PlayerStateMaxAirSupply)
+		if gameMode.Integer != creativeDescriptor || food.Integer != 12 || maxHealth.Number != 40 || health.Number != 23 || level.Integer != 12 || math.Abs(progress.Number-0.5) > 0.02 || scale.Number != 1.5 || invisible.Integer != 1 || immobile.Integer != 1 || speed.Number != 0.2 || flightSpeed.Number != 0.1 || verticalFlightSpeed.Number != 1.5 || fallDistance.Number != 0 || absorption.Number != 1 || dead.Integer != 0 || (onGround.Integer != 0 && onGround.Integer != 1) || eyeHeight.Number != 1.62 || torsoHeight.Number != 1.52 || (breathing.Integer != 0 && breathing.Integer != 1) || onFire.Integer != int64(2*time.Second) || fireProof.Integer != 1 || air.Integer != int64(10*time.Second) || maxAir.Integer != int64(15*time.Second) || !fallDistanceOK || !absorptionOK || !deadOK || !onGroundOK || !eyeHeightOK || !torsoHeightOK || !breathingOK || !onFireOK || !fireProofOK || !airOK || !maxAirOK {
 			t.Fatalf("state mismatch: game=%+v food=%+v max=%+v health=%+v level=%+v progress=%+v scale=%+v invisible=%+v immobile=%+v speed=%+v flight=%+v vertical=%+v fall=%+v absorption=%+v dead=%+v ground=%+v eye=%+v torso=%+v breathing=%+v", gameMode, food, maxHealth, health, level, progress, scale, invisible, immobile, speed, flightSpeed, verticalFlightSpeed, fallDistance, absorption, dead, onGround, eyeHeight, torsoHeight, breathing)
 		}
 		for _, kind := range []native.PlayerStateKind{

@@ -72,6 +72,14 @@ func TestPlayerStateMethodsFollowDragonflyAST(t *testing.T) {
 		"void StartFlying()",
 		"void StopFlying()",
 		"bool Flying()",
+		"bool FireProof()",
+		"TimeSpan OnFireDuration()",
+		"void SetOnFire(TimeSpan duration)",
+		"void Extinguish()",
+		"TimeSpan AirSupply()",
+		"void SetAirSupply(TimeSpan duration)",
+		"TimeSpan MaxAirSupply()",
+		"void SetMaxAirSupply(TimeSpan duration)",
 	} {
 		if !strings.Contains(generated, expected) {
 			t.Fatalf("generated player state methods missing %q", expected)

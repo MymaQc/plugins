@@ -88,7 +88,9 @@ from Dragonfly's Go AST. Generated player state parity currently includes `Food`
 visibility toggles, mobility toggles, direct `Heal`, and Dragonfly's walking, flight, and
 vertical-flight speed getters and setters. Physical-state parity covers absorption, fall distance,
 death, ground contact, body heights, and breathing. Sprint, sneak, swim, crawl, glide, and fly
-start/stop/state methods also map directly to Dragonfly. `World.New()` creates a writable in-memory world.
+start/stop/state methods also map directly to Dragonfly. Fireproof/on-fire state and current/maximum
+air supply use Dragonfly's exact methods, with Go `time.Duration` mapped to C# `TimeSpan`.
+`World.New()` creates a writable in-memory world.
 `World.Config.New()` accepts Dragonfly's dimension and runtime settings, and an
 `MCDB.Config().Open(...)` provider creates a writable, saveable world below the configured worlds
 directory. `World.BlockByName` resolves dynamic names and typed state properties through

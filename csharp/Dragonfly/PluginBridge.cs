@@ -670,11 +670,13 @@ internal static unsafe class PluginBridge
             }
         }
 
-        private static long DurationNanoseconds(TimeSpan value, string parameter)
+        internal static long DurationNanoseconds(TimeSpan value, string parameter)
         {
             try { return checked(value.Ticks * 100L); }
             catch (OverflowException) { throw new ArgumentOutOfRangeException(parameter); }
         }
+
+        internal static TimeSpan PlayerDuration(long nanoseconds) => TimeSpan.FromTicks(nanoseconds / 100);
 
         internal static string? WorldName(ulong invocation, WorldId world)
         {

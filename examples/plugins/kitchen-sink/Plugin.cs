@@ -1151,6 +1151,10 @@ public sealed class KitchenSink : Plugin
             var crawling = player.Crawling();
             var gliding = player.Gliding();
             var flying = player.Flying();
+            var fireProof = player.FireProof();
+            var onFireDuration = player.OnFireDuration();
+            var airSupply = player.AirSupply();
+            var maxAirSupply = player.MaxAirSupply();
 
             player.SetFood(food);
             player.SetMaxHealth(maxHealth);
@@ -1172,9 +1176,12 @@ public sealed class KitchenSink : Plugin
             if (crawling) player.StartCrawling(); else player.StopCrawling();
             if (gliding) player.StartGliding(); else player.StopGliding();
             if (flying) player.StartFlying(); else player.StopFlying();
+            if (onFireDuration > TimeSpan.Zero) player.SetOnFire(onFireDuration); else player.Extinguish();
+            player.SetAirSupply(airSupply);
+            player.SetMaxAirSupply(maxAirSupply);
 
             output.Printf(
-                "food={0}, health={1}/{2}, experience={3}:{4}, scale={5}, invisible={6}, immobile={7}, speed={8}/{9}/{10}, physical={11}/{12}/{13}/{14}/{15}/{16}/{17}, activity={18}/{19}/{20}/{21}/{22}/{23}",
+                "food={0}, health={1}/{2}, experience={3}:{4}, scale={5}, invisible={6}, immobile={7}, speed={8}/{9}/{10}, physical={11}/{12}/{13}/{14}/{15}/{16}/{17}, activity={18}/{19}/{20}/{21}/{22}/{23}, fire={24}/{25}, air={26}/{27}",
                 food,
                 health,
                 maxHealth,
@@ -1198,7 +1205,11 @@ public sealed class KitchenSink : Plugin
                 swimming ? "true" : "false",
                 crawling ? "true" : "false",
                 gliding ? "true" : "false",
-                flying ? "true" : "false");
+                flying ? "true" : "false",
+                fireProof ? "true" : "false",
+                onFireDuration.TotalSeconds,
+                airSupply.TotalSeconds,
+                maxAirSupply.TotalSeconds);
         }
     }
 

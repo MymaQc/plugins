@@ -17,6 +17,7 @@ func TestGeneratePlayerTransportMatchesCurrentFiles(t *testing.T) {
 		generate func(playerTransportSpec) ([]byte, error)
 	}{
 		{name: "native", path: "internal/native/player_state_generated.go", generate: generateNativePlayerTransport},
+		{name: "csharp", path: "csharp/Dragonfly.Native/Generated/Player.State.g.cs", generate: generateCSharpPlayerStateTransport},
 		{name: "host", path: "internal/host/player_state_generated.go", generate: generateHostPlayerTransport},
 	}
 	for _, test := range tests {
@@ -99,6 +100,8 @@ func TestPlayerTransportPreservesExplicitIDs(t *testing.T) {
 		"PlayerStateVerticalFlightSpeed PlayerStateKind = 13",
 		"PlayerStateBreathing           PlayerStateKind = 20",
 		"PlayerStateFlying              PlayerStateKind = 26",
+		"PlayerStateOnFireDuration      PlayerStateKind = 27",
+		"PlayerStateMaxAirSupply        PlayerStateKind = 30",
 		"EffectSlowFalling    EffectType = 27",
 		"EffectDarkness       EffectType = 30",
 		"PlayerTextTip          PlayerTextKind = 1",

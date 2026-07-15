@@ -61,6 +61,14 @@ var selectedPlayerStateMethods = []string{
 	"StartFlying",
 	"StopFlying",
 	"Flying",
+	"FireProof",
+	"OnFireDuration",
+	"SetOnFire",
+	"Extinguish",
+	"AirSupply",
+	"SetAirSupply",
+	"MaxAirSupply",
+	"SetMaxAirSupply",
 }
 
 type playerStateMethod struct {
@@ -133,6 +141,14 @@ func inspectPlayerStateMethods(path string) ([]playerStateMethod, error) {
 		"StartFlying":            {},
 		"StopFlying":             {},
 		"Flying":                 {Results: "bool"},
+		"FireProof":              {Results: "bool"},
+		"OnFireDuration":         {Results: "time.Duration"},
+		"SetOnFire":              {Parameters: "time.Duration"},
+		"Extinguish":             {},
+		"AirSupply":              {Results: "time.Duration"},
+		"SetAirSupply":           {Parameters: "time.Duration"},
+		"MaxAirSupply":           {Results: "time.Duration"},
+		"SetMaxAirSupply":        {Parameters: "time.Duration"},
 	}
 	for _, name := range selectedPlayerStateMethods {
 		function := found[name]
@@ -292,6 +308,22 @@ func generatePlayerStateMethods(methods []playerStateMethod) []byte {
 			output.WriteString("    public void StopFlying() => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateFlying, default);\n")
 		case "Flying":
 			output.WriteString("    public bool Flying() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateFlying).Integer != 0;\n")
+		case "FireProof":
+			output.WriteString("    public bool FireProof() => PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateFireProof).Integer != 0;\n")
+		case "OnFireDuration":
+			output.WriteString("    public TimeSpan OnFireDuration() => PluginBridge.Host.PlayerDuration(PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateOnFireDuration).Integer);\n")
+		case "SetOnFire":
+			fmt.Fprintf(&output, "    public void SetOnFire(TimeSpan %s) => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateOnFireDuration, new PlayerStateValue { Integer = PluginBridge.Host.DurationNanoseconds(%s, nameof(%s)) });\n", parameter, parameter, parameter)
+		case "Extinguish":
+			output.WriteString("    public void Extinguish() => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateOnFireDuration, default);\n")
+		case "AirSupply":
+			output.WriteString("    public TimeSpan AirSupply() => PluginBridge.Host.PlayerDuration(PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateAirSupply).Integer);\n")
+		case "SetAirSupply":
+			fmt.Fprintf(&output, "    public void SetAirSupply(TimeSpan %s) => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateAirSupply, new PlayerStateValue { Integer = PluginBridge.Host.DurationNanoseconds(%s, nameof(%s)) });\n", parameter, parameter, parameter)
+		case "MaxAirSupply":
+			output.WriteString("    public TimeSpan MaxAirSupply() => PluginBridge.Host.PlayerDuration(PluginBridge.Host.GetPlayerState(_invocation, Id, Abi.PlayerStateMaxAirSupply).Integer);\n")
+		case "SetMaxAirSupply":
+			fmt.Fprintf(&output, "    public void SetMaxAirSupply(TimeSpan %s) => PluginBridge.Host.SetPlayerState(_invocation, Id, Abi.PlayerStateMaxAirSupply, new PlayerStateValue { Integer = PluginBridge.Host.DurationNanoseconds(%s, nameof(%s)) });\n", parameter, parameter, parameter)
 		default:
 			panic("unsupported player state method: " + method.Name)
 		}

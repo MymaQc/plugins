@@ -32,6 +32,10 @@ const (
 	PlayerStateCrawling            PlayerStateKind = 24
 	PlayerStateGliding             PlayerStateKind = 25
 	PlayerStateFlying              PlayerStateKind = 26
+	PlayerStateOnFireDuration      PlayerStateKind = 27
+	PlayerStateFireProof           PlayerStateKind = 28
+	PlayerStateAirSupply           PlayerStateKind = 29
+	PlayerStateMaxAirSupply        PlayerStateKind = 30
 )
 
 type PlayerStateValue struct {

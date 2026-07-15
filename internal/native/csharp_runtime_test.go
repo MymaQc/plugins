@@ -219,6 +219,10 @@ func TestCSharpPlayerStateMethods(t *testing.T) {
 		PlayerStateCrawling:            {},
 		PlayerStateGliding:             {Integer: 1},
 		PlayerStateFlying:              {},
+		PlayerStateOnFireDuration:      {Integer: int64(2 * time.Second)},
+		PlayerStateFireProof:           {Integer: 1},
+		PlayerStateAirSupply:           {Integer: int64(10 * time.Second)},
+		PlayerStateMaxAirSupply:        {Integer: int64(15 * time.Second)},
 	}}
 	pluginRuntime := openCSharpRuntimeWithHost(t, host)
 	commands, err := pluginRuntime.Commands()
@@ -243,7 +247,7 @@ func TestCSharpPlayerStateMethods(t *testing.T) {
 		Overload: overload, Arguments: []string{"state"},
 		OnlinePlayers: []CommandPlayer{{Player: player, Name: "Danick"}},
 	})
-	if err != nil || output.Failed || output.Message != "food=10, health=16/20, experience=3:0.25, scale=1, invisible=false, immobile=false, speed=0.1/0.05/1, physical=2.5/4/false/true/1.62/1.52/true, activity=true/false/true/false/true/false" {
+	if err != nil || output.Failed || output.Message != "food=10, health=16/20, experience=3:0.25, scale=1, invisible=false, immobile=false, speed=0.1/0.05/1, physical=2.5/4/false/true/1.62/1.52/true, activity=true/false/true/false/true/false, fire=true/2, air=10/15" {
 		t.Fatalf("state output=%#v error=%v", output, err)
 	}
 	wantReads := []PlayerStateKind{
@@ -271,6 +275,10 @@ func TestCSharpPlayerStateMethods(t *testing.T) {
 		PlayerStateCrawling,
 		PlayerStateGliding,
 		PlayerStateFlying,
+		PlayerStateFireProof,
+		PlayerStateOnFireDuration,
+		PlayerStateAirSupply,
+		PlayerStateMaxAirSupply,
 	}
 	if !slices.Equal(host.reads, wantReads) {
 		t.Fatalf("state reads=%v, want %v", host.reads, wantReads)
@@ -294,9 +302,16 @@ func TestCSharpPlayerStateMethods(t *testing.T) {
 		PlayerStateCrawling,
 		PlayerStateGliding,
 		PlayerStateFlying,
+		PlayerStateOnFireDuration,
+		PlayerStateAirSupply,
+		PlayerStateMaxAirSupply,
 	}
 	if !slices.Equal(host.states, wantWrites) {
 		t.Fatalf("state writes=%v, want %v", host.states, wantWrites)
+	}
+	durations := host.values[len(host.values)-3:]
+	if durations[0].Integer != int64(2*time.Second) || durations[1].Integer != int64(10*time.Second) || durations[2].Integer != int64(15*time.Second) {
+		t.Fatalf("duration writes=%#v", durations)
 	}
 }
 
