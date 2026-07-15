@@ -1,6 +1,7 @@
 package host
 
 import (
+	"encoding/gob"
 	"math"
 	"reflect"
 
@@ -21,6 +22,14 @@ const (
 	nestedItemVersion     = int32(1)
 	nestedItemVersionName = "bedrock_gophers_version"
 )
+
+func init() {
+	gob.Register(map[string]any{})
+	gob.Register([]any{})
+	gob.Register([]byte{})
+	gob.Register([]int32{})
+	gob.Register([]int64{})
+}
 
 func (p *Players) InventorySize(invocation native.InvocationID, id native.InventoryID) (uint32, bool) {
 	value, ok := readPlayer(p, invocation, id.Player, func(connected *player.Player) uint32 {
@@ -336,6 +345,10 @@ func itemStackFromNativeDepth(value native.ItemStack, depth int) (stack item.Sta
 		if !ok {
 			return item.Stack{}, false
 		}
+		values, ok = normalizeItemNBTMap(values)
+		if !ok {
+			return item.Stack{}, false
+		}
 		for key, entry := range values {
 			stack = stack.WithValue(key, entry)
 		}
@@ -541,6 +554,47 @@ func byteArray(value any) ([]byte, bool) {
 		result[index] = byte(reflected.Index(index).Uint())
 	}
 	return result, true
+}
+
+func normalizeItemNBTMap(value map[string]any) (map[string]any, bool) {
+	result := make(map[string]any, len(value))
+	for key, entry := range value {
+		normalized, ok := normalizeItemNBTValue(entry)
+		if !ok {
+			return nil, false
+		}
+		result[key] = normalized
+	}
+	return result, true
+}
+
+func normalizeItemNBTValue(value any) (any, bool) {
+	switch typed := value.(type) {
+	case map[string]any:
+		return normalizeItemNBTMap(typed)
+	case []any:
+		result := make([]any, len(typed))
+		for index, entry := range typed {
+			normalized, ok := normalizeItemNBTValue(entry)
+			if !ok {
+				return nil, false
+			}
+			result[index] = normalized
+		}
+		return result, true
+	}
+	reflected := reflect.ValueOf(value)
+	if !reflected.IsValid() {
+		return nil, false
+	}
+	if (reflected.Kind() == reflect.Array || reflected.Kind() == reflect.Slice) && reflected.Type().Elem().Kind() == reflect.Uint8 {
+		result := make([]byte, reflected.Len())
+		for index := range result {
+			result[index] = byte(reflected.Index(index).Uint())
+		}
+		return result, true
+	}
+	return value, true
 }
 
 // ItemStackFromNative decodes a plugin item stack using Dragonfly registries.
