@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using Dragonfly;
-using GtPacket = Dragonfly.Packet;
+using Packet = Dragonfly.Packet;
 
 public sealed class KitchenSink : Plugin
 {
@@ -314,19 +314,19 @@ public sealed class KitchenSink : Plugin
 
     public override void HandleClose(World.Tx tx) => _ = tx;
 
-    public override void HandleClientPacket(GtPacket.Context ctx, GtPacket.Packet packet)
+    public override void HandleClientPacket(Packet.Context ctx, Packet.Packet packet)
     {
         Increment(ref _clientPackets);
-        if (packet is GtPacket.Text text) text.Message = text.Message.Trim();
-        if (packet is GtPacket.PlayerSkin skin) skin.UUID = skin.UUID;
-        if (packet is GtPacket.CommandRequest command && string.IsNullOrWhiteSpace(command.CommandLine))
+        if (packet is Packet.Text text) text.Message = text.Message.Trim();
+        if (packet is Packet.PlayerSkin skin) skin.UUID = skin.UUID;
+        if (packet is Packet.CommandRequest command && string.IsNullOrWhiteSpace(command.CommandLine))
             ctx.Cancel();
     }
 
     // Outgoing packets may be inspected or cancelled. The intercept library
     // does not yet clone broadcast packets, so this example intentionally does
     // not mutate them.
-    public override void HandleServerPacket(GtPacket.Context ctx, GtPacket.Packet packet)
+    public override void HandleServerPacket(Packet.Context ctx, Packet.Packet packet)
     {
         Increment(ref _serverPackets);
         _ = (ctx.XUID(), packet.ID());
